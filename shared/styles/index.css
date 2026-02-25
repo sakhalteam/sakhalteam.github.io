@@ -1,0 +1,180 @@
+/* // index.css */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =======================================
+   Theme tokens (dark & light aware)
+   ======================================= */
+:root {
+  --bg: #0b0c10;
+  --bg-elev: #0f1117;
+  --text: #e5e7eb;
+  --muted: #9aa4b2;
+  --border: rgba(255, 255, 255, 0.08);
+  --card: rgba(255, 255, 255, 0.04);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f8fafc;
+    --bg-elev: #ffffff;
+    --text: #0b1220;
+    --muted: #475569;
+    --border: rgba(2, 6, 23, 0.08);
+    --card: rgba(2, 6, 23, 0.04);
+  }
+}
+
+/* Base layout */
+html, body {
+  overflow-x: hidden;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Background gradient */
+.gradient-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  filter: blur(0.5px);
+  background:
+    radial-gradient(
+      1200px 800px at 20% 0%,
+      rgba(34, 211, 238, 0.25),
+      transparent 50%
+    ),
+    radial-gradient(
+      1000px 700px at 80% 20%,
+      rgba(167, 139, 250, 0.25),
+      transparent 60%
+    ),
+    linear-gradient(180deg, var(--bg), var(--bg));
+}
+
+/* Wrapper / layout helpers */
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.brand {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+/* Pill button */
+.btn {
+  --_bg: var(--card);
+  --_fg: var(--text);
+  --_bd: var(--border);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--_bd);
+  background: var(--_bg);
+  color: var(--_fg);
+  max-width: 100%;
+  text-decoration: none;
+  transition:
+    transform 0.15s ease,
+    border-color 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  border-color: rgb(103 232 249 / 0.8);
+}
+
+.btn.primary {
+  --_bg: linear-gradient(
+    135deg,
+    rgb(34 211 238 / 0.25),
+    rgb(167 139 250 / 0.25)
+  );
+}
+
+/* Card shadow */
+.shadow-card {
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.12);
+}
+
+/* Hide horizontal scrollbar for the carousel, keep it scrollable */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ==========================
+   3D flip card for BirdBingo
+   ========================== */
+
+.card-3d-container {
+  perspective: 1200px;
+  width: 100%;
+  height: 100%;
+}
+
+.card-3d {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  /* 🔥 remove these so we don't fight the animated box:
+     max-width, margin, min-height */
+  /* max-width: 420px; */
+  /* margin: 0 auto; */
+  /* min-height: 340px; */
+  transform-style: preserve-3d;
+  transition: transform 260ms ease-out;
+}
+
+/* The parent flip */
+.card-3d-flipped {
+  transform: rotateY(180deg) scale(1.02);
+}
+
+.card-3d-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+
+/* 🟡 Give front/back the same border as the grid cards */
+.card-3d-front,
+.card-3d-back {
+  border-radius: 20px;
+  border: 3px solid #f6c94b;
+  background-color: #ffffff;
+}
+
+/* back is rotated, shown when parent is flipped */
+.card-3d-back {
+  transform: rotateY(180deg);
+}
+
+/* Always do this */
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Prevent accidental sideways page scroll */
+html, body { overflow-x: hidden; }
