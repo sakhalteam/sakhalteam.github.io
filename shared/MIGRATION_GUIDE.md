@@ -37,12 +37,12 @@ All pages depend on these — they live in `shared/styles/index.css` in this rep
 
 ### B. On your PC (terminal — do NOT open VS Code yet)
 ```
-cd C:/Users/sakha/Code
+cd C:/Users/sakha/Code/sakhalteam
 git clone https://github.com/sakhalteam/bird-bingo.git
 ```
 
 ### C. Open in VS Code
-- Open VS Code → File → Open Folder → select `C:/Users/sakha/Code/bird-bingo`
+- Open VS Code → File → Open Folder → select `C:/Users/sakha/Code/sakhalteam/bird-bingo`
 - This should be a **new VS Code window** (not the sakhalteam.github.io window)
 - Start Claude Code in that window
 
@@ -75,14 +75,14 @@ Please scaffold a complete Vite + React + TS project with:
    })
 
 2. .github/workflows/deploy.yaml — standard peaceiris deploy:
-   (same as C:/Users/sakha/Code/sakhalteam.github.io/.github/workflows/deploy.yaml)
+   (same as C:/Users/sakha/Code/sakhalteam/sakhalteam.github.io/.github/workflows/deploy.yaml)
 
 3. Tailwind CSS — install and configure (same as sakhaltai.github.io:
    devDeps: tailwindcss, postcss, autoprefixer
    postcss.config.js + tailwind.config.ts pointing at src/**)
 
 4. src/index.css — copy exactly from:
-   C:/Users/sakha/Code/sakhalteam.github.io/shared/styles/index.css
+   C:/Users/sakha/Code/sakhalteam/sakhalteam.github.io/shared/styles/index.css
 
 5. src/birds-data.ts — copy exactly from:
    C:/Users/sakha/Code/sakhaltai.github.io/src/birds-data.ts
@@ -132,7 +132,7 @@ Please scaffold a complete Vite + React + TS project with:
     postcss.config.js + tailwind.config.ts pointing at src/**)
 
 4. src/index.css — copy exactly from:
-   C:/Users/sakha/Code/sakhalteam.github.io/shared/styles/index.css
+   C:/Users/sakha/Code/sakhalteam/sakhalteam.github.io/shared/styles/index.css
 
 5. src/App.tsx — copy the RockyCare page component from:
    C:/Users/sakha/Code/sakhaltai.github.io/src/pages/RockyCare.tsx
@@ -162,7 +162,7 @@ Please scaffold a complete Vite + React + TS project with:
 1. vite.config.ts — smart base-path config (same as bird-bingo above)
 2. .github/workflows/deploy.yaml — standard peaceiris deploy
 3. Tailwind CSS — install and configure
-4. src/index.css — copy from: C:/Users/sakha/Code/sakhalteam.github.io/shared/styles/index.css
+4. src/index.css — copy from: C:/Users/sakha/Code/sakhalteam/sakhalteam.github.io/shared/styles/index.css
 5. src/App.tsx — copy from: C:/Users/sakha/Code/sakhaltai.github.io/src/pages/OscarCare.tsx
    Make it the root of this app (no routing needed).
 6. src/main.tsx — standard Vite entry, no BrowserRouter.
@@ -186,7 +186,7 @@ Please scaffold a complete Vite + React + TS project with:
 1. vite.config.ts — smart base-path config (same as bird-bingo above)
 2. .github/workflows/deploy.yaml — standard peaceiris deploy
 3. Tailwind CSS — install and configure
-4. src/index.css — copy from: C:/Users/sakha/Code/sakhalteam.github.io/shared/styles/index.css
+4. src/index.css — copy from: C:/Users/sakha/Code/sakhalteam/sakhalteam.github.io/shared/styles/index.css
 5. src/App.tsx — copy from: C:/Users/sakha/Code/sakhaltai.github.io/src/pages/Teaching.tsx
    Make it the root of this app (no routing needed).
 6. src/main.tsx — standard Vite entry, no BrowserRouter.
@@ -208,7 +208,7 @@ Please scaffold a complete Vite + React + TS project with:
 1. vite.config.ts — smart base-path config (same as bird-bingo above)
 2. .github/workflows/deploy.yaml — standard peaceiris deploy
 3. Tailwind CSS — install and configure
-4. src/index.css — copy from: C:/Users/sakha/Code/sakhalteam.github.io/shared/styles/index.css
+4. src/index.css — copy from: C:/Users/sakha/Code/sakhalteam/sakhalteam.github.io/shared/styles/index.css
 5. src/App.tsx — copy from: C:/Users/sakha/Code/sakhaltai.github.io/src/pages/JapaneseArticles.tsx
    Make it the root of this app. The page has internal article routing — Claude Code
    will need to adapt this since there's no React Router in a standalone app.

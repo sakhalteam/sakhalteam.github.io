@@ -12,8 +12,8 @@ I'm setting up a new mini project as part of the sakhalteam GitHub org.
 **Org context:**
 - Org: `sakhalteam` on GitHub
 - This project will deploy to: `https://sakhalteam.github.io/[repo-name]/`
-- The org homepage repo lives at `C:/Users/sakha/Code/sakhalteam.github.io/`
-- Each project is a separate repo and separate local folder under `C:/Users/sakha/Code/`
+- The org homepage repo lives at `C:/Users/sakha/Code/sakhalteam/sakhalteam.github.io/`
+- Each project is a separate repo and separate local folder under `C:/Users/sakha/Code/sakhalteam/`
 
 **Stack:** Vite + React + TypeScript
 
@@ -48,8 +48,8 @@ I'm setting up a new mini project as part of the sakhalteam GitHub org.
 3. Scaffold `src/` with the app structure needed for this project.
 
 **Shared resources** (copy anything relevant into this project's `src/`):
-- Components: `C:/Users/sakha/Code/sakhalteam.github.io/shared/components/`
-- Styles: `C:/Users/sakha/Code/sakhalteam.github.io/shared/styles/`
+- Components: `C:/Users/sakha/Code/sakhalteam/sakhalteam.github.io/shared/components/`
+- Styles: `C:/Users/sakha/Code/sakhalteam/sakhalteam.github.io/shared/styles/`
 
 **After setup, I will:**
 - Push to `main` → GitHub Action runs → `gh-pages` branch is created automatically
