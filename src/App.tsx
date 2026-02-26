@@ -104,12 +104,24 @@ export default function App() {
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
-            {/* Island fill gradient */}
-            <radialGradient id="islandGrad" cx="42%" cy="44%" r="58%">
-              <stop offset="0%"   stopColor="#2e5e2e" />
-              <stop offset="55%"  stopColor="#1e4220" />
-              <stop offset="100%" stopColor="#112515" />
+            {/* Island top: radial gradient — bright center (sunlit plateau), dark edges */}
+            <radialGradient id="islandGrad" cx="42%" cy="40%" r="58%">
+              <stop offset="0%"   stopColor="#3c7a3c" />
+              <stop offset="45%"  stopColor="#2a5a2a" />
+              <stop offset="100%" stopColor="#142814" />
             </radialGradient>
+
+            {/* Cliff face: vertical gradient — earthy dark at top, near-black at base */}
+            <linearGradient id="cliffGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%"   stopColor="#2e1e0e" />
+              <stop offset="60%"  stopColor="#1a1008" />
+              <stop offset="100%" stopColor="#0a0604" />
+            </linearGradient>
+
+            {/* Soft blur for shadow blob */}
+            <filter id="shadowBlur" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="12" />
+            </filter>
 
             {/* Glow filter for active markers */}
             <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -119,20 +131,32 @@ export default function App() {
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
-
-            {/* Drop shadow for island */}
-            <filter id="islandShadow" x="-15%" y="-15%" width="130%" height="130%">
-              <feDropShadow dx="4" dy="7" stdDeviation="14" floodColor="#01040a" floodOpacity="0.9" />
-            </filter>
           </defs>
 
-          {/* Island landmass */}
+          {/* ── Faux-3D island (3 layers) ───────────────────── */}
+
+          {/* 1. Diffuse shadow — offset far, blurred, transparent */}
+          <path
+            d={ISLAND_PATH}
+            fill="#010306"
+            transform="translate(18, 40)"
+            opacity="0.75"
+            filter="url(#shadowBlur)"
+          />
+
+          {/* 2. Cliff face — offset slightly down-right; visible edges = south & east */}
+          <path
+            d={ISLAND_PATH}
+            fill="url(#cliffGrad)"
+            transform="translate(10, 22)"
+          />
+
+          {/* 3. Island top — sits on top of cliff, covers north & west cliff edges */}
           <path
             d={ISLAND_PATH}
             fill="url(#islandGrad)"
-            stroke="#2a5c2a"
-            strokeWidth="1.5"
-            filter="url(#islandShadow)"
+            stroke="#336633"
+            strokeWidth="1"
           />
 
           {/* Terrain details — subtle hill shapes */}
