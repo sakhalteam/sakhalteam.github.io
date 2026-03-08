@@ -43,7 +43,7 @@ interface ZoneMarker {
 }
 
 function IslandMesh({ onComingSoon }: { onComingSoon: (label: string) => void }) {
-  const { scene } = useGLTF('/island.glb')
+  const { scene } = useGLTF('/island.glb', true)
 
   const markers = useMemo(() => {
     const result: ZoneMarker[] = []
@@ -144,4 +144,4 @@ export default function IslandScene({ style, onComingSoon }: Props) {
   )
 }
 
-useGLTF.preload('/island.glb')
+useGLTF.preload('/island.glb', true)
