@@ -33,15 +33,10 @@
 /* ── Map ────────────────────────────────── */
 
 .map-wrap {
-  width: min(800px, 96vw);
-  position: relative;
-}
-
-.island-svg {
+  flex: 1;
   width: 100%;
-  height: auto;
-  display: block;
-  overflow: visible;
+  min-height: 0; /* needed for flex children to shrink */
+  position: relative;
 }
 
 /* ── Zone markers ───────────────────────── */
