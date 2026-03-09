@@ -1,7 +1,8 @@
-import { Suspense, useMemo, useState } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Suspense, useRef, useMemo, useState } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { useGLTF, OrbitControls, Environment, Html } from '@react-three/drei'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 interface ZoneConfig {
   label: string
@@ -40,6 +41,103 @@ interface ZoneMarker {
   label: string
   url: string | null
   type: 'active' | 'coming-soon'
+  sceneObj: THREE.Object3D
+}
+
+/* ---- Fresnel aura shaders ---- */
+
+const auraVertexShader = `
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vNormal = normalize(normalMatrix * normal);
+    vViewDir = normalize(cameraPosition - worldPos.xyz);
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`
+
+const auraFragmentShader = `
+  uniform vec3 glowColor;
+  uniform float intensity;
+  uniform float power;
+  uniform float opacity;
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    float fresnel = 1.0 - abs(dot(vNormal, vViewDir));
+    fresnel = pow(fresnel, power);
+    gl_FragColor = vec4(glowColor * intensity, fresnel * opacity);
+  }
+`
+
+function ZoneAura({ marker, hovered }: { marker: ZoneMarker, hovered: boolean }) {
+  const currentOpacity = useRef(0)
+
+  const geometry = useMemo(() => {
+    const obj = marker.sceneObj
+    const geometries: THREE.BufferGeometry[] = []
+
+    // We need to transform all child meshes into a space where
+    // marker.center is the origin (since the parent <group> is at marker.center)
+    const centerOffset = new THREE.Matrix4().makeTranslation(
+      -marker.center.x, -marker.center.y, -marker.center.z
+    )
+
+    obj.traverse((child) => {
+      if (!(child as THREE.Mesh).isMesh) return
+      const mesh = child as THREE.Mesh
+      if (!mesh.geometry) return
+      const cloned = mesh.geometry.clone()
+      // Apply child's world transform, then offset so marker.center = origin
+      mesh.updateWorldMatrix(true, false)
+      const mat = new THREE.Matrix4().copy(mesh.matrixWorld).premultiply(centerOffset)
+      cloned.applyMatrix4(mat)
+      geometries.push(cloned)
+    })
+
+    if (geometries.length === 0) {
+      // Fallback: use bounding box as aura shape (e.g. if zone is an empty with no mesh children)
+      const size = new THREE.Vector3()
+      marker.box.getSize(size)
+      return new THREE.BoxGeometry(size.x, size.y, size.z)
+    }
+    return geometries.length === 1 ? geometries[0] : mergeGeometries(geometries, false)
+  }, [marker.sceneObj, marker.center])
+
+  const material = useMemo(() => {
+    const isActive = marker.type === 'active'
+    return new THREE.ShaderMaterial({
+      vertexShader: auraVertexShader,
+      fragmentShader: auraFragmentShader,
+      uniforms: {
+        glowColor: { value: isActive ? new THREE.Color(0.9, 0.35, 0.2) : new THREE.Color(0.5, 0.5, 0.6) },
+        intensity: { value: 2.0 },
+        power: { value: 2.0 },
+        opacity: { value: 0.0 },
+      },
+      transparent: true,
+      depthWrite: false,
+      side: THREE.FrontSide,
+    })
+  }, [marker.type])
+
+  useFrame((_, delta) => {
+    const target = hovered ? 1.0 : 0.0
+    currentOpacity.current = THREE.MathUtils.lerp(currentOpacity.current, target, delta * 5)
+    material.uniforms.opacity.value = currentOpacity.current
+  })
+
+  if (!geometry) return null
+
+  return (
+    <mesh
+      geometry={geometry}
+      material={material}
+      scale={[1.06, 1.06, 1.06]}
+      raycast={() => {}} // don't intercept pointer events
+    />
+  )
 }
 
 function ZoneHitbox({ marker, onComingSoon }: { marker: ZoneMarker, onComingSoon: (label: string) => void }) {
@@ -52,6 +150,8 @@ function ZoneHitbox({ marker, onComingSoon }: { marker: ZoneMarker, onComingSoon
 
   return (
     <group position={marker.center}>
+      {/* Fresnel aura on the actual zone geometry */}
+      <ZoneAura marker={marker} hovered={hovered} />
       {/* Invisible hitbox for hover/click detection */}
       <mesh
         onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = 'pointer' }}
@@ -108,7 +208,7 @@ function IslandMesh({ onComingSoon }: { onComingSoon: (label: string) => void })
       const box = new THREE.Box3().setFromObject(obj)
       const center = new THREE.Vector3()
       box.getCenter(center)
-      result.push({ name: obj.name, box, center, ...config })
+      result.push({ name: obj.name, box, center, sceneObj: obj, ...config })
     })
     return result
   }, [scene])
