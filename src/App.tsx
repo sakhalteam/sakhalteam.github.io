@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { Routes, Route } from 'react-router-dom'
 import './App.css'
 import IslandScene from './IslandScene'
+import BirdSanctuaryScene from './BirdSanctuaryScene'
 
-export default function App() {
+function HomePage() {
   const [comingSoon, setComingSoon] = useState<string | null>(null)
 
   return (
@@ -40,5 +42,14 @@ export default function App() {
         </span>
       </footer>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/bird-sanctuary" element={<BirdSanctuaryScene />} />
+    </Routes>
   )
 }

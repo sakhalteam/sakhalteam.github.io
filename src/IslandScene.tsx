@@ -1,12 +1,14 @@
-import { Suspense, useRef, useMemo, useState } from 'react'
+import { Suspense, useRef, useMemo, useState, memo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useGLTF, OrbitControls, Environment, Html } from '@react-three/drei'
+import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 interface ZoneConfig {
   label: string
   url: string | null
+  internal: boolean  // true = React Router navigate, false = full page navigation
   type: 'active' | 'coming-soon'
 }
 
@@ -16,22 +18,23 @@ function toTitleCase(str: string) {
 
 // Blender naming: "zone_display_name" — e.g. zone_bird_sanctuary, zone_reading_room
 // URL mapping lives here. Unlisted zones show as coming-soon.
-const ZONE_URLS: Record<string, string> = {
-  bird_sanctuary: '/bird-bingo/',
-  reading_room: '/japanese-articles/',
-  boombox: '/nikbeat/',
-  // crystals: '/crystals/',         // uncomment when ready
-  // family_mart: '/family-mart/',   // uncomment when ready
-  // pokemon_center: '/pokemon/',    // uncomment when ready
-  // nessie: '/nessie/',             // uncomment when ready
-  // underground: '/underground/',   // uncomment when ready
+// internal: true = zone scene within this app, false = separate deployed site
+const ZONE_URLS: Record<string, { url: string, internal: boolean }> = {
+  bird_sanctuary: { url: '/bird-sanctuary', internal: true },
+  reading_room: { url: '/japanese-articles/', internal: false },
+  boombox: { url: '/nikbeat/', internal: false },
+  // crystals: { url: '/crystals', internal: true },
+  // family_mart: { url: '/family-mart', internal: true },
+  // pokemon_center: { url: '/pokemon', internal: true },
+  // nessie: { url: '/nessie', internal: true },
+  // underground: { url: '/underground', internal: true },
 }
 
 function getZoneConfig(meshName: string): ZoneConfig | null {
   const key = meshName.replace(/^zone_/i, '').toLowerCase()
-  const url = ZONE_URLS[key] ?? null
+  const entry = ZONE_URLS[key]
   const label = toTitleCase(key)
-  return { label, url, type: url ? 'active' : 'coming-soon' }
+  return { label, url: entry?.url ?? null, internal: entry?.internal ?? false, type: entry ? 'active' : 'coming-soon' }
 }
 
 interface ZoneMarker {
@@ -40,6 +43,7 @@ interface ZoneMarker {
   center: THREE.Vector3
   label: string
   url: string | null
+  internal: boolean
   type: 'active' | 'coming-soon'
   sceneObj: THREE.Object3D
 }
@@ -102,7 +106,17 @@ function ZoneAura({ marker, hovered }: { marker: ZoneMarker, hovered: boolean })
       marker.box.getSize(size)
       return new THREE.BoxGeometry(size.x, size.y, size.z)
     }
-    return geometries.length === 1 ? geometries[0] : mergeGeometries(geometries, false)
+    if (geometries.length === 1) return geometries[0]
+
+    // Normalize attributes: keep only position + normal (the aura shader only needs these).
+    // Strips uv1, uv2, etc. that cause mergeGeometries to fail on mixed meshes.
+    for (const geo of geometries) {
+      const keep = new Set(['position', 'normal'])
+      for (const attr of Object.keys(geo.attributes)) {
+        if (!keep.has(attr)) geo.deleteAttribute(attr)
+      }
+    }
+    return mergeGeometries(geometries, false)
   }, [marker.sceneObj, marker.center])
 
   const material = useMemo(() => {
@@ -124,6 +138,12 @@ function ZoneAura({ marker, hovered }: { marker: ZoneMarker, hovered: boolean })
 
   useFrame((_, delta) => {
     const target = hovered ? 1.0 : 0.0
+    // Skip work when opacity is already at (or very near) the target
+    if (Math.abs(currentOpacity.current - target) < 0.001) {
+      currentOpacity.current = target
+      material.uniforms.opacity.value = target
+      return
+    }
     currentOpacity.current = THREE.MathUtils.lerp(currentOpacity.current, target, delta * 5)
     material.uniforms.opacity.value = currentOpacity.current
   })
@@ -140,8 +160,9 @@ function ZoneAura({ marker, hovered }: { marker: ZoneMarker, hovered: boolean })
   )
 }
 
-function ZoneHitbox({ marker, onComingSoon }: { marker: ZoneMarker, onComingSoon: (label: string) => void }) {
+const ZoneHitbox = memo(function ZoneHitbox({ marker, onComingSoon, navigate }: { marker: ZoneMarker, onComingSoon: (label: string) => void, navigate: (path: string) => void }) {
   const [hovered, setHovered] = useState(false)
+  const pointerDown = useRef<{ x: number, y: number } | null>(null)
   const size = useMemo(() => {
     const s = new THREE.Vector3()
     marker.box.getSize(s)
@@ -156,10 +177,21 @@ function ZoneHitbox({ marker, onComingSoon }: { marker: ZoneMarker, onComingSoon
       <mesh
         onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = 'pointer' }}
         onPointerOut={() => { setHovered(false); document.body.style.cursor = 'auto' }}
+        onPointerDown={(e) => { pointerDown.current = { x: e.clientX, y: e.clientY } }}
         onClick={(e) => {
           e.stopPropagation()
+          // Ignore clicks that were actually orbit drags
+          if (pointerDown.current) {
+            const dx = e.clientX - pointerDown.current.x
+            const dy = e.clientY - pointerDown.current.y
+            if (dx * dx + dy * dy > 25) return // moved more than 5px = drag
+          }
           if (marker.url) {
-            window.location.href = marker.url
+            if (marker.internal) {
+              navigate(marker.url)
+            } else {
+              window.location.href = marker.url
+            }
           } else {
             onComingSoon(marker.label)
           }
@@ -193,9 +225,9 @@ function ZoneHitbox({ marker, onComingSoon }: { marker: ZoneMarker, onComingSoon
       </Html>
     </group>
   )
-}
+})
 
-function IslandMesh({ onComingSoon }: { onComingSoon: (label: string) => void }) {
+function IslandMesh({ onComingSoon, navigate }: { onComingSoon: (label: string) => void, navigate: (path: string) => void }) {
   const { scene } = useGLTF('/island.glb', true)
 
   const markers = useMemo(() => {
@@ -208,6 +240,12 @@ function IslandMesh({ onComingSoon }: { onComingSoon: (label: string) => void })
       const box = new THREE.Box3().setFromObject(obj)
       const center = new THREE.Vector3()
       box.getCenter(center)
+      // DEBUG: log zone info
+      let meshCount = 0
+      obj.traverse((c) => { if ((c as THREE.Mesh).isMesh) meshCount++ })
+      const size = new THREE.Vector3()
+      box.getSize(size)
+      console.log(`[Zone] ${obj.name} | meshes: ${meshCount} | center: (${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)}) | size: (${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}) | children: ${obj.children.length} | type: ${obj.type}`)
       result.push({ name: obj.name, box, center, sceneObj: obj, ...config })
     })
     return result
@@ -217,7 +255,7 @@ function IslandMesh({ onComingSoon }: { onComingSoon: (label: string) => void })
     <>
       <primitive object={scene} />
       {markers.map((marker) => (
-        <ZoneHitbox key={marker.name} marker={marker} onComingSoon={onComingSoon} />
+        <ZoneHitbox key={marker.name} marker={marker} onComingSoon={onComingSoon} navigate={navigate} />
       ))}
     </>
   )
@@ -239,6 +277,7 @@ interface Props {
 }
 
 export default function IslandScene({ style, onComingSoon }: Props) {
+  const navigate = useNavigate()
   return (
     <Canvas
       camera={{ position: [0, 8, 14], fov: 40 }}
@@ -250,7 +289,7 @@ export default function IslandScene({ style, onComingSoon }: Props) {
       <directionalLight position={[-4, 3, -6]} intensity={0.3} color="#4488ff" />
       <Environment preset="night" />
       <Suspense fallback={<LoadingFallback />}>
-        <IslandMesh onComingSoon={onComingSoon} />
+        <IslandMesh onComingSoon={onComingSoon} navigate={navigate} />
       </Suspense>
       <OrbitControls
         enablePan={true}
