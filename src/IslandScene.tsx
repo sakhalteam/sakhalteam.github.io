@@ -240,12 +240,6 @@ function IslandMesh({ onComingSoon, navigate }: { onComingSoon: (label: string) 
       const box = new THREE.Box3().setFromObject(obj)
       const center = new THREE.Vector3()
       box.getCenter(center)
-      // DEBUG: log zone info
-      let meshCount = 0
-      obj.traverse((c) => { if ((c as THREE.Mesh).isMesh) meshCount++ })
-      const size = new THREE.Vector3()
-      box.getSize(size)
-      console.log(`[Zone] ${obj.name} | meshes: ${meshCount} | center: (${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)}) | size: (${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}) | children: ${obj.children.length} | type: ${obj.type}`)
       result.push({ name: obj.name, box, center, sceneObj: obj, ...config })
     })
     return result
