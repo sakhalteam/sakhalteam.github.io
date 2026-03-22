@@ -25,7 +25,7 @@ const ZONE_URLS: Record<string, { url: string, internal: boolean }> = {
   boombox: { url: '/nikbeat/', internal: false },
   // crystals: { url: '/crystals', internal: true },
   // family_mart: { url: '/family-mart', internal: true },
-  // pokemon_center: { url: '/pokemon', internal: true },
+  pokemon_center: { url: '/pokemon-park/', internal: false },
   // nessie: { url: '/nessie', internal: true },
   // underground: { url: '/underground', internal: true },
 }
@@ -127,7 +127,7 @@ function ZoneAura({ marker, hovered }: { marker: ZoneMarker, hovered: boolean })
       uniforms: {
         glowColor: { value: isActive ? new THREE.Color(0.9, 0.35, 0.2) : new THREE.Color(0.5, 0.5, 0.6) },
         intensity: { value: 2.0 },
-        power: { value: 2.0 },
+        power: { value: 2.5 },
         opacity: { value: 0.0 },
       },
       transparent: true,
@@ -154,7 +154,7 @@ function ZoneAura({ marker, hovered }: { marker: ZoneMarker, hovered: boolean })
     <mesh
       geometry={geometry}
       material={material}
-      scale={[1.06, 1.06, 1.06]}
+      scale={[1.12, 1.12, 1.12]}
       raycast={() => {}} // don't intercept pointer events
     />
   )
