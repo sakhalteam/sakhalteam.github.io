@@ -1,6 +1,6 @@
-import { Suspense, useRef, useMemo, useState, memo } from 'react'
+import { Suspense, useRef, useMemo, useState, useEffect, memo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { useGLTF, OrbitControls, Environment, Html } from '@react-three/drei'
+import { useGLTF, useAnimations, OrbitControls, Environment, Html } from '@react-three/drei'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -217,7 +217,13 @@ const HotspotHitbox = memo(function HotspotHitbox({ hotspot, navigate }: { hotsp
 })
 
 function SanctuaryMesh({ navigate }: { navigate: (path: string) => void }) {
-  const { scene } = useGLTF('/zones/zone_bird_sanctuary.glb', true)
+  const { scene, animations } = useGLTF('/zones/zone_bird_sanctuary.glb', true)
+  const { actions } = useAnimations(animations, scene)
+
+  useEffect(() => {
+    console.log(`[BirdSanctuary] ${animations.length} animation(s) found:`, animations.map(a => a.name))
+    Object.values(actions).forEach(action => action?.play())
+  }, [actions, animations])
 
   const hotspots = useMemo(() => {
     const result: Hotspot[] = []

@@ -20,8 +20,8 @@ The main portfolio/hub site for sakhalteam. Features an interactive 3D island ma
 - Island model lives in `island.blend` (Blender source) — Nic edits this on his main PC
 
 ## Pending zones
-- `zone_pokemon_park` → `/pokemon-park/` (needs adding to island.blend + IslandScene.tsx)
-- `zone_adhdo` → `/adhdo/` (future)
+- `zone_pokemon_park` → `/pokemon-park/` (code wired, needs mesh in island.blend — Pattern B direct link)
+- `zone_adhdo` → `/adhdo/` (code wired, needs mesh in island.blend — Pattern B direct link)
 
 ## Important
 Nic does the Blender modeling himself. Claude helps with the React/Three.js wiring, not the 3D asset creation.

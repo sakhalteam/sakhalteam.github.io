@@ -23,9 +23,10 @@ const ZONE_URLS: Record<string, { url: string, internal: boolean }> = {
   bird_sanctuary: { url: '/bird-sanctuary', internal: true },
   reading_room: { url: '/japanese-articles/', internal: false },
   boombox: { url: '/nikbeat/', internal: false },
+  pokemon_park: { url: '/pokemon-park/', internal: false },
+  adhdo: { url: '/adhdo/', internal: false },
   // crystals: { url: '/crystals', internal: true },
   // family_mart: { url: '/family-mart', internal: true },
-  pokemon_center: { url: '/pokemon-park/', internal: false },
   // nessie: { url: '/nessie', internal: true },
   // underground: { url: '/underground', internal: true },
 }
