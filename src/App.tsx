@@ -3,12 +3,14 @@ import { Routes, Route } from 'react-router-dom'
 import './App.css'
 import IslandScene from './IslandScene'
 import BirdSanctuaryScene from './BirdSanctuaryScene'
+import QuickNav from './QuickNav'
 
 function HomePage() {
   const [comingSoon, setComingSoon] = useState<string | null>(null)
 
   return (
     <div className="ocean" onClick={() => setComingSoon(null)}>
+      <QuickNav />
       <header className="site-header">
         <h1 className="site-title">SAKHALTEAM</h1>
         <p className="site-subtitle">an archipelago of small projects</p>
