@@ -6,6 +6,7 @@ const SITES = [
   { label: 'Japanese Articles', url: '/japanese-articles/' },
   { label: 'NikBeat', url: '/nikbeat/' },
   { label: 'Pokemon Park', url: '/pokemon-park/' },
+  { label: 'Weather Report', url: '/weather-report/' },
 ]
 
 export default function QuickNav() {
