@@ -25,6 +25,7 @@ const ZONE_URLS: Record<string, { url: string, internal: boolean }> = {
   boombox: { url: '/nikbeat/', internal: false },
   pokemon_park: { url: '/pokemon-park/', internal: false },
   adhdo: { url: '/adhdo/', internal: false },
+  weather_report: { url: '/weather-report/', internal: false },
   // crystals: { url: '/crystals', internal: true },
   // family_mart: { url: '/family-mart', internal: true },
   // nessie: { url: '/nessie', internal: true },
