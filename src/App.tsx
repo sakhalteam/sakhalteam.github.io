@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom'
 import './App.css'
 import IslandScene from './IslandScene'
 import BirdSanctuaryScene from './BirdSanctuaryScene'
+import ZoneScene from './ZoneScene'
 import QuickNav from './QuickNav'
 
 function HomePage() {
@@ -51,7 +52,10 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/bird-sanctuary" element={<BirdSanctuaryScene />} />
+      <Route path="/zone-bird-sanctuary" element={<BirdSanctuaryScene />} />
+      <Route path="/zone-ss-brainfog" element={<ZoneScene glbPath="/zones/zone_ss_brainfog.glb" title="S.S. BRAINFOG" environmentPreset="sunset" />} />
+      <Route path="/zone-weather-report" element={<ZoneScene glbPath="/zones/zone_weather_report.glb" title="WEATHER REPORT" environmentPreset="city" />} />
+      <Route path="/zone-reading-room" element={<ZoneScene glbPath="/zones/zone_reading_room.glb" title="READING ROOM" environmentPreset="apartment" />} />
     </Routes>
   )
 }

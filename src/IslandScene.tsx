@@ -1,14 +1,16 @@
-import { Suspense, useRef, useMemo, useState, memo } from 'react'
+import { Suspense, useRef, useMemo, useState, useCallback, memo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { useGLTF, OrbitControls, Environment, Html } from '@react-three/drei'
+import { OrbitControls, Environment, Html } from '@react-three/drei'
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
+import { KernelSize } from 'postprocessing'
+import { useOptimizedGLTF } from './useOptimizedGLTF'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 interface ZoneConfig {
   label: string
   url: string | null
-  internal: boolean  // true = React Router navigate, false = full page navigation
+  internal: boolean
   type: 'active' | 'coming-soon'
 }
 
@@ -16,31 +18,31 @@ function toTitleCase(str: string) {
   return str.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
-// Blender naming: "zone_display_name" — e.g. zone_bird_sanctuary, zone_reading_room
-// URL mapping lives here. Unlisted zones show as coming-soon.
-// internal: true = zone scene within this app, false = separate deployed site
-const ZONE_URLS: Record<string, { url: string, internal: boolean }> = {
-  bird_sanctuary: { url: '/bird-sanctuary', internal: true },
-  reading_room: { url: '/japanese-articles/', internal: false },
-  boombox: { url: '/nikbeat/', internal: false },
-  pokemon_park: { url: '/pokemon-park/', internal: false },
-  adhdo: { url: '/adhdo/', internal: false },
-  weather_report: { url: '/weather-report/', internal: false },
-  // crystals: { url: '/crystals', internal: true },
-  // family_mart: { url: '/family-mart', internal: true },
-  // nessie: { url: '/nessie', internal: true },
-  // underground: { url: '/underground', internal: true },
+const ZONE_LABELS: Record<string, string> = {
+  ss_brainfog: 'S.S. Brainfog',
+  boombox: 'The Boombox',
+  reading_room: 'Reading Room',
 }
 
-function getZoneConfig(meshName: string): ZoneConfig | null {
-  const key = meshName.replace(/^zone_/i, '').toLowerCase()
+const ZONE_URLS: Record<string, { url: string, internal: boolean }> = {
+  bird_sanctuary: { url: '/zone-bird-sanctuary', internal: true },
+  ss_brainfog: { url: '/zone-ss-brainfog', internal: true },
+  weather_report: { url: '/zone-weather-report', internal: true },
+  reading_room: { url: '/zone-reading-room', internal: true },
+  boombox: { url: '/nikbeat/', internal: false },
+  pokemon_park: { url: '/pokemon-park/', internal: false },
+}
+
+function getZoneConfig(meshName: string): ZoneConfig {
+  const key = meshName.replace(/^(zone|portal)_/i, '').toLowerCase()
   const entry = ZONE_URLS[key]
-  const label = toTitleCase(key)
+  const label = ZONE_LABELS[key] ?? toTitleCase(key)
   return { label, url: entry?.url ?? null, internal: entry?.internal ?? false, type: entry ? 'active' : 'coming-soon' }
 }
 
 interface ZoneMarker {
   name: string
+  key: string
   box: THREE.Box3
   center: THREE.Vector3
   label: string
@@ -48,121 +50,89 @@ interface ZoneMarker {
   internal: boolean
   type: 'active' | 'coming-soon'
   sceneObj: THREE.Object3D
+  meshes: THREE.Mesh[]
 }
 
-/* ---- Fresnel aura shaders ---- */
+/** Collect all Mesh descendants of an Object3D (including itself if it's a mesh) */
+function collectMeshes(obj: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = []
+  obj.traverse((child) => {
+    if ((child as THREE.Mesh).isMesh) meshes.push(child as THREE.Mesh)
+  })
+  return meshes
+}
 
-const auraVertexShader = `
-  varying vec3 vNormal;
-  varying vec3 vViewDir;
-  void main() {
-    vec4 worldPos = modelMatrix * vec4(position, 1.0);
-    vNormal = normalize(normalMatrix * normal);
-    vViewDir = normalize(cameraPosition - worldPos.xyz);
-    gl_Position = projectionMatrix * viewMatrix * worldPos;
-  }
-`
+/**
+ * Build zone markers by scanning the scene for zone_/portal_ objects
+ * and associating zc_ (zone child) meshes with their parent zones.
+ *
+ * Convention:
+ *   zone_<key>        — clickable zone (hitbox + label + glow source)
+ *   zc_<key>_<name>   — glows with zone_<key> on hover, not a trigger itself
+ *   portal_<key>      — navigates to a site
+ *   (no prefix)       — scenery, no interaction
+ */
+function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
+  const zoneObjects: THREE.Object3D[] = []
+  const zoneKeys: string[] = []
 
-const auraFragmentShader = `
-  uniform vec3 glowColor;
-  uniform float intensity;
-  uniform float power;
-  uniform float opacity;
-  varying vec3 vNormal;
-  varying vec3 vViewDir;
-  void main() {
-    float fresnel = 1.0 - abs(dot(vNormal, vViewDir));
-    fresnel = pow(fresnel, power);
-    gl_FragColor = vec4(glowColor * intensity, fresnel * opacity);
-  }
-`
-
-function ZoneAura({ marker, hovered }: { marker: ZoneMarker, hovered: boolean }) {
-  const currentOpacity = useRef(0)
-
-  const geometry = useMemo(() => {
-    const obj = marker.sceneObj
-    const geometries: THREE.BufferGeometry[] = []
-
-    // We need to transform all child meshes into a space where
-    // marker.center is the origin (since the parent <group> is at marker.center)
-    const centerOffset = new THREE.Matrix4().makeTranslation(
-      -marker.center.x, -marker.center.y, -marker.center.z
-    )
-
-    obj.traverse((child) => {
-      if (!(child as THREE.Mesh).isMesh) return
-      const mesh = child as THREE.Mesh
-      if (!mesh.geometry) return
-      const cloned = mesh.geometry.clone()
-      // Apply child's world transform, then offset so marker.center = origin
-      mesh.updateWorldMatrix(true, false)
-      const mat = new THREE.Matrix4().copy(mesh.matrixWorld).premultiply(centerOffset)
-      cloned.applyMatrix4(mat)
-      geometries.push(cloned)
-    })
-
-    if (geometries.length === 0) {
-      // Fallback: use bounding box as aura shape (e.g. if zone is an empty with no mesh children)
-      const size = new THREE.Vector3()
-      marker.box.getSize(size)
-      return new THREE.BoxGeometry(size.x, size.y, size.z)
+  // Pass 1: find zone_/portal_ objects among scene children
+  for (const child of scene.children) {
+    const lower = child.name.toLowerCase()
+    if (lower.startsWith('zone_') || lower.startsWith('portal_')) {
+      zoneObjects.push(child)
+      zoneKeys.push(lower.replace(/^(zone|portal)_/, ''))
     }
-    if (geometries.length === 1) return geometries[0]
+  }
 
-    // Normalize attributes: keep only position + normal (the aura shader only needs these).
-    // Strips uv1, uv2, etc. that cause mergeGeometries to fail on mixed meshes.
-    for (const geo of geometries) {
-      const keep = new Set(['position', 'normal'])
-      for (const attr of Object.keys(geo.attributes)) {
-        if (!keep.has(attr)) geo.deleteAttribute(attr)
+  // Sort keys longest-first so zc_ matching is unambiguous
+  // (e.g. "pokemon_park" matches before "pokemon")
+  const sortedKeys = [...zoneKeys].sort((a, b) => b.length - a.length)
+
+  // Pass 2: collect zc_ meshes and associate with their zone
+  const zcMap = new Map<string, THREE.Mesh[]>(zoneKeys.map(k => [k, []]))
+  for (const child of scene.children) {
+    const lower = child.name.toLowerCase()
+    if (!lower.startsWith('zc_')) continue
+    const suffix = lower.slice(3) // strip 'zc_'
+    for (const key of sortedKeys) {
+      if (suffix.startsWith(key + '_') || suffix === key) {
+        // Collect this object + any mesh descendants
+        collectMeshes(child).forEach(m => zcMap.get(key)!.push(m))
+        break
       }
     }
-    return mergeGeometries(geometries, false)
-  }, [marker.sceneObj, marker.center])
+  }
 
-  const material = useMemo(() => {
-    const isActive = marker.type === 'active'
-    return new THREE.ShaderMaterial({
-      vertexShader: auraVertexShader,
-      fragmentShader: auraFragmentShader,
-      uniforms: {
-        glowColor: { value: isActive ? new THREE.Color(0.9, 0.35, 0.2) : new THREE.Color(0.5, 0.5, 0.6) },
-        intensity: { value: 2.0 },
-        power: { value: 2.5 },
-        opacity: { value: 0.0 },
-      },
-      transparent: true,
-      depthWrite: false,
-      side: THREE.FrontSide,
-    })
-  }, [marker.type])
+  // Build markers with combined meshes and expanded bounding boxes
+  const result: ZoneMarker[] = []
+  for (const obj of zoneObjects) {
+    const key = obj.name.toLowerCase().replace(/^(zone|portal)_/, '')
+    const config = getZoneConfig(obj.name)
+    const zoneMeshes = collectMeshes(obj)
+    const zcMeshes = zcMap.get(key) ?? []
+    const allMeshes = [...zoneMeshes, ...zcMeshes]
 
-  useFrame((_, delta) => {
-    const target = hovered ? 1.0 : 0.0
-    // Skip work when opacity is already at (or very near) the target
-    if (Math.abs(currentOpacity.current - target) < 0.001) {
-      currentOpacity.current = target
-      material.uniforms.opacity.value = target
-      return
-    }
-    currentOpacity.current = THREE.MathUtils.lerp(currentOpacity.current, target, delta * 5)
-    material.uniforms.opacity.value = currentOpacity.current
-  })
+    // Bounding box covers zone object + all zc_ children
+    const box = new THREE.Box3().setFromObject(obj)
+    for (const mesh of zcMeshes) box.expandByObject(mesh)
+    const center = new THREE.Vector3()
+    box.getCenter(center)
 
-  if (!geometry) return null
+    result.push({ name: obj.name, key, box, center, sceneObj: obj, meshes: allMeshes, ...config })
+  }
 
-  return (
-    <mesh
-      geometry={geometry}
-      material={material}
-      scale={[1.12, 1.12, 1.12]}
-      raycast={() => {}} // don't intercept pointer events
-    />
-  )
+  return result
 }
 
-const ZoneHitbox = memo(function ZoneHitbox({ marker, onComingSoon, navigate }: { marker: ZoneMarker, onComingSoon: (label: string) => void, navigate: (path: string) => void }) {
+const ZoneHitbox = memo(function ZoneHitbox({
+  marker, onComingSoon, navigate, onHoverChange,
+}: {
+  marker: ZoneMarker
+  onComingSoon: (label: string) => void
+  navigate: (path: string) => void
+  onHoverChange: (marker: ZoneMarker, hovered: boolean) => void
+}) {
   const [hovered, setHovered] = useState(false)
   const pointerDown = useRef<{ x: number, y: number } | null>(null)
   const size = useMemo(() => {
@@ -173,20 +143,25 @@ const ZoneHitbox = memo(function ZoneHitbox({ marker, onComingSoon, navigate }: 
 
   return (
     <group position={marker.center}>
-      {/* Fresnel aura on the actual zone geometry */}
-      <ZoneAura marker={marker} hovered={hovered} />
-      {/* Invisible hitbox for hover/click detection */}
       <mesh
-        onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = 'pointer' }}
-        onPointerOut={() => { setHovered(false); document.body.style.cursor = 'auto' }}
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          setHovered(true)
+          onHoverChange(marker, true)
+          document.body.style.cursor = 'pointer'
+        }}
+        onPointerOut={() => {
+          setHovered(false)
+          onHoverChange(marker, false)
+          document.body.style.cursor = 'auto'
+        }}
         onPointerDown={(e) => { pointerDown.current = { x: e.clientX, y: e.clientY } }}
         onClick={(e) => {
           e.stopPropagation()
-          // Ignore clicks that were actually orbit drags
           if (pointerDown.current) {
             const dx = e.clientX - pointerDown.current.x
             const dy = e.clientY - pointerDown.current.y
-            if (dx * dx + dy * dy > 25) return // moved more than 5px = drag
+            if (dx * dx + dy * dy > 25) return
           }
           if (marker.url) {
             if (marker.internal) {
@@ -202,7 +177,6 @@ const ZoneHitbox = memo(function ZoneHitbox({ marker, onComingSoon, navigate }: 
         <boxGeometry args={[size.x, size.y, size.z]} />
         <meshStandardMaterial visible={false} />
       </mesh>
-      {/* Label floats above the bounding box */}
       <Html center distanceFactor={12} position={[0, size.y / 2 + 0.3, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
         <div style={{
           background: hovered ? 'rgba(0,0,0,0.9)' : 'rgba(0,0,0,0.75)',
@@ -229,29 +203,95 @@ const ZoneHitbox = memo(function ZoneHitbox({ marker, onComingSoon, navigate }: 
   )
 })
 
-function IslandMesh({ onComingSoon, navigate }: { onComingSoon: (label: string) => void, navigate: (path: string) => void }) {
-  const { scene } = useGLTF('/island.glb', true)
+/**
+ * Drives emissive bloom on ALL zone meshes.
+ * Iterates every registered mesh each frame — boosts hovered ones, restores the rest.
+ */
+function BloomDriver({ allMeshes, hoveredMeshes, color }: {
+  allMeshes: React.RefObject<Map<string, THREE.Mesh[]>>
+  hoveredMeshes: THREE.Mesh[]
+  color: THREE.Color
+}) {
+  // Track per-MESH (not per-material) to handle shared materials like cranes
+  const originals = useRef<Map<THREE.Mesh, { emissive: THREE.Color, emissiveIntensity: number }>>(new Map())
+  const intensities = useRef<Map<THREE.Mesh, number>>(new Map())
+  const hoveredSet = useRef<Set<THREE.Mesh>>(new Set())
+  const activeColor = useRef(color)
+
+  hoveredSet.current = new Set(hoveredMeshes)
+  activeColor.current = color
+
+  useFrame((_, delta) => {
+    for (const [, meshes] of allMeshes.current) {
+      for (const mesh of meshes) {
+        const mat = mesh.material as THREE.MeshStandardMaterial
+        if (!mat.emissive) continue
+
+        // On first encounter, clone shared materials so each mesh is independent
+        if (!originals.current.has(mesh)) {
+          if (!mesh.userData._bloomCloned) {
+            mesh.material = mat.clone()
+            mesh.userData._bloomCloned = true
+          }
+          const cloned = mesh.material as THREE.MeshStandardMaterial
+          originals.current.set(mesh, {
+            emissive: cloned.emissive.clone(),
+            emissiveIntensity: cloned.emissiveIntensity,
+          })
+          intensities.current.set(mesh, 0)
+        }
+
+        const target = hoveredSet.current.has(mesh) ? 1.0 : 0.0
+        let curr = intensities.current.get(mesh)!
+        const diff = Math.abs(curr - target)
+
+        if (diff < 0.001) {
+          if (curr !== target) {
+            curr = target
+            intensities.current.set(mesh, curr)
+          }
+          if (curr === 0) {
+            const orig = originals.current.get(mesh)!
+            mat.emissive.copy(orig.emissive)
+            mat.emissiveIntensity = orig.emissiveIntensity
+          }
+          continue
+        }
+
+        curr = THREE.MathUtils.lerp(curr, target, delta * 8)
+        intensities.current.set(mesh, curr)
+
+        const orig = originals.current.get(mesh)!
+        mat.emissive.copy(orig.emissive).lerp(activeColor.current, curr)
+        mat.emissiveIntensity = orig.emissiveIntensity + curr * 0.15
+      }
+    }
+  })
+
+  return null
+}
+
+function IslandMesh({ onComingSoon, navigate, onHoverChange, allMeshesRef }: {
+  onComingSoon: (label: string) => void
+  navigate: (path: string) => void
+  onHoverChange: (marker: ZoneMarker, hovered: boolean) => void
+  allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>
+}) {
+  const { scene } = useOptimizedGLTF('/island.glb')
 
   const markers = useMemo(() => {
-    const result: ZoneMarker[] = []
-    scene.traverse((obj) => {
-      if (!obj.name.toLowerCase().startsWith('zone_')) return
-      const config = getZoneConfig(obj.name)
-      if (!config) return
-      // Compute world-space bounding box of this mesh (and any children)
-      const box = new THREE.Box3().setFromObject(obj)
-      const center = new THREE.Vector3()
-      box.getCenter(center)
-      result.push({ name: obj.name, box, center, sceneObj: obj, ...config })
-    })
+    const result = buildZoneMarkers(scene)
+    for (const marker of result) {
+      allMeshesRef.current.set(marker.name, marker.meshes)
+    }
     return result
-  }, [scene])
+  }, [scene, allMeshesRef])
 
   return (
     <>
       <primitive object={scene} />
       {markers.map((marker) => (
-        <ZoneHitbox key={marker.name} marker={marker} onComingSoon={onComingSoon} navigate={navigate} />
+        <ZoneHitbox key={marker.name} marker={marker} onComingSoon={onComingSoon} navigate={navigate} onHoverChange={onHoverChange} />
       ))}
     </>
   )
@@ -267,6 +307,9 @@ function LoadingFallback() {
   )
 }
 
+const BLOOM_COLOR_ACTIVE = new THREE.Color(0.9, 0.35, 0.2)
+const BLOOM_COLOR_COMING_SOON = new THREE.Color(0.55, 0.35, 0.85)
+
 interface Props {
   style?: React.CSSProperties
   onComingSoon: (label: string) => void
@@ -274,6 +317,15 @@ interface Props {
 
 export default function IslandScene({ style, onComingSoon }: Props) {
   const navigate = useNavigate()
+  const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map())
+  const [hoveredZone, setHoveredZone] = useState<ZoneMarker | null>(null)
+
+  const onHoverChange = useCallback((marker: ZoneMarker, hovered: boolean) => {
+    setHoveredZone(hovered ? marker : null)
+  }, [])
+
+  const bloomColor = hoveredZone?.type === 'active' ? BLOOM_COLOR_ACTIVE : BLOOM_COLOR_COMING_SOON
+
   return (
     <Canvas
       camera={{ position: [0, 8, 14], fov: 40 }}
@@ -285,7 +337,12 @@ export default function IslandScene({ style, onComingSoon }: Props) {
       <directionalLight position={[-4, 3, -6]} intensity={0.3} color="#4488ff" />
       <Environment preset="night" />
       <Suspense fallback={<LoadingFallback />}>
-        <IslandMesh onComingSoon={onComingSoon} navigate={navigate} />
+        <IslandMesh onComingSoon={onComingSoon} navigate={navigate} onHoverChange={onHoverChange} allMeshesRef={allMeshesRef} />
+        <BloomDriver
+          allMeshes={allMeshesRef}
+          hoveredMeshes={hoveredZone?.meshes ?? []}
+          color={bloomColor}
+        />
       </Suspense>
       <OrbitControls
         enablePan={true}
@@ -294,8 +351,17 @@ export default function IslandScene({ style, onComingSoon }: Props) {
         maxDistance={30}
         maxPolarAngle={Math.PI / 2.1}
       />
+      <EffectComposer multisampling={0}>
+        <Bloom
+          intensity={0.2}
+          luminanceThreshold={0.85}
+          luminanceSmoothing={0.3}
+          kernelSize={KernelSize.SMALL}
+          mipmapBlur
+        />
+      </EffectComposer>
     </Canvas>
   )
 }
 
-useGLTF.preload('/island.glb', true)
+useOptimizedGLTF.preload('/island.glb')

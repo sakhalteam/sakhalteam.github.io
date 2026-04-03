@@ -1,6 +1,7 @@
 import { Suspense, useRef, useMemo, useState, useEffect, memo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { useGLTF, useAnimations, OrbitControls, Environment, Html } from '@react-three/drei'
+import { useAnimations, OrbitControls, Environment, Html } from '@react-three/drei'
+import { useOptimizedGLTF } from './useOptimizedGLTF'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -15,6 +16,7 @@ interface HotspotConfig {
 }
 
 const HOTSPOTS: Record<string, HotspotConfig> = {
+  portal_bird_bingo: { label: 'Bird Bingo',     url: '/bird-bingo/',  internal: false },
   baby_deku:        { label: 'Deku Sprout',     url: null,            internal: false },
   bird_penguin:     { label: 'Penguin',         url: null,            internal: false },
   bird_ostrich:     { label: 'Ostrich',         url: null,            internal: false },
@@ -217,7 +219,7 @@ const HotspotHitbox = memo(function HotspotHitbox({ hotspot, navigate }: { hotsp
 })
 
 function SanctuaryMesh({ navigate }: { navigate: (path: string) => void }) {
-  const { scene, animations } = useGLTF('/zones/zone_bird_sanctuary.glb', true)
+  const { scene, animations } = useOptimizedGLTF('/zones/zone_bird_sanctuary.glb')
   const { actions } = useAnimations(animations, scene)
 
   useEffect(() => {
@@ -353,4 +355,4 @@ export default function BirdSanctuaryScene() {
   )
 }
 
-useGLTF.preload('/zones/zone_bird_sanctuary.glb', true)
+useOptimizedGLTF.preload('/zones/zone_bird_sanctuary.glb')
