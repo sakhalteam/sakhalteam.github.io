@@ -15,26 +15,27 @@ The main portfolio/hub site for sakhalteam. Features an interactive 3D island ma
 
 ## Navigation terminology (the naming contract)
 
+**The prefix is the verb. The key is the noun.** Prefixes encode *what happens on click*, keys encode *the destination/target*. The scene map (future `sceneMap.ts`) encodes the full topology (hierarchy, parent scenes, back-navigation).
+
 Object name prefixes in GLB files determine behavior:
 
-| Prefix | Behavior | File location |
-|--------|----------|---------------|
-| `zone_<key>` | Clickable zone (hitbox + label + glow source) | `public/zones/zone_<key>.glb` |
-| `zc_<key>_<name>` | Glows with zone_<key> on hover, not a trigger | Part of parent GLB |
-| `room_<key>` | Loads intermediate 3D scene (nested in zone) | `public/zones/rooms/room_<key>.glb` |
-| `portal_<key>` | Navigates directly to a sakhalteam site | No GLB — it's a URL |
-| *(no prefix)* | Scenery, decoration, or local interaction | Part of parent GLB |
+| Prefix | Behavior (what happens on click) | File location |
+|--------|----------------------------------|---------------|
+| `zone_<key>` | Loads a new 3D scene | `public/zones/zone_<key>.glb` |
+| `portal_<key>` | Navigates to an external sakhalteam minisite | No GLB — it's a URL |
+| `toy_<key>` | Plays animation / interaction, no navigation | Part of parent GLB |
+| `zc_<key>_<name>` | Not clickable — glows with parent zone on hover | Part of parent GLB |
+| *(no prefix)* | Scenery, decoration — not interactive | Part of parent GLB |
+
+**Depth is implicit, not encoded in the prefix.** A `zone_` inside island.glb and a `zone_` inside zone_reading_room.glb behave identically — both load a .glb scene. The hierarchy comes from *which scene contains the object*, not the prefix. This means no `room_`/`nook_`/`cranny_` prefixes — just `zone_` for any scene-loading click at any depth.
+
+**Zone names describe destinations, not the clickable object.** The boombox mesh on the island is `zone_beach_party` (the place you arrive at), not `zone_boombox` (the thing you clicked). Exception: if the zone IS the object (e.g., a ship named S.S. Brainfog), naming after the object is fine.
 
 **`zc_` convention (zone children):** Objects prefixed `zc_<key>_` are siblings (NOT children) of `zone_<key>` in Blender. They receive the bloom glow when the zone is hovered but don't create hitboxes or labels. This decouples glow membership from Blender parenting, allowing free animation. Matching uses longest-key-first to avoid ambiguity. No `empty_zone_x` wrappers needed — everything should be flat at the scene root.
 
-**Hierarchy:** Hub (island) → Zone → Room → Subroom → ... → Portal
+**Hierarchy:** Hub (island.glb) → Zone → Sub-zone → ... → Portal (or dead end)
 
-- **Hub** = the island itself (`island.glb`)
-- **Zone** = one level down from island, its own 3D scene
-- **Room** = one level down from zone, its own 3D scene
-- **Portal** = navigates to a deployed sakhalteam site (the final exit)
-
-Not every path ends in a portal. Dead-end zones/rooms are valid (puzzles, easter eggs, vibes).
+Not every path ends in a portal. Dead-end zones are valid (puzzles, easter eggs, vibes). Toys (`toy_`) are interactive but don't navigate — they're fun diversions within a scene.
 
 **Naming in island.glb:** Objects named `zone_x` that don't yet have a corresponding `zone_x.glb` in `public/zones/` are coming-soon zones. Keeping the `zone_` prefix signals Nic's intent to eventually build a zone scene for them.
 
@@ -42,17 +43,17 @@ Not every path ends in a portal. Dead-end zones/rooms are valid (puzzles, easter
 
 **Zone URL routes:** Internal zone scenes use `/zone-x` URL prefix (e.g., `/zone-bird-sanctuary`) to avoid collisions with external sites at `/x`.
 
+**Minigames:** Small interactive experiences (e.g., a computer screen minigame inside a zone) stay as components within this repo. Only spin out to a separate repo if it's big enough for Jojo to bookmark independently.
+
 ## Folder structure
 ```
 public/
 ├── island.glb                          # Hub scene
 └── zones/
-    ├── zone_bird_sanctuary.glb         # Zone scenes
-    ├── zone_*.glb
-    └── rooms/
-        └── room_*.glb                  # Room scenes (nested in zones)
+    ├── zone_bird_sanctuary.glb         # Zone scenes (any depth — sub-zones go here too)
+    └── zone_*.glb
 ```
-Keep it flat. The GLB hierarchy encodes parent-child relationships. Don't nest folders per-zone.
+Keep it flat. All zone GLBs live in `public/zones/` regardless of depth in the navigation tree. The scene map encodes parent-child relationships, not the folder structure.
 
 ## Architecture
 - **IslandScene.tsx**: Main 3D scene. Traverses island.glb for `zone_`/`portal_` prefixed objects. `ZONE_URLS` maps keys to URLs, `ZONE_LABELS` maps keys to display names. Bloom post-processing on active zone hover, outline pass on coming-soon zone hover.
@@ -69,11 +70,11 @@ Both zone types use bloom (emissive ramp + Bloom pass). The Outline approach was
 
 ## Active zones
 - `zone_bird_sanctuary` → zone scene at `/zone-bird-sanctuary` → `portal_bird_bingo` → `/bird-bingo/`
-- `zone_ss_brainfog` → `/adhdo/` (boat mesh, has zone GLB)
-- `zone_boombox` → `/nikbeat/` (boombox on beach)
-- `zone_reading_room` → `/japanese-articles/` (Bell Tower, has zone GLB)
-- `zone_pokemon_park` → `/pokemon-park/` (rocky island + pokemon children)
-- `zone_weather_report` → `/weather-report/` (cloud mesh, has zone GLB)
+- `zone_ss_brainfog` → zone scene at `/zone-ss-brainfog` (boat mesh) → portal to `/adhdo/`
+- `zone_beach_party` → zone scene (TODO: rename from `zone_boombox`, build beach party scene GLB) → `portal_nikbeat` → `/nikbeat/`
+- `zone_reading_room` → zone scene at `/zone-reading-room` (Bell Tower) → `portal_japanese_articles` → `/japanese-articles/`
+- `zone_pokemon_park` → zone scene at `/zone-pokemon-park` → `portal_pokemon_park` → `/pokemon-park/`
+- `zone_weather_report` → zone scene at `/zone-weather-report` → portal to `/weather-report/`
 
 ## Coming-soon zones (meshes exist in island.glb, not yet wired to sites)
 zone_crystals, zone_family_mart, zone_flower_shop, zone_nessie, zone_pokemon_center, zone_underground
@@ -90,5 +91,15 @@ Optimized via gltf-transform: Draco geometry compression + WebP texture compress
 ## SPA routing
 `404.html` is copied from `index.html` during build (`npm run build`). This fixes GitHub Pages 404 on refresh for internal routes like `/zone-bird-sanctuary`.
 
+## Planned: scene map (`sceneMap.ts`)
+A single source-of-truth file mapping the entire navigation tree: which scenes contain which zones/portals/toys, parent references for back-navigation, and destination URLs. This replaces the current scattered `ZONE_URLS`/`PORTAL_URLS` constants. Not yet implemented — build this when wiring up back-button navigation or adding sub-zones.
+
+## Example user flows (for context)
+- island → `zone_reading_room` → interior scene → `portal_japanese_articles` → /japanese-articles/
+- island → `zone_reading_room` → interior scene → `zone_computer_desk` → minigame vignette (component, not separate site)
+- island → `zone_bird_sanctuary` → `toy_kiwi` (dance animation) → `zone_deku_sprout` → zoomed-in scene → back → `portal_bird_bingo` → /bird-bingo/
+- island → `zone_pokemon_park` → `toy_omanyte` (dance) → `portal_pokemon_park` → /pokemon-park/
+- island → `zone_beach_party` → `toy_maracas` (shake) → `portal_nikbeat` → /nikbeat/
+
 ## Important
-Nic does the Blender modeling himself. Claude helps with the React/Three.js wiring, not the 3D asset creation. When Nic adds a `room_x` object to a zone GLB, check that `room_x.glb` exists in `public/zones/rooms/` — flag if missing.
+Nic does the Blender modeling himself. Claude helps with the React/Three.js wiring, not the 3D asset creation. When Nic adds a `zone_x` object to a GLB, check that `zone_x.glb` exists in `public/zones/` — flag if missing.
