@@ -2,6 +2,20 @@
 
 > Parent context: `../CLAUDE.md` has universal preferences and conventions. Keep it updated with anything universal you learn here.
 
+## Memory system
+- **At conversation start and after context compaction**, always read `MEMORY.md` and scan relevant memory files before proceeding. This prevents re-asking questions or losing context from prior sessions.
+- Keep `~/.claude/projects/` memory files updated (user profile, project state, feedback)
+- If you discover something **universal** (interaction prefs, conventions, cross-project patterns), note it so Nic can update `Code/CLAUDE.md`. Don't put project-specific info in other repos' CLAUDE.md files.
+- If you discover something **project-specific**, update this file only.
+- When upgrading dependencies, always verify CI pipeline (deploy.yaml Node version, tsconfig compatibility) before pushing.
+
+## Org-wide conventions
+- **Stack**: Vite 8 + React 19 + TypeScript 6. `"types": ["vite/client"]` required in tsconfig.app.json.
+- **Deploy**: GitHub Actions (Node 22) → GitHub Pages.
+- **Shared pattern**: HomeBtn component (fixed top-left, links to sakhalteam.github.io). Every sub-site should have one.
+- **Themes**: dark-first, modern. headlessui.com aesthetics — gradients, glows, frosted glass.
+- **Design philosophy**: Animal Crossing museum model — layered depth, available but never imposed. Playful, approachable, never overwhelming.
+
 ## What this is
 The main portfolio/hub site for sakhalteam. Features an interactive 3D island map built with React Three Fiber. Clickable zones and portals link to each project. Long-term vision is **Cosmic Osmo / Myst** — click a zone, enter a 3D environment, interact with objects, discover portals to actual sites. The journey is the point. Some zones may be dead ends, puzzles, or easter eggs with no portal at all.
 
@@ -25,6 +39,7 @@ Object name prefixes in GLB files determine behavior:
 | `portal_<key>` | Navigates to an external sakhalteam minisite | No GLB — it's a URL |
 | `toy_<key>` | Plays animation / interaction, no navigation | Part of parent GLB |
 | `zc_<key>_<name>` | Not clickable — glows with parent zone on hover | Part of parent GLB |
+| `pc_<key>_<name>` | Not clickable — glows with parent portal on hover | Part of parent GLB |
 | *(no prefix)* | Scenery, decoration — not interactive | Part of parent GLB |
 
 **Depth is implicit, not encoded in the prefix.** A `zone_` inside island.glb and a `zone_` inside zone_reading_room.glb behave identically — both load a .glb scene. The hierarchy comes from *which scene contains the object*, not the prefix. This means no `room_`/`nook_`/`cranny_` prefixes — just `zone_` for any scene-loading click at any depth.
@@ -69,15 +84,16 @@ Both zone types use bloom (emissive ramp + Bloom pass). The Outline approach was
 - **Coming-soon zones**: Lavender bloom glow (`THREE.Color(0.55, 0.35, 0.85)`)
 
 ## Active zones
-- `zone_bird_sanctuary` → zone scene at `/zone-bird-sanctuary` → `portal_bird_bingo` → `/bird-bingo/`
-- `zone_ss_brainfog` → zone scene at `/zone-ss-brainfog` (boat mesh) → portal to `/adhdo/`
-- `zone_beach_party` → zone scene (TODO: rename from `zone_boombox`, build beach party scene GLB) → `portal_nikbeat` → `/nikbeat/`
-- `zone_reading_room` → zone scene at `/zone-reading-room` (Bell Tower) → `portal_japanese_articles` → `/japanese-articles/`
-- `zone_pokemon_park` → zone scene at `/zone-pokemon-park` → `portal_pokemon_park` → `/pokemon-park/`
-- `zone_weather_report` → zone scene at `/zone-weather-report` → portal to `/weather-report/`
+- `zone_bird_sanctuary` → `/zone-bird-sanctuary` → `portal_bird_bingo` → `/bird-bingo/`
+- `zone_ss_brainfog` → `/zone-ss-brainfog` → `portal_adhdo` → `/adhdo/`
+- `zone_cloud_town` → `/zone-cloud-town` → `portal_weather_report` → `/weather-report/`
+- `zone_tower_of_knowledge` → `/zone-tower-of-knowledge` → `zone_reading_room` → `/zone-reading-room` → `portal_japanese_articles` → `/japanese-articles/`
+- `zone_pokemon_island` → `/zone-pokemon-island` → `portal_pokemon_park` → `/pokemon-park/`
+- `zone_family_mart` → `/zone-family-mart` → `zone_family_mart_interior` → `/zone-family-mart-interior` (dead-end for now)
+- `zone_beach_party` → `/zone-beach-party` → `portal_nikbeat` → `/nikbeat/`
 
 ## Coming-soon zones (meshes exist in island.glb, not yet wired to sites)
-zone_crystals, zone_family_mart, zone_flower_shop, zone_nessie, zone_pokemon_center, zone_underground
+zone_crystals, zone_flower_shop, zone_mystery_zone, zone_nessie, zone_the_tunnels
 
 ## Blender naming (no parenting needed)
 All objects should be flat at the scene root — no `empty_zone_x` wrappers, no parenting hierarchy. Use `zc_<key>_<name>` prefix to include meshes in a zone's hover glow. Cranes use `zc_` prefix on their respective zones (e.g., `zc_crystals_crane.004`).

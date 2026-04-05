@@ -53,9 +53,14 @@ export default function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/zone-bird-sanctuary" element={<BirdSanctuaryScene />} />
-      <Route path="/zone-ss-brainfog" element={<ZoneScene glbPath="/zones/zone_ss_brainfog.glb" title="S.S. BRAINFOG" environmentPreset="sunset" />} />
-      <Route path="/zone-weather-report" element={<ZoneScene glbPath="/zones/zone_weather_report.glb" title="WEATHER REPORT" environmentPreset="city" />} />
+      <Route path="/zone-ss-brainfog" element={<ZoneScene glbPath="/zones/zone_ss_brainfog.glb" title="S.S. BRAINFOG" cameraPosition={[0, 8, 20]} environmentPreset="sunset" />} />
+      <Route path="/zone-cloud-town" element={<ZoneScene glbPath="/zones/zone_cloud_town.glb" title="CLOUD TOWN" environmentPreset="city" />} />
+      <Route path="/zone-tower-of-knowledge" element={<ZoneScene glbPath="/zones/zone_tower_of_knowledge.glb" title="TOWER OF KNOWLEDGE" environmentPreset="apartment" />} />
       <Route path="/zone-reading-room" element={<ZoneScene glbPath="/zones/zone_reading_room.glb" title="READING ROOM" environmentPreset="apartment" />} />
+      <Route path="/zone-pokemon-island" element={<ZoneScene glbPath="/zones/zone_pokemon_island.glb" title="POKEMON ISLAND" environmentPreset="park" />} />
+      <Route path="/zone-beach-party" element={<ZoneScene glbPath="/zones/zone_beach_party.glb" title="BEACH PARTY" environmentPreset="sunset" />} />
+      <Route path="/zone-family-mart" element={<ZoneScene glbPath="/zones/zone_family_mart.glb" title="FAMILY MART" environmentPreset="warehouse" />} />
+      <Route path="/zone-family-mart-interior" element={<ZoneScene glbPath="/zones/zone_family_mart_interior.glb" title="FAMILY MART" environmentPreset="warehouse" />} />
     </Routes>
   )
 }

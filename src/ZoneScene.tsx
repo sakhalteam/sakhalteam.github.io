@@ -29,10 +29,11 @@ interface Hotspot {
   center: THREE.Vector3
   label: string
   url: string | null
+  internal: boolean
   sceneObj: THREE.Object3D
 }
 
-const HotspotHitbox = memo(function HotspotHitbox({ hotspot }: { hotspot: Hotspot }) {
+const HotspotHitbox = memo(function HotspotHitbox({ hotspot, navigate }: { hotspot: Hotspot, navigate: (path: string) => void }) {
   const [hovered, setHovered] = useState(false)
   const pointerDown = useRef<{ x: number, y: number } | null>(null)
   const size = useMemo(() => {
@@ -55,7 +56,11 @@ const HotspotHitbox = memo(function HotspotHitbox({ hotspot }: { hotspot: Hotspo
             if (dx * dx + dy * dy > 25) return
           }
           if (hotspot.url) {
-            window.location.href = hotspot.url
+            if (hotspot.internal) {
+              navigate(hotspot.url)
+            } else {
+              window.location.href = hotspot.url
+            }
           }
         }}
       >
@@ -86,7 +91,7 @@ const HotspotHitbox = memo(function HotspotHitbox({ hotspot }: { hotspot: Hotspo
   )
 })
 
-function ZoneMesh({ glbPath }: { glbPath: string }) {
+function ZoneMesh({ glbPath, navigate }: { glbPath: string, navigate: (path: string) => void }) {
   const { scene, animations } = useOptimizedGLTF(glbPath)
   const { actions } = useAnimations(animations, scene)
 
@@ -97,25 +102,49 @@ function ZoneMesh({ glbPath }: { glbPath: string }) {
   const hotspots = useMemo(() => {
     const result: Hotspot[] = []
     const seen = new Set<string>()
-    scene.traverse((obj) => {
+
+    // Only scan top-level children — avoids picking up sub-meshes from
+    // multi-primitive objects (e.g. portal_adhdo with 10 materials creates
+    // child meshes named portal_adhdo_1, portal_adhdo_2, etc.)
+    for (const obj of scene.children) {
       const lower = obj.name.toLowerCase()
-      if (!lower.startsWith('portal_')) return
-      const key = lower.replace(/^portal_/, '')
-      if (seen.has(key)) return
-      seen.add(key)
-      const entry = PORTAL_URLS[key]
-      const box = new THREE.Box3().setFromObject(obj)
-      const center = new THREE.Vector3()
-      box.getCenter(center)
-      result.push({
-        name: obj.name,
-        box,
-        center,
-        label: entry?.label ?? toTitleCase(key),
-        url: entry?.url ?? null,
-        sceneObj: obj,
-      })
-    })
+
+      // portal_ → external navigation
+      if (lower.startsWith('portal_')) {
+        const key = lower.replace(/^portal_/, '')
+        if (seen.has(key)) continue
+        seen.add(key)
+        const entry = PORTAL_URLS[key]
+        const box = new THREE.Box3().setFromObject(obj)
+        const center = new THREE.Vector3()
+        box.getCenter(center)
+        result.push({
+          name: obj.name, box, center,
+          label: entry?.label ?? toTitleCase(key),
+          url: entry?.url ?? null,
+          internal: false,
+          sceneObj: obj,
+        })
+        continue
+      }
+
+      // zone_ → internal sub-zone navigation
+      if (lower.startsWith('zone_')) {
+        const key = lower.replace(/^zone_/, '')
+        if (seen.has(key)) continue
+        seen.add(key)
+        const box = new THREE.Box3().setFromObject(obj)
+        const center = new THREE.Vector3()
+        box.getCenter(center)
+        result.push({
+          name: obj.name, box, center,
+          label: toTitleCase(key),
+          url: `/zone-${key.replace(/_/g, '-')}`,
+          internal: true,
+          sceneObj: obj,
+        })
+      }
+    }
     return result
   }, [scene])
 
@@ -123,7 +152,7 @@ function ZoneMesh({ glbPath }: { glbPath: string }) {
     <>
       <primitive object={scene} />
       {hotspots.map((hotspot) => (
-        <HotspotHitbox key={hotspot.name} hotspot={hotspot} />
+        <HotspotHitbox key={hotspot.name} hotspot={hotspot} navigate={navigate} />
       ))}
     </>
   )
@@ -143,10 +172,11 @@ interface ZoneSceneProps {
   glbPath: string
   title: string
   subtitle?: string
+  cameraPosition?: [number, number, number]
   environmentPreset?: 'night' | 'forest' | 'sunset' | 'dawn' | 'apartment' | 'city' | 'park' | 'lobby' | 'studio' | 'warehouse'
 }
 
-export default function ZoneScene({ glbPath, title, subtitle = 'click on things to explore', environmentPreset = 'night' }: ZoneSceneProps) {
+export default function ZoneScene({ glbPath, title, subtitle = 'click on things to explore', cameraPosition = [0, 5, 16], environmentPreset = 'night' }: ZoneSceneProps) {
   const navigate = useNavigate()
 
   return (
@@ -179,7 +209,7 @@ export default function ZoneScene({ glbPath, title, subtitle = 'click on things 
 
       <div className="map-wrap">
         <Canvas
-          camera={{ position: [0, 5, 16], fov: 50 }}
+          camera={{ position: cameraPosition, fov: 50 }}
           style={{ width: '100%', height: '100%' }}
           gl={{ antialias: true, alpha: true }}
         >
@@ -188,7 +218,7 @@ export default function ZoneScene({ glbPath, title, subtitle = 'click on things 
           <directionalLight position={[-3, 2, -4]} intensity={0.2} color="#88aaff" />
           <Environment preset={environmentPreset} />
           <Suspense fallback={<LoadingFallback />}>
-            <ZoneMesh glbPath={glbPath} />
+            <ZoneMesh glbPath={glbPath} navigate={navigate} />
           </Suspense>
           <OrbitControls
             enablePan={true}

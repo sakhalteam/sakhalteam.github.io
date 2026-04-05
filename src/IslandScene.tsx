@@ -20,17 +20,16 @@ function toTitleCase(str: string) {
 
 const ZONE_LABELS: Record<string, string> = {
   ss_brainfog: 'S.S. Brainfog',
-  boombox: 'The Boombox',
-  reading_room: 'Reading Room',
 }
 
 const ZONE_URLS: Record<string, { url: string, internal: boolean }> = {
   bird_sanctuary: { url: '/zone-bird-sanctuary', internal: true },
   ss_brainfog: { url: '/zone-ss-brainfog', internal: true },
-  weather_report: { url: '/zone-weather-report', internal: true },
-  reading_room: { url: '/zone-reading-room', internal: true },
-  boombox: { url: '/nikbeat/', internal: false },
-  pokemon_park: { url: '/pokemon-park/', internal: false },
+  cloud_town: { url: '/zone-cloud-town', internal: true },
+  tower_of_knowledge: { url: '/zone-tower-of-knowledge', internal: true },
+  pokemon_island: { url: '/zone-pokemon-island', internal: true },
+  family_mart: { url: '/zone-family-mart', internal: true },
+  beach_party: { url: '/zone-beach-party', internal: true },
 }
 
 function getZoneConfig(meshName: string): ZoneConfig {
@@ -271,6 +270,31 @@ function BloomDriver({ allMeshes, hoveredMeshes, color }: {
   return null
 }
 
+/**
+ * Gently bobs toy_ objects in the scene (e.g. Lapras floating in water).
+ * Finds all toy_ prefixed objects and applies a sine-wave Y offset.
+ */
+function ToyAnimator({ scene }: { scene: THREE.Object3D }) {
+  const toys = useMemo(() => {
+    const result: { obj: THREE.Object3D, baseY: number }[] = []
+    for (const child of scene.children) {
+      if (child.name.toLowerCase().startsWith('toy_')) {
+        result.push({ obj: child, baseY: child.position.y })
+      }
+    }
+    return result
+  }, [scene])
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime()
+    for (const { obj, baseY } of toys) {
+      obj.position.y = baseY + Math.sin(t * 0.8) * 0.06
+    }
+  })
+
+  return null
+}
+
 function IslandMesh({ onComingSoon, navigate, onHoverChange, allMeshesRef }: {
   onComingSoon: (label: string) => void
   navigate: (path: string) => void
@@ -290,6 +314,7 @@ function IslandMesh({ onComingSoon, navigate, onHoverChange, allMeshesRef }: {
   return (
     <>
       <primitive object={scene} />
+      <ToyAnimator scene={scene} />
       {markers.map((marker) => (
         <ZoneHitbox key={marker.name} marker={marker} onComingSoon={onComingSoon} navigate={navigate} onHoverChange={onHoverChange} />
       ))}
