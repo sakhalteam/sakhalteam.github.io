@@ -2,6 +2,10 @@ import { Suspense, useRef, useMemo, useState, useEffect, memo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useAnimations, OrbitControls, Environment, Html } from '@react-three/drei'
 import { useOptimizedGLTF } from './useOptimizedGLTF'
+import { useKeyboardControls } from './useKeyboardControls'
+import { useAutoFitCamera } from './useAutoFitCamera'
+import { useTurntable } from './useTurntable'
+import { AdaptiveLabel } from './AdaptiveLabel'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -178,7 +182,7 @@ const HotspotHitbox = memo(function HotspotHitbox({ hotspot, navigate }: { hotsp
         <boxGeometry args={[size.x, size.y, size.z]} />
         <meshStandardMaterial visible={false} />
       </mesh>
-      <Html center distanceFactor={18} position={[0, size.y / 2 + 0.2, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      <AdaptiveLabel position={[0, size.y / 2 + 0.2, 0]} nearDistance={5} farDistance={20}>
         <div style={{
           background: hovered ? 'rgba(0,0,0,0.9)' : 'rgba(0,0,0,0.75)',
           color: hovered
@@ -213,12 +217,12 @@ const HotspotHitbox = memo(function HotspotHitbox({ hotspot, navigate }: { hotsp
             * chirp *
           </div>
         )}
-      </Html>
+      </AdaptiveLabel>
     </group>
   )
 })
 
-function SanctuaryMesh({ navigate }: { navigate: (path: string) => void }) {
+function SanctuaryMesh({ navigate, onSceneReady }: { navigate: (path: string) => void; onSceneReady: (scene: THREE.Object3D) => void }) {
   const { scene, animations } = useOptimizedGLTF('/zones/zone_bird_sanctuary.glb')
   const { actions } = useAnimations(animations, scene)
 
@@ -226,6 +230,10 @@ function SanctuaryMesh({ navigate }: { navigate: (path: string) => void }) {
     console.log(`[BirdSanctuary] ${animations.length} animation(s) found:`, animations.map(a => a.name))
     Object.values(actions).forEach(action => action?.play())
   }, [actions, animations])
+
+  useEffect(() => {
+    onSceneReady(scene)
+  }, [scene, onSceneReady])
 
   const hotspots = useMemo(() => {
     const result: Hotspot[] = []
@@ -273,8 +281,18 @@ function LoadingFallback() {
   )
 }
 
+/** Connects keyboard controls + auto-fit camera + turntable to OrbitControls */
+function CameraRig({ orbitRef, scene }: { orbitRef: React.RefObject<any>; scene: THREE.Object3D | null }) {
+  const stopTurntable = useTurntable(orbitRef)
+  useKeyboardControls(orbitRef, { onInteract: stopTurntable })
+  useAutoFitCamera(scene, orbitRef)
+  return null
+}
+
 export default function BirdSanctuaryScene() {
   const navigate = useNavigate()
+  const orbitRef = useRef<any>(null)
+  const [loadedScene, setLoadedScene] = useState<THREE.Object3D | null>(null)
 
   return (
     <div className="ocean">
@@ -325,7 +343,7 @@ export default function BirdSanctuaryScene() {
 
       <div className="map-wrap">
         <Canvas
-          camera={{ position: [0, 5, 16], fov: 50 }}
+          camera={{ fov: 50 }}
           style={{ width: '100%', height: '100%' }}
           gl={{ antialias: true, alpha: true }}
         >
@@ -334,21 +352,21 @@ export default function BirdSanctuaryScene() {
           <directionalLight position={[-3, 2, -4]} intensity={0.2} color="#88aaff" />
           <Environment preset="forest" />
           <Suspense fallback={<LoadingFallback />}>
-            <SanctuaryMesh navigate={navigate} />
+            <SanctuaryMesh navigate={navigate} onSceneReady={setLoadedScene} />
           </Suspense>
           <OrbitControls
+            ref={orbitRef}
             enablePan={true}
             mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
-            minDistance={3}
-            maxDistance={35}
             maxPolarAngle={Math.PI / 2.1}
           />
+          <CameraRig orbitRef={orbitRef} scene={loadedScene} />
         </Canvas>
       </div>
 
       <footer className="site-footer">
         <span className="footer-hint">
-          click objects to interact · drag to rotate · scroll to zoom
+          click objects to interact · drag to rotate · scroll to zoom · WASD pan · QE orbit · RF zoom · ZX rise/lower
         </span>
       </footer>
     </div>

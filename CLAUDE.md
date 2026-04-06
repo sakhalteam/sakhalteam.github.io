@@ -10,7 +10,7 @@
 - When upgrading dependencies, always verify CI pipeline (deploy.yaml Node version, tsconfig compatibility) before pushing.
 
 ## Org-wide conventions
-- **Stack**: Vite 8 + React 19 + TypeScript 6. `"types": ["vite/client"]` required in tsconfig.app.json.
+- **Stack**: Vite 8 + React 19 + TypeScript 6. Node 22+ required (nvm use 22.14.0). `"types": ["vite/client"]` required in tsconfig.app.json.
 - **Deploy**: GitHub Actions (Node 22) → GitHub Pages.
 - **Shared pattern**: HomeBtn component (fixed top-left, links to sakhalteam.github.io). Every sub-site should have one.
 - **Themes**: dark-first, modern. headlessui.com aesthetics — gradients, glows, frosted glass.
@@ -71,12 +71,19 @@ public/
 Keep it flat. All zone GLBs live in `public/zones/` regardless of depth in the navigation tree. The scene map encodes parent-child relationships, not the folder structure.
 
 ## Architecture
-- **IslandScene.tsx**: Main 3D scene. Traverses island.glb for `zone_`/`portal_` prefixed objects. `ZONE_URLS` maps keys to URLs, `ZONE_LABELS` maps keys to display names. Bloom post-processing on active zone hover, outline pass on coming-soon zone hover.
+- **IslandScene.tsx**: Main 3D scene. Traverses island.glb for `zone_`/`portal_` prefixed objects. `ZONE_URLS` maps keys to URLs, `ZONE_LABELS` maps keys to display names. Bloom post-processing on active zone hover, outline pass on coming-soon zone hover. Hitboxes use zone_ object bounds only (NOT expanded by zc_ children) to prevent overlapping.
+- **ZoneScene.tsx**: Generic zone scene component. Props: `glbPath`, `title`, `subtitle`, `environmentPreset`, optional `camera` overrides (`elevation`, `azimuth`, `padding`). Auto-detects camera angle from model shape.
 - **BirdSanctuaryScene.tsx**: Zone scene for bird sanctuary. `HOTSPOTS` map for clickable objects including `portal_bird_bingo`. Route: `/zone-bird-sanctuary`.
 - **useOptimizedGLTF.ts**: GLB loader with Draco + Meshopt decompression support.
+- **useKeyboardControls.ts**: WASD pan, QE orbit, RF zoom, ZX vertical, Shift 2x speed. Only active when canvas hovered.
+- **useAutoFitCamera.ts**: Auto-positions camera based on scene bounding box shape. Tall models get lower angles, flat models get higher angles. Per-zone overrides via `camera` prop on ZoneScene.
+- **useTurntable.ts**: Slow auto-rotation (~6 deg/s CCW) until user interacts. Applied to all scenes.
+- **AdaptiveLabel.tsx**: Labels that stay readable at all zoom levels — clamps scale between min/max based on camera distance.
 - **QuickNav.tsx**: Hamburger dropdown (top-left) with direct links to all active sites. Must be updated when adding new sites.
 - **App.css**: All styling (no Tailwind). Frosted glass modals, zone cards, quick-nav dropdown.
 - **scripts/optimize-glb.sh**: GLB optimization script (Draco + WebP + texture resize). Run via `npm run optimize`.
+- **NOTES.md**: Quick reference for Nic — camera overrides, keyboard controls, adding zones. Human-readable, not for Claude.
+- **TODO.md**: Planned features and their priority order.
 
 ## Hover effects
 Both zone types use bloom (emissive ramp + Bloom pass). The Outline approach was abandoned due to @react-three/postprocessing reactivity issues.

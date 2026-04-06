@@ -4,6 +4,9 @@ import { OrbitControls, Environment, Html } from '@react-three/drei'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import { KernelSize } from 'postprocessing'
 import { useOptimizedGLTF } from './useOptimizedGLTF'
+import { useKeyboardControls } from './useKeyboardControls'
+import { useTurntable } from './useTurntable'
+import { AdaptiveLabel } from './AdaptiveLabel'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
 
@@ -42,14 +45,14 @@ function getZoneConfig(meshName: string): ZoneConfig {
 interface ZoneMarker {
   name: string
   key: string
-  box: THREE.Box3
+  box: THREE.Box3          // hitbox — only the zone_ object, no zc_ children
   center: THREE.Vector3
   label: string
   url: string | null
   internal: boolean
   type: 'active' | 'coming-soon'
   sceneObj: THREE.Object3D
-  meshes: THREE.Mesh[]
+  meshes: THREE.Mesh[]     // bloom glow — includes zone_ + zc_ meshes
 }
 
 /** Collect all Mesh descendants of an Object3D (including itself if it's a mesh) */
@@ -112,9 +115,10 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
     const zcMeshes = zcMap.get(key) ?? []
     const allMeshes = [...zoneMeshes, ...zcMeshes]
 
-    // Bounding box covers zone object + all zc_ children
+    // Hitbox covers only the zone_ object itself — NOT zc_ children.
+    // This prevents tall objects like cranes from creating huge overlapping hitboxes.
+    // The zc_ meshes still glow via the meshes array.
     const box = new THREE.Box3().setFromObject(obj)
-    for (const mesh of zcMeshes) box.expandByObject(mesh)
     const center = new THREE.Vector3()
     box.getCenter(center)
 
@@ -176,7 +180,7 @@ const ZoneHitbox = memo(function ZoneHitbox({
         <boxGeometry args={[size.x, size.y, size.z]} />
         <meshStandardMaterial visible={false} />
       </mesh>
-      <Html center distanceFactor={12} position={[0, size.y / 2 + 0.3, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      <AdaptiveLabel position={[0, size.y / 2 + 0.3, 0]} nearDistance={8} farDistance={25}>
         <div style={{
           background: hovered ? 'rgba(0,0,0,0.9)' : 'rgba(0,0,0,0.75)',
           color: hovered
@@ -197,7 +201,7 @@ const ZoneHitbox = memo(function ZoneHitbox({
         }}>
           {marker.label}
         </div>
-      </Html>
+      </AdaptiveLabel>
     </group>
   )
 })
@@ -332,6 +336,13 @@ function LoadingFallback() {
   )
 }
 
+/** Keyboard controls + turntable for the island view */
+function IslandCameraRig({ orbitRef }: { orbitRef: React.RefObject<any> }) {
+  const stopTurntable = useTurntable(orbitRef)
+  useKeyboardControls(orbitRef, { onInteract: stopTurntable })
+  return null
+}
+
 const BLOOM_COLOR_ACTIVE = new THREE.Color(0.9, 0.35, 0.2)
 const BLOOM_COLOR_COMING_SOON = new THREE.Color(0.55, 0.35, 0.85)
 
@@ -343,6 +354,7 @@ interface Props {
 export default function IslandScene({ style, onComingSoon }: Props) {
   const navigate = useNavigate()
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map())
+  const orbitRef = useRef<any>(null)
   const [hoveredZone, setHoveredZone] = useState<ZoneMarker | null>(null)
 
   const onHoverChange = useCallback((marker: ZoneMarker, hovered: boolean) => {
@@ -370,12 +382,14 @@ export default function IslandScene({ style, onComingSoon }: Props) {
         />
       </Suspense>
       <OrbitControls
+        ref={orbitRef}
         enablePan={true}
         mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
         minDistance={6}
         maxDistance={30}
         maxPolarAngle={Math.PI / 2.1}
       />
+      <IslandCameraRig orbitRef={orbitRef} />
       <EffectComposer multisampling={0}>
         <Bloom
           intensity={0.2}
