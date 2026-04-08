@@ -29,7 +29,7 @@ The main portfolio/hub site for sakhalteam. Features an interactive 3D island ma
 
 ## Navigation terminology (the naming contract)
 
-**The prefix is the verb. The key is the noun.** Prefixes encode *what happens on click*, keys encode *the destination/target*. The scene map (future `sceneMap.ts`) encodes the full topology (hierarchy, parent scenes, back-navigation).
+**The prefix is the verb. The key is the noun.** Prefixes encode *what happens on click*, keys encode *the destination/target*.
 
 Object name prefixes in GLB files determine behavior:
 
@@ -54,16 +54,44 @@ Not every path ends in a portal. Dead-end zones are valid (puzzles, easter eggs,
 
 **Naming in island.glb:** Objects named `zone_x` that don't yet have a corresponding `zone_x.glb` in `public/zones/` are coming-soon zones. Keeping the `zone_` prefix signals Nic's intent to eventually build a zone scene for them.
 
-**Display labels:** `ZONE_LABELS` in IslandScene.tsx maps object keys to custom display names. If unlisted, labels are auto-derived via toTitleCase.
-
 **Zone URL routes:** Internal zone scenes use `/zone-x` URL prefix (e.g., `/zone-bird-sanctuary`) to avoid collisions with external sites at `/x`.
 
 **Minigames:** Small interactive experiences (e.g., a computer screen minigame inside a zone) stay as components within this repo. Only spin out to a separate repo if it's big enough for Jojo to bookmark independently.
+
+## sceneMap.ts — single source of truth (IMPLEMENTED 2026-04-08)
+
+`sceneMap.ts` encodes the entire site navigation tree. **All zone, portal, toy, and sister site data lives here.** No more scattered constants — every consumer imports from sceneMap.
+
+**What it replaced:**
+- `ZONE_URLS` / `ZONE_LABELS` / `getZoneConfig()` in IslandScene.tsx
+- `PORTAL_URLS` in ZoneScene.tsx
+- `HOTSPOTS` in BirdSanctuaryScene.tsx
+- `TOY_CONFIG` in ToyInteractor.tsx
+- `SITES` array in QuickNav.tsx
+- Hardcoded `<Route>` elements in App.tsx
+
+**Exports:**
+- `sceneMap` — `Map<string, SceneNode>` of all nodes
+- `getZoneConfig(objName)` — IslandScene zone label/url/type lookup
+- `getPortalConfig(key)` — ZoneScene portal URL lookup
+- `getHotspotConfig(objName)` — BirdSanctuaryScene hotspot lookup
+- `getToyConfig(objName)` — ToyInteractor label + sound lookup
+- `getActiveZones()` — all zones with path + glbPath (used by App.tsx for route generation)
+- `getSisterSites()` — all external sites (used by QuickNav)
+- `getBreadcrumbs(key)` — root-first ancestry chain (ready for breadcrumb nav)
+- `findNodeByObjectName(objName)` — generic GLB name → node lookup
+
+**To add a new zone:** Add a `zone()` call in sceneMap.ts, add a GLB file to public/zones/, and it auto-generates routes, labels, bloom config, and nav entries. No other files need editing.
 
 ## Folder structure
 ```
 public/
 ├── island.glb                          # Hub scene
+├── sounds/                             # Audio files (Pokemon cries etc.)
+│   ├── diglett.ogg
+│   ├── staryu.ogg
+│   ├── lapras.ogg
+│   └── poliwag.ogg
 └── zones/
     ├── zone_bird_sanctuary.glb         # Zone scenes (any depth — sub-zones go here too)
     └── zone_*.glb
@@ -71,24 +99,37 @@ public/
 Keep it flat. All zone GLBs live in `public/zones/` regardless of depth in the navigation tree. The scene map encodes parent-child relationships, not the folder structure.
 
 ## Architecture
-- **IslandScene.tsx**: Main 3D scene. Traverses island.glb for `zone_`/`portal_` prefixed objects. `ZONE_URLS` maps keys to URLs, `ZONE_LABELS` maps keys to display names. Bloom post-processing on active zone hover, outline pass on coming-soon zone hover. Hitboxes use zone_ object bounds only (NOT expanded by zc_ children) to prevent overlapping.
-- **ZoneScene.tsx**: Generic zone scene component. Props: `glbPath`, `title`, `subtitle`, `environmentPreset`, optional `camera` overrides (`elevation`, `azimuth`, `padding`). Auto-detects camera angle from model shape.
-- **BirdSanctuaryScene.tsx**: Zone scene for bird sanctuary. `HOTSPOTS` map for clickable objects including `portal_bird_bingo`. Route: `/zone-bird-sanctuary`.
-- **useOptimizedGLTF.ts**: GLB loader with Draco + Meshopt decompression support.
+
+### Core scene components
+- **IslandScene.tsx**: Main 3D hub scene. Scans island.glb for `zone_`/`portal_` objects, uses `getZoneConfig()` from sceneMap. Renders ToyInteractor for toy_ objects.
+- **ZoneScene.tsx**: Generic zone scene component. Props: `glbPath`, `title`, `subtitle`, `environmentPreset`, optional `camera` overrides. Uses `getPortalConfig()` from sceneMap. Auto-detects camera angle from model shape.
+- **BirdSanctuaryScene.tsx**: Custom zone scene for bird sanctuary. Uses `getHotspotConfig()` from sceneMap. Has special "chirp" tooltip for bird toys.
+- **App.tsx**: Routes auto-generated from `getActiveZones()`. Bird sanctuary has its own route/component, everything else goes through ZoneScene.
+
+### Shared systems
+- **sceneMap.ts**: Single source of truth for all navigation data (see section above).
+- **BloomDriver.tsx**: Shared emissive glow system for hover effects. Clones materials per-mesh, lerps emissive at 35% max tint + 0.08 intensity boost. Preserves texture detail (like a "Screen" blend). Active zones: salmon-orange (`0.9, 0.35, 0.2`). Coming-soon: lavender (`0.55, 0.35, 0.85`).
+- **ToyInteractor.tsx**: Click-to-spin + Pokemon cries + proximity label reveal for toy_ objects. Raycasts actual mesh geometry (not bounding boxes) for pixel-perfect selection. Labels hidden by default, revealed within 120px cursor radius with 1.5s linger. Z-axis spin on click (0.6s ease-out cubic). Sound files: public/sounds/*.ogg (~50KB total from PokeAPI).
+- **useTurntable.ts**: Slow auto-rotation (0.04 rad/s, ~2.4°/s CCW). Auto-resumes after 15s idle (not if manually paused). Returns `{ stop, toggle, playing }`. All scenes have ⏸/⏵ footer button.
+- **useAutoFitCamera.ts**: Auto-positions camera based on bounding box shape. Tall=low angle, flat=high angle, cubic=3/4. Per-zone overrides via `camera` prop.
 - **useKeyboardControls.ts**: WASD pan, QE orbit, RF zoom, ZX vertical, Shift 2x speed. Only active when canvas hovered.
-- **useAutoFitCamera.ts**: Auto-positions camera based on scene bounding box shape. Tall models get lower angles, flat models get higher angles. Per-zone overrides via `camera` prop on ZoneScene.
-- **useTurntable.ts**: Slow auto-rotation (~6 deg/s CCW) until user interacts. Applied to all scenes.
-- **AdaptiveLabel.tsx**: Labels that stay readable at all zoom levels — clamps scale between min/max based on camera distance.
-- **QuickNav.tsx**: Hamburger dropdown (top-left) with direct links to all active sites. Must be updated when adding new sites.
-- **App.css**: All styling (no Tailwind). Frosted glass modals, zone cards, quick-nav dropdown.
-- **scripts/optimize-glb.sh**: GLB optimization script (Draco + WebP + texture resize). Run via `npm run optimize`.
-- **NOTES.md**: Quick reference for Nic — camera overrides, keyboard controls, adding zones. Human-readable, not for Claude.
-- **TODO.md**: Planned features and their priority order.
+- **AdaptiveLabel.tsx**: Labels that clamp scale between min/max based on camera distance.
+- **useOptimizedGLTF.ts**: GLB loader with Draco + Meshopt decompression support.
+
+### UI components
+- **QuickNav.tsx**: Hamburger dropdown (top-left) with direct links to all sister sites. Auto-generated from `getSisterSites()`.
+- **App.css**: All styling (no Tailwind). Frosted glass modals, zone cards, quick-nav dropdown, turntable toggle.
+
+### Scripts & config
+- **scripts/optimize-glb.sh**: GLB optimization (Draco + WebP + texture resize 2048px). Run via `npm run optimize`.
+- **NOTES.md**: Quick reference for Nic — camera overrides, keyboard controls, adding zones.
+- **TODO.md**: Planned features and priority order.
 
 ## Hover effects
-Both zone types use bloom (emissive ramp + Bloom pass). The Outline approach was abandoned due to @react-three/postprocessing reactivity issues.
+Both zone types use bloom (emissive ramp + Bloom pass via BloomDriver.tsx). The Outline approach was abandoned due to @react-three/postprocessing reactivity issues.
 - **Active zones**: Warm salmon-orange bloom glow (`THREE.Color(0.9, 0.35, 0.2)`)
 - **Coming-soon zones**: Lavender bloom glow (`THREE.Color(0.55, 0.35, 0.85)`)
+- **Toys**: No bloom glow — blue proximity labels + cursor change instead
 
 ## Active zones
 - `zone_bird_sanctuary` → `/zone-bird-sanctuary` → `portal_bird_bingo` → `/bird-bingo/`
@@ -114,8 +155,22 @@ Optimized via gltf-transform: Draco geometry compression + WebP texture compress
 ## SPA routing
 `404.html` is copied from `index.html` during build (`npm run build`). This fixes GitHub Pages 404 on refresh for internal routes like `/zone-bird-sanctuary`.
 
-## Planned: scene map (`sceneMap.ts`)
-A single source-of-truth file mapping the entire navigation tree: which scenes contain which zones/portals/toys, parent references for back-navigation, and destination URLs. This replaces the current scattered `ZONE_URLS`/`PORTAL_URLS` constants. Not yet implemented — build this when wiring up back-button navigation or adding sub-zones.
+## Known issues
+- **Bug #9 (cranes glow purple)**: All cranes on the island glow purple when hovering The Tunnels zone. Caused by GPU-instanced meshes (`EXT_mesh_gpu_instancing`) with unnamed nodes that can't be matched by the zc_ scanner. **Deferred** — Nic will redo cranes in Blender as separate top-level objects.
+
+## TODO status (as of 2026-04-08)
+- [x] #1: Unified glow system (BloomDriver.tsx) — done
+- [ ] #2: Breadcrumb navigation — `getBreadcrumbs()` ready in sceneMap, UI not built
+- [ ] #3: Site map / quick-jump menu — QuickNav exists but only shows sister sites
+- [ ] #4: Standardize HomeBtn across sister sites
+- [x] #5: Toy hover effect — done (proximity labels in ToyInteractor)
+- [x] #6: sceneMap.ts — done, all consumers wired
+- [x] #7: Turntable play/pause + auto-resume — done
+- [x] #8: Pokemon toy interactions (spin + cries + proximity labels) — done
+- [x] #9: Crane glow bug — deferred (Blender fix needed)
+- [x] #10: Bird sanctuary permanent bloom — no longer reproducing
+
+**Next up:** #2 (breadcrumbs) or #3 (quick-jump), then #4 (HomeBtn standardization)
 
 ## Example user flows (for context)
 - island → `zone_reading_room` → interior scene → `portal_japanese_articles` → /japanese-articles/

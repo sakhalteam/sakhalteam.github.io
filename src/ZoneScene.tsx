@@ -5,28 +5,19 @@ import {
   useAnimations,
 } from "@react-three/drei"
 import { Canvas } from "@react-three/fiber"
-import { memo, Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { EffectComposer, Bloom } from "@react-three/postprocessing"
+import { KernelSize } from "postprocessing"
+import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import * as THREE from "three"
 import "./App.css"
 import { AdaptiveLabel } from "./AdaptiveLabel"
+import { BloomDriver, collectMeshes, BLOOM_COLOR_ACTIVE } from "./BloomDriver"
 import { useAutoFitCamera } from "./useAutoFitCamera"
 import { useKeyboardControls } from "./useKeyboardControls"
 import { useOptimizedGLTF } from "./useOptimizedGLTF"
 import { useTurntable } from "./useTurntable"
-
-/**
- * Portal URL mapping. Key = suffix after "portal_" in the GLB node name.
- * If a portal_ object is found but not listed here, it's shown as a label-only hotspot.
- */
-const PORTAL_URLS: Record<string, { label: string; url: string }> = {
-  adhdo: { label: "ADHDO", url: "/adhdo/" },
-  bird_bingo: { label: "Bird Bingo", url: "/bird-bingo/" },
-  japanese_articles: { label: "Japanese Articles", url: "/japanese-articles/" },
-  nikbeat: { label: "NikBeat", url: "/nikbeat/" },
-  pokemon_park: { label: "Pokemon Park", url: "/pokemon-park/" },
-  weather_report: { label: "Weather Report", url: "/weather-report/" },
-}
+import { getPortalConfig } from "./sceneMap"
 
 function toTitleCase(str: string) {
   return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
@@ -34,20 +25,24 @@ function toTitleCase(str: string) {
 
 interface Hotspot {
   name: string
+  key: string
   box: THREE.Box3
   center: THREE.Vector3
   label: string
   url: string | null
   internal: boolean
   sceneObj: THREE.Object3D
+  meshes: THREE.Mesh[]
 }
 
 const HotspotHitbox = memo(function HotspotHitbox({
   hotspot,
   navigate,
+  onHoverChange,
 }: {
   hotspot: Hotspot
   navigate: (path: string) => void
+  onHoverChange: (hotspot: Hotspot, hovered: boolean) => void
 }) {
   const [hovered, setHovered] = useState(false)
   const pointerDown = useRef<{ x: number; y: number } | null>(null)
@@ -63,10 +58,12 @@ const HotspotHitbox = memo(function HotspotHitbox({
         onPointerOver={(e) => {
           e.stopPropagation()
           setHovered(true)
+          onHoverChange(hotspot, true)
           document.body.style.cursor = "pointer"
         }}
         onPointerOut={() => {
           setHovered(false)
+          onHoverChange(hotspot, false)
           document.body.style.cursor = "auto"
         }}
         onPointerDown={(e) => {
@@ -127,14 +124,111 @@ const HotspotHitbox = memo(function HotspotHitbox({
   )
 })
 
+/**
+ * Build hotspots from a zone GLB scene, collecting portal_/zone_ objects
+ * and associating zc_/pc_ (child) meshes for glow membership.
+ */
+function buildHotspots(scene: THREE.Object3D): Hotspot[] {
+  const hotspotObjects: THREE.Object3D[] = []
+  const hotspotKeys: string[] = []
+  const hotspotTypes: ('portal' | 'zone')[] = []
+  const seen = new Set<string>()
+
+  // Pass 1: find portal_/zone_ objects
+  for (const obj of scene.children) {
+    const lower = obj.name.toLowerCase()
+
+    if (lower.startsWith("portal_")) {
+      const key = lower.replace(/^portal_/, "")
+      if (seen.has(key)) continue
+      seen.add(key)
+      hotspotObjects.push(obj)
+      hotspotKeys.push(key)
+      hotspotTypes.push('portal')
+    } else if (lower.startsWith("zone_")) {
+      const key = lower.replace(/^zone_/, "")
+      if (seen.has(key)) continue
+      seen.add(key)
+      hotspotObjects.push(obj)
+      hotspotKeys.push(key)
+      hotspotTypes.push('zone')
+    }
+  }
+
+  // Sort keys longest-first for unambiguous zc_/pc_ matching
+  const sortedKeys = [...hotspotKeys].sort((a, b) => b.length - a.length)
+
+  // Pass 2: collect zc_/pc_ meshes and associate with their parent
+  const childMap = new Map<string, THREE.Mesh[]>(hotspotKeys.map(k => [k, []]))
+  for (const child of scene.children) {
+    const lower = child.name.toLowerCase()
+    if (!lower.startsWith('zc_') && !lower.startsWith('pc_')) continue
+    const suffix = lower.slice(3) // strip prefix
+    for (const key of sortedKeys) {
+      if (suffix.startsWith(key + '_') || suffix === key) {
+        collectMeshes(child).forEach(m => childMap.get(key)!.push(m))
+        break
+      }
+    }
+  }
+
+  // Build hotspots
+  const result: Hotspot[] = []
+  for (let i = 0; i < hotspotObjects.length; i++) {
+    const obj = hotspotObjects[i]
+    const key = hotspotKeys[i]
+    const type = hotspotTypes[i]
+    const box = new THREE.Box3().setFromObject(obj)
+    const center = new THREE.Vector3()
+    box.getCenter(center)
+
+    const objMeshes = collectMeshes(obj)
+    const childMeshes = childMap.get(key) ?? []
+    const allMeshes = [...objMeshes, ...childMeshes]
+
+    if (type === 'portal') {
+      const entry = getPortalConfig(key)
+      result.push({
+        name: obj.name,
+        key,
+        box,
+        center,
+        label: entry?.label ?? toTitleCase(key),
+        url: entry?.url ?? null,
+        internal: false,
+        sceneObj: obj,
+        meshes: allMeshes,
+      })
+    } else {
+      result.push({
+        name: obj.name,
+        key,
+        box,
+        center,
+        label: toTitleCase(key),
+        url: `/zone-${key.replace(/_/g, "-")}`,
+        internal: true,
+        sceneObj: obj,
+        meshes: allMeshes,
+      })
+    }
+  }
+
+  return result
+}
+
 function ZoneMesh({
   glbPath,
   navigate,
   onSceneReady,
+  onHoverChange,
+  allMeshesRef,
 }: {
   glbPath: string
   navigate: (path: string) => void
   onSceneReady: (scene: THREE.Object3D) => void
+  onHoverChange: (hotspot: Hotspot, hovered: boolean) => void
+  allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>
 }) {
   const { scene, animations } = useOptimizedGLTF(glbPath)
   const { actions } = useAnimations(animations, scene)
@@ -148,52 +242,12 @@ function ZoneMesh({
   }, [scene, onSceneReady])
 
   const hotspots = useMemo(() => {
-    const result: Hotspot[] = []
-    const seen = new Set<string>()
-
-    for (const obj of scene.children) {
-      const lower = obj.name.toLowerCase()
-
-      if (lower.startsWith("portal_")) {
-        const key = lower.replace(/^portal_/, "")
-        if (seen.has(key)) continue
-        seen.add(key)
-        const entry = PORTAL_URLS[key]
-        const box = new THREE.Box3().setFromObject(obj)
-        const center = new THREE.Vector3()
-        box.getCenter(center)
-        result.push({
-          name: obj.name,
-          box,
-          center,
-          label: entry?.label ?? toTitleCase(key),
-          url: entry?.url ?? null,
-          internal: false,
-          sceneObj: obj,
-        })
-        continue
-      }
-
-      if (lower.startsWith("zone_")) {
-        const key = lower.replace(/^zone_/, "")
-        if (seen.has(key)) continue
-        seen.add(key)
-        const box = new THREE.Box3().setFromObject(obj)
-        const center = new THREE.Vector3()
-        box.getCenter(center)
-        result.push({
-          name: obj.name,
-          box,
-          center,
-          label: toTitleCase(key),
-          url: `/zone-${key.replace(/_/g, "-")}`,
-          internal: true,
-          sceneObj: obj,
-        })
-      }
+    const result = buildHotspots(scene)
+    for (const hotspot of result) {
+      allMeshesRef.current.set(hotspot.name, hotspot.meshes)
     }
     return result
-  }, [scene])
+  }, [scene, allMeshesRef])
 
   return (
     <>
@@ -203,6 +257,7 @@ function ZoneMesh({
           key={hotspot.name}
           hotspot={hotspot}
           navigate={navigate}
+          onHoverChange={onHoverChange}
         />
       ))}
     </>
@@ -222,18 +277,27 @@ function LoadingFallback() {
 }
 
 /** Connects keyboard controls + auto-fit camera + turntable to OrbitControls */
-function CameraRig({ orbitRef, scene, cameraOptions }: {
+function CameraRig({ orbitRef, scene, cameraOptions, turntableToggleRef, onPlayingChange }: {
   orbitRef: React.RefObject<any>
   scene: THREE.Object3D | null
   cameraOptions?: { padding?: number; elevation?: number; azimuth?: number }
+  turntableToggleRef: React.RefObject<(() => void) | null>
+  onPlayingChange: (playing: boolean) => void
 }) {
-  const stopTurntable = useTurntable(orbitRef)
-  useKeyboardControls(orbitRef, { onInteract: stopTurntable })
+  const { stop, toggle, playing } = useTurntable(orbitRef)
+  useKeyboardControls(orbitRef, { onInteract: stop })
   useAutoFitCamera(scene, orbitRef, {
     ...(cameraOptions?.padding != null && { padding: cameraOptions.padding }),
     ...(cameraOptions?.elevation != null && { elevation: cameraOptions.elevation }),
     ...(cameraOptions?.azimuth != null && { azimuth: cameraOptions.azimuth }),
   })
+
+  turntableToggleRef.current = toggle
+
+  useEffect(() => {
+    onPlayingChange(playing)
+  }, [playing, onPlayingChange])
+
   return null
 }
 
@@ -265,7 +329,19 @@ export default function ZoneScene({
 }: ZoneSceneProps) {
   const navigate = useNavigate()
   const orbitRef = useRef<any>(null)
+  const turntableToggleRef = useRef<(() => void) | null>(null)
+  const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map())
   const [loadedScene, setLoadedScene] = useState<THREE.Object3D | null>(null)
+  const [hoveredHotspot, setHoveredHotspot] = useState<Hotspot | null>(null)
+  const [turntablePlaying, setTurntablePlaying] = useState(true)
+
+  const onHoverChange = useCallback((hotspot: Hotspot, hovered: boolean) => {
+    setHoveredHotspot(hovered ? hotspot : null)
+  }, [])
+
+  const onPlayingChange = useCallback((playing: boolean) => {
+    setTurntablePlaying(playing)
+  }, [])
 
   return (
     <div className="ocean">
@@ -323,7 +399,18 @@ export default function ZoneScene({
           />
           <Environment preset={environmentPreset} />
           <Suspense fallback={<LoadingFallback />}>
-            <ZoneMesh glbPath={glbPath} navigate={navigate} onSceneReady={setLoadedScene} />
+            <ZoneMesh
+              glbPath={glbPath}
+              navigate={navigate}
+              onSceneReady={setLoadedScene}
+              onHoverChange={onHoverChange}
+              allMeshesRef={allMeshesRef}
+            />
+            <BloomDriver
+              allMeshes={allMeshesRef}
+              hoveredMeshes={hoveredHotspot?.meshes ?? []}
+              color={BLOOM_COLOR_ACTIVE}
+            />
           </Suspense>
           <OrbitControls
             ref={orbitRef}
@@ -335,7 +422,16 @@ export default function ZoneScene({
             }}
             maxPolarAngle={Math.PI / 2.1}
           />
-          <CameraRig orbitRef={orbitRef} scene={loadedScene} cameraOptions={cameraOptions} />
+          <CameraRig orbitRef={orbitRef} scene={loadedScene} cameraOptions={cameraOptions} turntableToggleRef={turntableToggleRef} onPlayingChange={onPlayingChange} />
+          <EffectComposer multisampling={0}>
+            <Bloom
+              intensity={0.2}
+              luminanceThreshold={0.85}
+              luminanceSmoothing={0.3}
+              kernelSize={KernelSize.SMALL}
+              mipmapBlur
+            />
+          </EffectComposer>
         </Canvas>
       </div>
 
@@ -343,6 +439,13 @@ export default function ZoneScene({
         <span className="footer-hint">
           click objects to interact · drag to rotate · scroll to zoom · WASD pan · QE orbit · RF zoom · ZX rise/lower
         </span>
+        <button
+          className="turntable-toggle"
+          onClick={() => turntableToggleRef.current?.()}
+          title={turntablePlaying ? 'Pause rotation' : 'Resume rotation'}
+        >
+          {turntablePlaying ? '\u23F8' : '\u23F5'}
+        </button>
       </footer>
     </div>
   )

@@ -1,34 +1,25 @@
-import { Suspense, useRef, useMemo, useState, useEffect, memo } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Suspense, useRef, useMemo, useState, useEffect, useCallback, memo } from 'react'
+import { Canvas } from '@react-three/fiber'
 import { useAnimations, OrbitControls, Environment, Html } from '@react-three/drei'
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
+import { KernelSize } from 'postprocessing'
 import { useOptimizedGLTF } from './useOptimizedGLTF'
 import { useKeyboardControls } from './useKeyboardControls'
 import { useAutoFitCamera } from './useAutoFitCamera'
 import { useTurntable } from './useTurntable'
 import { AdaptiveLabel } from './AdaptiveLabel'
+import { BloomDriver, collectMeshes, BLOOM_COLOR_ACTIVE } from './BloomDriver'
+import { getHotspotConfig } from './sceneMap'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import './App.css'
 
-// Hotspot config: objects in the GLB that are clickable
-// name = node name prefix in the GLB, label = display name
-interface HotspotConfig {
-  label: string
-  url: string | null      // null = just show a tooltip / coming-soon
-  internal: boolean       // true = react-router, false = full page nav
-}
-
-const HOTSPOTS: Record<string, HotspotConfig> = {
-  portal_bird_bingo: { label: 'Bird Bingo',     url: '/bird-bingo/',  internal: false },
-  baby_deku:        { label: 'Deku Sprout',     url: null,            internal: false },
-  bird_penguin:     { label: 'Penguin',         url: null,            internal: false },
-  bird_ostrich:     { label: 'Ostrich',         url: null,            internal: false },
-  bird_chocobo:     { label: 'Chocobo',         url: null,            internal: false },
-  bird_kiwi2:       { label: 'Kiwi',            url: null,            internal: false },
-  bird_flamingo:    { label: 'Flamingo',        url: null,            internal: false },
-  tree_stump:       { label: 'Tree Stump',      url: null,            internal: false },
-}
+/** Keys of objects in the GLB that are interactive hotspots */
+const HOTSPOT_KEYS = [
+  'portal_bird_bingo',
+  'baby_deku', 'bird_penguin', 'bird_ostrich', 'bird_chocobo',
+  'bird_kiwi2', 'bird_flamingo', 'tree_stump',
+]
 
 interface Hotspot {
   name: string
@@ -38,113 +29,18 @@ interface Hotspot {
   url: string | null
   internal: boolean
   sceneObj: THREE.Object3D
+  meshes: THREE.Mesh[]
 }
 
-/* ---- Fresnel aura shaders (same as island) ---- */
-
-const auraVertexShader = `
-  varying vec3 vNormal;
-  varying vec3 vViewDir;
-  void main() {
-    vec4 worldPos = modelMatrix * vec4(position, 1.0);
-    vNormal = normalize(normalMatrix * normal);
-    vViewDir = normalize(cameraPosition - worldPos.xyz);
-    gl_Position = projectionMatrix * viewMatrix * worldPos;
-  }
-`
-
-const auraFragmentShader = `
-  uniform vec3 glowColor;
-  uniform float intensity;
-  uniform float power;
-  uniform float opacity;
-  varying vec3 vNormal;
-  varying vec3 vViewDir;
-  void main() {
-    float fresnel = 1.0 - abs(dot(vNormal, vViewDir));
-    fresnel = pow(fresnel, power);
-    gl_FragColor = vec4(glowColor * intensity, fresnel * opacity);
-  }
-`
-
-function HotspotAura({ hotspot, hovered }: { hotspot: Hotspot, hovered: boolean }) {
-  const currentOpacity = useRef(0)
-
-  const geometry = useMemo(() => {
-    const obj = hotspot.sceneObj
-    const geometries: THREE.BufferGeometry[] = []
-    const centerOffset = new THREE.Matrix4().makeTranslation(
-      -hotspot.center.x, -hotspot.center.y, -hotspot.center.z
-    )
-
-    obj.traverse((child) => {
-      if (!(child as THREE.Mesh).isMesh) return
-      const mesh = child as THREE.Mesh
-      if (!mesh.geometry) return
-      const cloned = mesh.geometry.clone()
-      mesh.updateWorldMatrix(true, false)
-      const mat = new THREE.Matrix4().copy(mesh.matrixWorld).premultiply(centerOffset)
-      cloned.applyMatrix4(mat)
-      geometries.push(cloned)
-    })
-
-    if (geometries.length === 0) {
-      const size = new THREE.Vector3()
-      hotspot.box.getSize(size)
-      return new THREE.BoxGeometry(size.x, size.y, size.z)
-    }
-    if (geometries.length === 1) return geometries[0]
-
-    for (const geo of geometries) {
-      const keep = new Set(['position', 'normal'])
-      for (const attr of Object.keys(geo.attributes)) {
-        if (!keep.has(attr)) geo.deleteAttribute(attr)
-      }
-    }
-    return mergeGeometries(geometries, false)
-  }, [hotspot.sceneObj, hotspot.center])
-
-  const material = useMemo(() => {
-    const hasUrl = hotspot.url != null
-    return new THREE.ShaderMaterial({
-      vertexShader: auraVertexShader,
-      fragmentShader: auraFragmentShader,
-      uniforms: {
-        glowColor: { value: hasUrl ? new THREE.Color(0.9, 0.35, 0.2) : new THREE.Color(0.3, 0.7, 0.9) },
-        intensity: { value: 2.0 },
-        power: { value: 2.0 },
-        opacity: { value: 0.0 },
-      },
-      transparent: true,
-      depthWrite: false,
-      side: THREE.FrontSide,
-    })
-  }, [hotspot.url])
-
-  useFrame((_, delta) => {
-    const target = hovered ? 1.0 : 0.0
-    if (Math.abs(currentOpacity.current - target) < 0.001) {
-      currentOpacity.current = target
-      material.uniforms.opacity.value = target
-      return
-    }
-    currentOpacity.current = THREE.MathUtils.lerp(currentOpacity.current, target, delta * 5)
-    material.uniforms.opacity.value = currentOpacity.current
-  })
-
-  if (!geometry) return null
-
-  return (
-    <mesh
-      geometry={geometry}
-      material={material}
-      scale={[1.04, 1.04, 1.04]}
-      raycast={() => {}}
-    />
-  )
-}
-
-const HotspotHitbox = memo(function HotspotHitbox({ hotspot, navigate }: { hotspot: Hotspot, navigate: (path: string) => void }) {
+const HotspotHitbox = memo(function HotspotHitbox({
+  hotspot,
+  navigate,
+  onHoverChange,
+}: {
+  hotspot: Hotspot
+  navigate: (path: string) => void
+  onHoverChange: (hotspot: Hotspot, hovered: boolean) => void
+}) {
   const [hovered, setHovered] = useState(false)
   const [tooltip, setTooltip] = useState(false)
   const pointerDown = useRef<{ x: number, y: number } | null>(null)
@@ -156,10 +52,19 @@ const HotspotHitbox = memo(function HotspotHitbox({ hotspot, navigate }: { hotsp
 
   return (
     <group position={hotspot.center}>
-      <HotspotAura hotspot={hotspot} hovered={hovered} />
       <mesh
-        onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = 'pointer' }}
-        onPointerOut={() => { setHovered(false); setTooltip(false); document.body.style.cursor = 'auto' }}
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          setHovered(true)
+          onHoverChange(hotspot, true)
+          document.body.style.cursor = 'pointer'
+        }}
+        onPointerOut={() => {
+          setHovered(false)
+          setTooltip(false)
+          onHoverChange(hotspot, false)
+          document.body.style.cursor = 'auto'
+        }}
         onPointerDown={(e) => { pointerDown.current = { x: e.clientX, y: e.clientY } }}
         onClick={(e) => {
           e.stopPropagation()
@@ -222,7 +127,17 @@ const HotspotHitbox = memo(function HotspotHitbox({ hotspot, navigate }: { hotsp
   )
 })
 
-function SanctuaryMesh({ navigate, onSceneReady }: { navigate: (path: string) => void; onSceneReady: (scene: THREE.Object3D) => void }) {
+function SanctuaryMesh({
+  navigate,
+  onSceneReady,
+  onHoverChange,
+  allMeshesRef,
+}: {
+  navigate: (path: string) => void
+  onSceneReady: (scene: THREE.Object3D) => void
+  onHoverChange: (hotspot: Hotspot, hovered: boolean) => void
+  allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>
+}) {
   const { scene, animations } = useOptimizedGLTF('/zones/zone_bird_sanctuary.glb')
   const { actions } = useAnimations(animations, scene)
 
@@ -237,35 +152,49 @@ function SanctuaryMesh({ navigate, onSceneReady }: { navigate: (path: string) =>
 
   const hotspots = useMemo(() => {
     const result: Hotspot[] = []
+    const seen = new Set<string>()
+
     scene.traverse((obj) => {
-      // Match node names against hotspot keys (case-insensitive prefix match)
-      const key = Object.keys(HOTSPOTS).find(k =>
+      const key = HOTSPOT_KEYS.find(k =>
         obj.name.toLowerCase().startsWith(k.toLowerCase())
       )
       if (!key) return
-      const config = HOTSPOTS[key]
+      if (seen.has(key)) return
+      seen.add(key)
+
+      const config = getHotspotConfig(key)
       const box = new THREE.Box3().setFromObject(obj)
       const center = new THREE.Vector3()
       box.getCenter(center)
-      result.push({ name: obj.name, box, center, sceneObj: obj, ...config })
+      const meshes = collectMeshes(obj)
+
+      const hotspot: Hotspot = {
+        name: obj.name,
+        box,
+        center,
+        sceneObj: obj,
+        meshes,
+        label: config?.label ?? key,
+        url: config?.url ?? null,
+        internal: config?.internal ?? false,
+      }
+      allMeshesRef.current.set(hotspot.name, hotspot.meshes)
+      result.push(hotspot)
     })
-    // Deduplicate: keep only the first match per hotspot key
-    const seen = new Set<string>()
-    return result.filter(h => {
-      const key = Object.keys(HOTSPOTS).find(k =>
-        h.name.toLowerCase().startsWith(k.toLowerCase())
-      )!
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }, [scene])
+
+    return result
+  }, [scene, allMeshesRef])
 
   return (
     <>
       <primitive object={scene} />
       {hotspots.map((hotspot) => (
-        <HotspotHitbox key={hotspot.name} hotspot={hotspot} navigate={navigate} />
+        <HotspotHitbox
+          key={hotspot.name}
+          hotspot={hotspot}
+          navigate={navigate}
+          onHoverChange={onHoverChange}
+        />
       ))}
     </>
   )
@@ -282,17 +211,41 @@ function LoadingFallback() {
 }
 
 /** Connects keyboard controls + auto-fit camera + turntable to OrbitControls */
-function CameraRig({ orbitRef, scene }: { orbitRef: React.RefObject<any>; scene: THREE.Object3D | null }) {
-  const stopTurntable = useTurntable(orbitRef)
-  useKeyboardControls(orbitRef, { onInteract: stopTurntable })
+function CameraRig({ orbitRef, scene, turntableToggleRef, onPlayingChange }: {
+  orbitRef: React.RefObject<any>
+  scene: THREE.Object3D | null
+  turntableToggleRef: React.RefObject<(() => void) | null>
+  onPlayingChange: (playing: boolean) => void
+}) {
+  const { stop, toggle, playing } = useTurntable(orbitRef)
+  useKeyboardControls(orbitRef, { onInteract: stop })
   useAutoFitCamera(scene, orbitRef)
+
+  turntableToggleRef.current = toggle
+
+  useEffect(() => {
+    onPlayingChange(playing)
+  }, [playing, onPlayingChange])
+
   return null
 }
 
 export default function BirdSanctuaryScene() {
   const navigate = useNavigate()
   const orbitRef = useRef<any>(null)
+  const turntableToggleRef = useRef<(() => void) | null>(null)
+  const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map())
   const [loadedScene, setLoadedScene] = useState<THREE.Object3D | null>(null)
+  const [hoveredHotspot, setHoveredHotspot] = useState<Hotspot | null>(null)
+  const [turntablePlaying, setTurntablePlaying] = useState(true)
+
+  const onHoverChange = useCallback((hotspot: Hotspot, hovered: boolean) => {
+    setHoveredHotspot(hovered ? hotspot : null)
+  }, [])
+
+  const onPlayingChange = useCallback((playing: boolean) => {
+    setTurntablePlaying(playing)
+  }, [])
 
   return (
     <div className="ocean">
@@ -352,7 +305,17 @@ export default function BirdSanctuaryScene() {
           <directionalLight position={[-3, 2, -4]} intensity={0.2} color="#88aaff" />
           <Environment preset="forest" />
           <Suspense fallback={<LoadingFallback />}>
-            <SanctuaryMesh navigate={navigate} onSceneReady={setLoadedScene} />
+            <SanctuaryMesh
+              navigate={navigate}
+              onSceneReady={setLoadedScene}
+              onHoverChange={onHoverChange}
+              allMeshesRef={allMeshesRef}
+            />
+            <BloomDriver
+              allMeshes={allMeshesRef}
+              hoveredMeshes={hoveredHotspot?.meshes ?? []}
+              color={BLOOM_COLOR_ACTIVE}
+            />
           </Suspense>
           <OrbitControls
             ref={orbitRef}
@@ -360,7 +323,16 @@ export default function BirdSanctuaryScene() {
             mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
             maxPolarAngle={Math.PI / 2.1}
           />
-          <CameraRig orbitRef={orbitRef} scene={loadedScene} />
+          <CameraRig orbitRef={orbitRef} scene={loadedScene} turntableToggleRef={turntableToggleRef} onPlayingChange={onPlayingChange} />
+          <EffectComposer multisampling={0}>
+            <Bloom
+              intensity={0.2}
+              luminanceThreshold={0.85}
+              luminanceSmoothing={0.3}
+              kernelSize={KernelSize.SMALL}
+              mipmapBlur
+            />
+          </EffectComposer>
         </Canvas>
       </div>
 
@@ -368,6 +340,13 @@ export default function BirdSanctuaryScene() {
         <span className="footer-hint">
           click objects to interact · drag to rotate · scroll to zoom · WASD pan · QE orbit · RF zoom · ZX rise/lower
         </span>
+        <button
+          className="turntable-toggle"
+          onClick={() => turntableToggleRef.current?.()}
+          title={turntablePlaying ? 'Pause rotation' : 'Resume rotation'}
+        >
+          {turntablePlaying ? '\u23F8' : '\u23F5'}
+        </button>
       </footer>
     </div>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
@@ -6,32 +6,61 @@ import * as THREE from 'three'
  * Slow auto-rotation turntable for 3D scenes.
  *
  * Rotates the camera around the orbit target at a gentle speed.
- * Stops permanently as soon as the user interacts (mouse or keyboard).
+ * Pauses when the user interacts (mouse, keyboard, touch).
+ * Auto-resumes after `idleTimeout` ms of no interaction.
  *
- * Returns a `stopTurntable` callback that can be passed to other
- * interaction hooks (e.g. useKeyboardControls' onInteract).
+ * Returns `{ stop, playing }`:
+ *   - `stop()` — pause turntable (called by keyboard hook etc.)
+ *   - `playing` — whether turntable is currently rotating (for UI)
+ *   - `toggle()` — flip play/pause manually
  */
 export function useTurntable(
   orbitRef: React.RefObject<any>,
   {
-    /** Rotation speed in radians per second. Default: ~6° per second */
-    speed = 0.1,
+    /** Rotation speed in radians per second. Default: ~2.4° per second */
+    speed = 0.04,
     /** Direction: 1 = counter-clockwise (from above), -1 = clockwise */
     direction = 1,
+    /** Ms of idle before auto-resuming rotation. Default: 15000 (15s). Set 0 to disable. */
+    idleTimeout = 15000,
   } = {}
 ) {
   const active = useRef(true)
+  const [playing, setPlaying] = useState(true)
+  const lastInteraction = useRef(0)
+  const manualPause = useRef(false)
   const { gl } = useThree()
 
   const stop = useCallback(() => {
     active.current = false
+    setPlaying(false)
+    lastInteraction.current = performance.now()
+  }, [])
+
+  const toggle = useCallback(() => {
+    if (active.current) {
+      // Currently playing → pause manually
+      active.current = false
+      manualPause.current = true
+      setPlaying(false)
+    } else {
+      // Currently paused → resume
+      active.current = true
+      manualPause.current = false
+      setPlaying(true)
+    }
   }, [])
 
   // Stop on any mouse/touch/scroll interaction with the canvas
   useEffect(() => {
     const canvas = gl.domElement
 
-    const onInteract = () => { active.current = false }
+    const onInteract = () => {
+      active.current = false
+      manualPause.current = false
+      setPlaying(false)
+      lastInteraction.current = performance.now()
+    }
 
     canvas.addEventListener('pointerdown', onInteract)
     canvas.addEventListener('wheel', onInteract)
@@ -45,6 +74,15 @@ export function useTurntable(
   }, [gl])
 
   useFrame(({ camera }, delta) => {
+    // Auto-resume after idle timeout (unless manually paused via toggle)
+    if (!active.current && !manualPause.current && idleTimeout > 0) {
+      const idle = performance.now() - lastInteraction.current
+      if (idle > idleTimeout && lastInteraction.current > 0) {
+        active.current = true
+        setPlaying(true)
+      }
+    }
+
     if (!active.current) return
     const controls = orbitRef.current
     if (!controls) return
@@ -58,5 +96,5 @@ export function useTurntable(
     controls.update()
   })
 
-  return stop
+  return { stop, toggle, playing }
 }

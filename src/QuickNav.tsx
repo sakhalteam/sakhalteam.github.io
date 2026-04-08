@@ -1,13 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
+import { getSisterSites } from './sceneMap'
 
-const SITES = [
-  { label: 'ADHDO', url: '/adhdo/' },
-  { label: 'Bird Bingo', url: '/bird-bingo/' },
-  { label: 'Japanese Articles', url: '/japanese-articles/' },
-  { label: 'NikBeat', url: '/nikbeat/' },
-  { label: 'Pokemon Park', url: '/pokemon-park/' },
-  { label: 'Weather Report', url: '/weather-report/' },
-]
+const SITES = getSisterSites().map(s => ({ label: s.label, url: s.url! }))
 
 export default function QuickNav() {
   const [open, setOpen] = useState(false)

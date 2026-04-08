@@ -1,13 +1,24 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import './App.css'
 import IslandScene from './IslandScene'
 import BirdSanctuaryScene from './BirdSanctuaryScene'
 import ZoneScene from './ZoneScene'
 import QuickNav from './QuickNav'
+import { getActiveZones } from './sceneMap'
+
+/** Zones that use ZoneScene (all active zones except bird_sanctuary which has its own component) */
+const zoneRoutes = getActiveZones().filter(z => z.key !== 'bird_sanctuary' && z.key !== 'island')
 
 function HomePage() {
   const [comingSoon, setComingSoon] = useState<string | null>(null)
+  const turntableToggleRef = useRef<(() => void) | null>(null)
+  const [turntablePlaying, setTurntablePlaying] = useState(true)
+
+  const onTurntableChange = useCallback((toggle: () => void, playing: boolean) => {
+    turntableToggleRef.current = toggle
+    setTurntablePlaying(playing)
+  }, [])
 
   return (
     <div className="ocean" onClick={() => setComingSoon(null)}>
@@ -21,6 +32,7 @@ function HomePage() {
         <IslandScene
           style={{ width: '100%', height: '100%' }}
           onComingSoon={setComingSoon}
+          onTurntableChange={onTurntableChange}
         />
       </div>
 
@@ -43,6 +55,13 @@ function HomePage() {
           uninhabited &nbsp;·&nbsp;
           drag to rotate · scroll to zoom · WASD/QE/RF/ZX for keyboard
         </span>
+        <button
+          className="turntable-toggle"
+          onClick={() => turntableToggleRef.current?.()}
+          title={turntablePlaying ? 'Pause rotation' : 'Resume rotation'}
+        >
+          {turntablePlaying ? '\u23F8' : '\u23F5'}
+        </button>
       </footer>
     </div>
   )
@@ -53,14 +72,19 @@ export default function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/zone-bird-sanctuary" element={<BirdSanctuaryScene />} />
-      <Route path="/zone-ss-brainfog" element={<ZoneScene glbPath="/zones/zone_ss_brainfog.glb" title="S.S. BRAINFOG" environmentPreset="sunset" />} />
-      <Route path="/zone-cloud-town" element={<ZoneScene glbPath="/zones/zone_cloud_town.glb" title="CLOUD TOWN" environmentPreset="city" />} />
-      <Route path="/zone-tower-of-knowledge" element={<ZoneScene glbPath="/zones/zone_tower_of_knowledge.glb" title="TOWER OF KNOWLEDGE" environmentPreset="apartment" />} />
-      <Route path="/zone-reading-room" element={<ZoneScene glbPath="/zones/zone_reading_room.glb" title="READING ROOM" environmentPreset="apartment" />} />
-      <Route path="/zone-pokemon-island" element={<ZoneScene glbPath="/zones/zone_pokemon_island.glb" title="POKEMON ISLAND" environmentPreset="park" />} />
-      <Route path="/zone-beach-party" element={<ZoneScene glbPath="/zones/zone_beach_party.glb" title="BEACH PARTY" environmentPreset="sunset" />} />
-      <Route path="/zone-family-mart" element={<ZoneScene glbPath="/zones/zone_family_mart.glb" title="FAMILY MART" environmentPreset="warehouse" />} />
-      <Route path="/zone-family-mart-interior" element={<ZoneScene glbPath="/zones/zone_family_mart_interior.glb" title="FAMILY MART" environmentPreset="warehouse" />} />
+      {zoneRoutes.map(z => (
+        <Route
+          key={z.key}
+          path={z.path!}
+          element={
+            <ZoneScene
+              glbPath={z.glbPath!}
+              title={z.label.toUpperCase()}
+              environmentPreset={z.environmentPreset as any}
+            />
+          }
+        />
+      ))}
     </Routes>
   )
 }
