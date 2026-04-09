@@ -61,7 +61,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
   const spinState = useRef<Map<string, { startTime: number; startRotZ: number }>>(new Map())
   const pointerDown = useRef<{ x: number; y: number } | null>(null)
   const mouseScreen = useRef<{ x: number; y: number }>({ x: -9999, y: -9999 })
-  const { camera, gl, size } = useThree()
+  const { camera, gl } = useThree()
   const raycaster = useMemo(() => new THREE.Raycaster(), [])
   const pointer = useMemo(() => new THREE.Vector2(), [])
   const tmpVec3 = useMemo(() => new THREE.Vector3(), [])

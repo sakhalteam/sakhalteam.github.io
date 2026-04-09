@@ -35,8 +35,8 @@ function zone(
   key: string,
   label: string,
   opts: {
-    path?: string
-    glbPath?: string
+    path?: string | null
+    glbPath?: string | null
     env?: string
     parent?: string
     children?: string[]
@@ -46,9 +46,9 @@ function zone(
     key,
     label,
     type: 'zone',
-    path: opts.path ?? `/zone-${key.replace(/_/g, '-')}`,
+    path: opts.path === null ? null : (opts.path ?? `/zone-${key.replace(/_/g, '-')}`),
     url: null,
-    glbPath: opts.glbPath ?? `/zones/zone_${key}.glb`,
+    glbPath: opts.glbPath === null ? null : (opts.glbPath ?? `/zones/zone_${key}.glb`),
     environmentPreset: opts.env ?? 'night',
     parent: opts.parent ?? 'island',
     children: opts.children ?? [],
