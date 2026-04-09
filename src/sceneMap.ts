@@ -120,9 +120,11 @@ const nodes: SceneNode[] = [
     parent: null,
     children: [
       'bird_sanctuary', 'ss_brainfog', 'cloud_town', 'tower_of_knowledge',
-      'pokemon_island', 'family_mart', 'beach_party',
+      'pokemon_island', 'the_tunnels', 'beach_party',
+      // Direct portals on the island
+      'portal_famima',
       // Coming-soon zones (no glb yet)
-      'mystery_zone', 'nessie', 'flower_shop', 'the_tunnels',
+      'mystery_zone', 'nessie', 'flower_shop',
       // Toys on the island
       'toy_diglett', 'toy_staryu', 'toy_lapras', 'toy_pollywag',
     ],
@@ -152,13 +154,9 @@ const nodes: SceneNode[] = [
     env: 'park',
     children: ['portal_pokemon_park'],
   }),
-  zone('family_mart', 'Family Mart', {
-    env: 'warehouse',
-    children: ['family_mart_interior'],
-  }),
-  zone('family_mart_interior', 'Family Mart', {
-    env: 'warehouse',
-    parent: 'family_mart',
+  zone('the_tunnels', 'The Tunnels', {
+    env: 'night',
+    children: ['portal_jr_jingle_journey'],
   }),
   zone('beach_party', 'Beach Party', { env: 'sunset' }),
 
@@ -166,7 +164,6 @@ const nodes: SceneNode[] = [
   zone('mystery_zone', 'Mystery Zone', { glbPath: null, path: null }),
   zone('nessie', 'Nessie', { glbPath: null, path: null }),
   zone('flower_shop', 'Flower Shop', { glbPath: null, path: null }),
-  zone('the_tunnels', 'The Tunnels', { glbPath: null, path: null }),
 
   // ── Portals (external site links inside zones) ─────
   portal('portal_bird_bingo', 'Bird Bingo', '/bird-bingo/', 'bird_sanctuary'),
@@ -175,6 +172,8 @@ const nodes: SceneNode[] = [
   portal('portal_nikbeat', 'NikBeat', '/nikbeat/', 'island'),
   portal('portal_pokemon_park', 'Pokemon Park', '/pokemon-park/', 'island'),
   portal('portal_weather_report', 'Weather Report', '/weather-report/', 'island'),
+  portal('portal_famima', 'Famima', '/famima/', 'island'),
+  portal('portal_jr_jingle_journey', 'JR Jingle Journey', '/jr-jingle-journey/', 'the_tunnels'),
 
   // ── Bird sanctuary creatures (non-navigable hotspots) ──
   toy('baby_deku', 'Deku Sprout', 'bird_sanctuary'),
@@ -199,6 +198,8 @@ const nodes: SceneNode[] = [
   site('site_nikbeat', 'NikBeat', '/nikbeat/'),
   site('site_pokemon_park', 'Pokemon Park', '/pokemon-park/'),
   site('site_weather_report', 'Weather Report', '/weather-report/'),
+  site('site_famima', 'Famima', '/famima/'),
+  site('site_jr_jingle_journey', 'JR Jingle Journey', '/jr-jingle-journey/'),
 ]
 
 // ─── Indexed lookups ────────────────────────────────────────────────

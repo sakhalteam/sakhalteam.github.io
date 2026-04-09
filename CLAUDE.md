@@ -137,11 +137,12 @@ Both zone types use bloom (emissive ramp + Bloom pass via BloomDriver.tsx). The 
 - `zone_cloud_town` → `/zone-cloud-town` → `portal_weather_report` → `/weather-report/`
 - `zone_tower_of_knowledge` → `/zone-tower-of-knowledge` → `zone_reading_room` → `/zone-reading-room` → `portal_japanese_articles` → `/japanese-articles/`
 - `zone_pokemon_island` → `/zone-pokemon-island` → `portal_pokemon_park` → `/pokemon-park/`
-- `zone_family_mart` → `/zone-family-mart` → `zone_family_mart_interior` → `/zone-family-mart-interior` (dead-end for now)
+- `zone_the_tunnels` → `/zone-the-tunnels` → `portal_jr_jingle_journey` → `/jr-jingle-journey/`
+- `portal_famima` → `/famima/` (direct portal on island, no zone scene)
 - `zone_beach_party` → `/zone-beach-party` → `portal_nikbeat` → `/nikbeat/`
 
 ## Coming-soon zones (meshes exist in island.glb, not yet wired to sites)
-zone_crystals, zone_flower_shop, zone_mystery_zone, zone_nessie, zone_the_tunnels
+zone_crystals, zone_flower_shop, zone_mystery_zone, zone_nessie
 
 ## Blender naming (no parenting needed)
 All objects should be flat at the scene root — no `empty_zone_x` wrappers, no parenting hierarchy. Use `zc_<key>_<name>` prefix to include meshes in a zone's hover glow. Cranes use `zc_` prefix on their respective zones (e.g., `zc_crystals_crane.004`).
@@ -160,9 +161,9 @@ Optimized via gltf-transform: Draco geometry compression + WebP texture compress
 
 ## TODO status (as of 2026-04-08)
 - [x] #1: Unified glow system (BloomDriver.tsx) — done
-- [ ] #2: Breadcrumb navigation — `getBreadcrumbs()` ready in sceneMap, UI not built
-- [ ] #3: Site map / quick-jump menu — QuickNav exists but only shows sister sites
-- [ ] #4: Standardize HomeBtn across sister sites
+- [x] #2: Breadcrumb navigation — done (Breadcrumbs.tsx) — `getBreadcrumbs()` ready in sceneMap, UI not built
+- [x] #3: Site map / quick-jump menu — done (QuickNav rewrite) — QuickNav exists but only shows sister sites
+- [x] #4: Standardize HomeBtn across sister sites — done (all repos)
 - [x] #5: Toy hover effect — done (proximity labels in ToyInteractor)
 - [x] #6: sceneMap.ts — done, all consumers wired
 - [x] #7: Turntable play/pause + auto-resume — done
@@ -170,7 +171,7 @@ Optimized via gltf-transform: Draco geometry compression + WebP texture compress
 - [x] #9: Crane glow bug — deferred (Blender fix needed)
 - [x] #10: Bird sanctuary permanent bloom — no longer reproducing
 
-**Next up:** #2 (breadcrumbs) or #3 (quick-jump), then #4 (HomeBtn standardization)
+**Next up:** Wire train departure animation in zone_the_tunnels, finish famima scaffold
 
 ## Example user flows (for context)
 - island → `zone_reading_room` → interior scene → `portal_japanese_articles` → /japanese-articles/
