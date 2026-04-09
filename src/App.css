@@ -222,7 +222,7 @@
   position: absolute;
   top: calc(100% + 0.35rem);
   left: 0;
-  min-width: 160px;
+  min-width: 200px;
   background: rgba(10, 22, 40, 0.82);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -237,19 +237,121 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+.quick-nav-section {
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.55rem 0.85rem 0.25rem;
+  opacity: 0.6;
+}
+
+.quick-nav-section:not(:first-child) {
+  border-top: 1px solid var(--card-border);
+  margin-top: 0.25rem;
+  padding-top: 0.55rem;
+}
+
 .quick-nav-item {
-  display: block;
-  padding: 0.45rem 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.4rem 0.85rem;
   font-size: 0.72rem;
   letter-spacing: 0.06em;
   color: var(--text);
   text-decoration: none;
-  transition: background 0.1s;
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
 }
 
-.quick-nav-item:hover {
+.quick-nav-item:hover:not(:disabled) {
   background: rgba(224, 90, 58, 0.12);
   color: var(--accent);
+}
+
+.quick-nav-item--disabled {
+  color: var(--muted);
+  opacity: 0.45;
+  cursor: default;
+}
+
+.quick-nav-indent {
+  color: var(--card-border);
+  font-size: 0.65rem;
+}
+
+.quick-nav-soon {
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  opacity: 0.5;
+  margin-left: auto;
+}
+
+.quick-nav-external {
+  font-size: 0.6rem;
+  opacity: 0.4;
+  margin-left: auto;
+}
+
+/* ── Breadcrumbs ─────────────────────────── */
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-bottom: 0.5rem;
+}
+
+.breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+}
+
+.breadcrumb-sep {
+  color: var(--card-border);
+  margin: 0 0.4rem;
+  font-size: 0.7rem;
+}
+
+.breadcrumb-link {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0.2rem 0;
+  transition: color 0.15s;
+}
+
+.breadcrumb-link:hover {
+  color: var(--accent);
+}
+
+.breadcrumb-current {
+  color: var(--text);
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.breadcrumb-text {
+  color: var(--muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 /* ── Footer ─────────────────────────────── */

@@ -22,7 +22,6 @@ function HomePage() {
 
   return (
     <div className="ocean" onClick={() => setComingSoon(null)}>
-      <QuickNav />
       <header className="site-header">
         <h1 className="site-title">SAKHALTEAM</h1>
         <p className="site-subtitle">an archipelago of small projects</p>
@@ -69,6 +68,8 @@ function HomePage() {
 
 export default function App() {
   return (
+    <>
+    <QuickNav />
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/zone-bird-sanctuary" element={<BirdSanctuaryScene />} />
@@ -79,6 +80,7 @@ export default function App() {
           element={
             <ZoneScene
               glbPath={z.glbPath!}
+              zoneKey={z.key}
               title={z.label.toUpperCase()}
               environmentPreset={z.environmentPreset as any}
             />
@@ -86,5 +88,6 @@ export default function App() {
         />
       ))}
     </Routes>
+    </>
   )
 }

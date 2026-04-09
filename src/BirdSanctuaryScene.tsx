@@ -10,6 +10,7 @@ import { useTurntable } from './useTurntable'
 import { AdaptiveLabel } from './AdaptiveLabel'
 import { BloomDriver, collectMeshes, BLOOM_COLOR_ACTIVE } from './BloomDriver'
 import { getHotspotConfig } from './sceneMap'
+import Breadcrumbs from './Breadcrumbs'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
 import './App.css'
@@ -250,46 +251,7 @@ export default function BirdSanctuaryScene() {
   return (
     <div className="ocean">
       <header className="site-header">
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '0.5rem' }}>
-          <button
-            onClick={() => navigate('/')}
-            style={{
-              background: 'none',
-              border: '1px solid var(--card-border)',
-              color: 'var(--muted)',
-              fontSize: '0.65rem',
-              letterSpacing: '0.14em',
-              padding: '0.35rem 1rem',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              textTransform: 'uppercase',
-              transition: 'color 0.15s, border-color 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.borderColor = '#3a5070' }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.borderColor = 'var(--card-border)' }}
-          >
-            &larr; Back to Island
-          </button>
-          <button
-            onClick={() => { window.location.href = '/bird-bingo/' }}
-            style={{
-              background: 'none',
-              border: '1px solid var(--accent)',
-              color: 'var(--accent)',
-              fontSize: '0.65rem',
-              letterSpacing: '0.14em',
-              padding: '0.35rem 1rem',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              textTransform: 'uppercase',
-              transition: 'color 0.15s, border-color 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#ff8a6a'; e.currentTarget.style.borderColor = '#ff8a6a' }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.borderColor = 'var(--accent)' }}
-          >
-            Play Bird Bingo &rarr;
-          </button>
-        </div>
+        <Breadcrumbs zoneKey="bird_sanctuary" />
         <h1 className="site-title">BIRD SANCTUARY</h1>
         <p className="site-subtitle">click on things to explore</p>
       </header>

@@ -18,6 +18,7 @@ import { useKeyboardControls } from "./useKeyboardControls"
 import { useOptimizedGLTF } from "./useOptimizedGLTF"
 import { useTurntable } from "./useTurntable"
 import { getPortalConfig } from "./sceneMap"
+import Breadcrumbs from "./Breadcrumbs"
 
 function toTitleCase(str: string) {
   return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
@@ -303,6 +304,7 @@ function CameraRig({ orbitRef, scene, cameraOptions, turntableToggleRef, onPlayi
 
 interface ZoneSceneProps {
   glbPath: string
+  zoneKey: string
   title: string
   subtitle?: string
   /** Override auto-fit camera. elevation/azimuth in radians, padding multiplier. */
@@ -322,6 +324,7 @@ interface ZoneSceneProps {
 
 export default function ZoneScene({
   glbPath,
+  zoneKey,
   title,
   subtitle = "click on things to explore",
   camera: cameraOptions,
@@ -346,40 +349,7 @@ export default function ZoneScene({
   return (
     <div className="ocean">
       <header className="site-header">
-        <div
-          style={{
-            display: "flex",
-            gap: "0.5rem",
-            justifyContent: "center",
-            marginBottom: "0.5rem",
-          }}
-        >
-          <button
-            onClick={() => navigate("/")}
-            style={{
-              background: "none",
-              border: "1px solid var(--card-border)",
-              color: "var(--muted)",
-              fontSize: "0.65rem",
-              letterSpacing: "0.14em",
-              padding: "0.35rem 1rem",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              textTransform: "uppercase",
-              transition: "color 0.15s, border-color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "var(--text)"
-              e.currentTarget.style.borderColor = "#3a5070"
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--muted)"
-              e.currentTarget.style.borderColor = "var(--card-border)"
-            }}
-          >
-            &larr; Back to Island
-          </button>
-        </div>
+        <Breadcrumbs zoneKey={zoneKey} />
         <h1 className="site-title">{title}</h1>
         <p className="site-subtitle">{subtitle}</p>
       </header>
