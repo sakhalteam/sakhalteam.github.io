@@ -144,10 +144,14 @@ const nodes: SceneNode[] = [
   zone('cloud_town', 'Cloud Town', { env: 'city' }),
   zone('tower_of_knowledge', 'Tower Of Knowledge', {
     env: 'apartment',
-    children: ['reading_room'],
+    children: ['reading_room', 'dojo'],
   }),
   zone('reading_room', 'Reading Room', {
     env: 'apartment',
+    parent: 'tower_of_knowledge',
+  }),
+  zone('dojo', 'Dojo', {
+    env: 'night',
     parent: 'tower_of_knowledge',
   }),
   zone('pokemon_island', 'Pokemon Island', {
@@ -172,7 +176,7 @@ const nodes: SceneNode[] = [
   portal('portal_nikbeat', 'NikBeat', '/nikbeat/', 'island'),
   portal('portal_pokemon_park', 'Pokemon Park', '/pokemon-park/', 'island'),
   portal('portal_weather_report', 'Weather Report', '/weather-report/', 'island'),
-  portal('portal_famima', 'Famima', '/famima/', 'island'),
+  portal('portal_famima', 'Family Mart', '/famima/', 'island'),
   portal('portal_jr_jingle_journey', 'JR Jingle Journey', '/jr-jingle-journey/', 'the_tunnels'),
 
   // ── Bird sanctuary creatures (non-navigable hotspots) ──
