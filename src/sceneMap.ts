@@ -27,6 +27,8 @@ export interface SceneNode {
   parent: string | null
   /** Child keys — zones/portals/toys contained in this scene. */
   children: string[]
+  /** Sound URLs to play on click (cycles if multiple). */
+  sounds?: string[]
 }
 
 // ─── Helper to build nodes with defaults ────────────────────────────
@@ -40,6 +42,7 @@ function zone(
     env?: string
     parent?: string
     children?: string[]
+    sounds?: string[]
   } = {}
 ): SceneNode {
   return {
@@ -52,6 +55,7 @@ function zone(
     environmentPreset: opts.env ?? 'night',
     parent: opts.parent ?? 'island',
     children: opts.children ?? [],
+    ...(opts.sounds && { sounds: opts.sounds }),
   }
 }
 
@@ -165,7 +169,7 @@ const nodes: SceneNode[] = [
   zone('beach_party', 'Beach Party', { env: 'sunset' }),
 
   // ── Coming-soon zones (on the island, no GLB) ─────
-  zone('mystery_zone', 'Mystery Zone', { glbPath: null, path: null }),
+  zone('mystery_zone', 'Mystery Zone', { glbPath: null, path: null, sounds: ['/sounds/thwomp_01.ogg', '/sounds/thwomp_02.ogg'] }),
   zone('nessie', 'Nessie', { glbPath: null, path: null }),
   zone('flower_shop', 'Flower Shop', { glbPath: null, path: null }),
 
@@ -276,6 +280,10 @@ export function findNodeByObjectName(objName: string): SceneNode | undefined {
     if (sceneMap.has(prefixed)) return sceneMap.get(prefixed)
   }
 
+  // Handle numbered duplicates (e.g. "zone_the_tunnels_01" → "the_tunnels")
+  const withoutNum = stripped.replace(/_\d+$/, '')
+  if (withoutNum !== stripped && sceneMap.has(withoutNum)) return sceneMap.get(withoutNum)
+
   return undefined
 }
 
@@ -288,6 +296,7 @@ export function getZoneConfig(objName: string): {
   url: string | null
   internal: boolean
   type: 'active' | 'coming-soon'
+  sounds?: string[]
 } {
   const node = findNodeByObjectName(objName)
   if (node && node.type === 'zone') {
@@ -297,6 +306,7 @@ export function getZoneConfig(objName: string): {
       url: node.path,
       internal: true,
       type: isActive ? 'active' : 'coming-soon',
+      sounds: node.sounds,
     }
   }
   // Portal on the island

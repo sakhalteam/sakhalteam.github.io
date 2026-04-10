@@ -22,6 +22,7 @@ interface ZoneMarker {
   url: string | null
   internal: boolean
   type: 'active' | 'coming-soon'
+  sounds?: string[]
   sceneObj: THREE.Object3D
   meshes: THREE.Mesh[]     // bloom glow — includes zone_ + zc_ meshes
 }
@@ -91,6 +92,24 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
   return result
 }
 
+/** Audio cache + cycling index for zone click sounds */
+const zoneSoundIndex = new Map<string, number>()
+const zoneSoundCache = new Map<string, HTMLAudioElement>()
+function playZoneSound(marker: ZoneMarker) {
+  if (!marker.sounds?.length) return
+  const idx = zoneSoundIndex.get(marker.name) ?? 0
+  const url = marker.sounds[idx % marker.sounds.length]
+  zoneSoundIndex.set(marker.name, idx + 1)
+  let audio = zoneSoundCache.get(url)
+  if (!audio) {
+    audio = new Audio(url)
+    audio.volume = 0.5
+    zoneSoundCache.set(url, audio)
+  }
+  audio.currentTime = 0
+  audio.play().catch(() => {})
+}
+
 const ZoneHitbox = memo(function ZoneHitbox({
   marker, onComingSoon, navigate, onHoverChange,
 }: {
@@ -136,6 +155,7 @@ const ZoneHitbox = memo(function ZoneHitbox({
               window.location.href = marker.url
             }
           } else {
+            playZoneSound(marker)
             onComingSoon(marker.label)
           }
         }}
