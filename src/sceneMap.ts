@@ -208,6 +208,7 @@ const nodes: SceneNode[] = [
   site('site_weather_report', 'Weather Report', '/weather-report/'),
   site('site_famima', 'Famima', '/famima/'),
   site('site_jr_jingle_journey', 'JR Jingle Journey', '/jr-jingle-journey/'),
+  site('site_karasu_drop', 'Karasu Drop', '/karasu-drop/'),
 ]
 
 // ─── Indexed lookups ────────────────────────────────────────────────
