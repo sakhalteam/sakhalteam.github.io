@@ -142,7 +142,7 @@ Both zone types use bloom (emissive ramp + Bloom pass via BloomDriver.tsx). The 
 - `zone_beach_party` → `/zone-beach-party` → `portal_nikbeat` → `/nikbeat/`
 
 ## Coming-soon zones (meshes exist in island.glb, not yet wired to sites)
-zone_crystals, zone_flower_shop, zone_mystery_zone, zone_nessie
+zone_crystals, zone_flower_shop, zone_mystery_zone, zone_nessie, zone_warehouse
 
 ## Blender naming (no parenting needed)
 All objects should be flat at the scene root — no `empty_zone_x` wrappers, no parenting hierarchy. Use `zc_<key>_<name>` prefix to include meshes in a zone's hover glow. Cranes use `zc_` prefix on their respective zones (e.g., `zc_crystals_crane.004`).

@@ -77,7 +77,7 @@ function portal(
   }
 }
 
-export type ToyAnimation = 'spin' | 'hop' | 'wobble'
+export type ToyAnimation = 'spin' | 'hop' | 'wobble' | 'none'
 
 function toy(
   key: string,
@@ -131,10 +131,12 @@ const nodes: SceneNode[] = [
       // Direct portals on the island
       'portal_famima',
       // Coming-soon zones (no glb yet)
-      'mystery_zone', 'nessie', 'flower_shop',
+      'mystery_zone', 'nessie', 'flower_shop', 'warehouse',
       // Toys on the island
       'toy_diglett', 'toy_staryu', 'toy_lapras', 'toy_pollywag',
       'toy_pigeon_01', 'toy_pigeon_02',
+      'toy_pizza', 'toy_ramen', 'toy_harpy',
+      'toy_king_egg', 'toy_simple_egg',
     ],
   },
 
@@ -176,6 +178,7 @@ const nodes: SceneNode[] = [
   zone('mystery_zone', 'Mystery Zone', { glbPath: null, path: null, sounds: ['/sounds/thwomp_01.ogg', '/sounds/thwomp_02.ogg'] }),
   zone('nessie', 'Nessie', { glbPath: null, path: null }),
   zone('flower_shop', 'Flower Shop', { glbPath: null, path: null }),
+  zone('warehouse', 'Warehouse', { glbPath: null, path: null }),
 
   // ── Portals (external site links inside zones) ─────
   portal('portal_bird_bingo', 'Bird Bingo', '/bird-bingo/', 'bird_sanctuary'),
@@ -209,6 +212,11 @@ const nodes: SceneNode[] = [
   toy('toy_bird_sanctuary_eagle', 'Eagle', 'island'),
   toy('toy_nessie_object_nessie_umbrella', 'Umbrella', 'island'),
   toy('toy_nessie_object_nessie_hat', 'Hat', 'island'),
+  toy('toy_pizza', 'Pizza', 'island'),
+  toy('toy_ramen', 'Ramen', 'island'),
+  toy('toy_harpy', 'Harpy', 'island', { animation: 'none' }),
+  toy('toy_king_egg', 'King Egg', 'island', { animation: 'hop' }),
+  toy('toy_simple_egg', 'Egg', 'island', { animation: 'hop' }),
   // zc_ objects that are ALSO interactive toys (glow with parent zone + hop on click)
   toy('zc_beach_party_character_mudkip', 'Mudkip', 'island', { animation: 'hop' }),
   toy('zc_beach_party_character_squirtle', 'Squirtle', 'island', { animation: 'hop' }),

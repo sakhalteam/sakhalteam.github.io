@@ -135,6 +135,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
   }, [gl, camera, raycaster, pointer, allMeshes, meshToToy])
 
   const triggerAnimation = useCallback((toy: ToyData) => {
+    if (toy.animation === 'none') return // pre-animated in Blender, no click behavior
     const name = toy.obj.name
     if (toy.animation === 'hop') {
       if (hopState.current.has(name)) return
@@ -200,8 +201,8 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     const delta = clock.getDelta() || 1 / 60
 
     for (const toy of toys) {
-      // Gentle bob (skip hop toys — they stay still until clicked)
-      if (toy.animation !== 'hop' && !hopState.current.has(toy.obj.name)) {
+      // Gentle bob (skip hop toys and pre-animated toys)
+      if (toy.animation !== 'hop' && toy.animation !== 'none' && !hopState.current.has(toy.obj.name)) {
         toy.obj.position.y = toy.baseY + Math.sin(t * 0.8) * 0.06
       }
 
