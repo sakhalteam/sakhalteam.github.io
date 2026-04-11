@@ -69,36 +69,46 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
   const tmpVec3 = useMemo(() => new THREE.Vector3(), [])
 
   const toys = useMemo(() => {
-    const result: ToyData[] = []
+    // Normalize Blender's .001/.002 dot-notation duplicates to base name.
+    // Only strip dot-suffixes — underscore numbers like _01/_02 are intentional names.
+    const normalizeName = (lower: string) => lower.replace(/\.\d+$/, '')
+
+    // Collect all toy_ and eligible zc_ objects, grouping numbered Blender variants
+    const byBase = new Map<string, { primary: THREE.Object3D; meshes: THREE.Mesh[] }>()
+
     scene.traverse((child) => {
       const lower = child.name.toLowerCase()
-      // Pick up toy_ objects (always) and zc_ objects that have a toy config in sceneMap
       if (lower.startsWith('toy_')) {
-        const config = getToyConfig(lower)
+        const base = normalizeName(lower)
         const meshes = collectMeshes(child)
-        result.push({
-          obj: child,
-          baseY: child.position.y,
-          label: config?.label ?? child.name,
-          soundUrl: config?.sound ?? null,
-          meshes,
-          animation: config?.animation ?? 'spin',
-        })
+        if (!byBase.has(base)) {
+          // Use the base-named object as primary if it exists, otherwise first found
+          byBase.set(base, { primary: child, meshes })
+        } else {
+          // Numbered variant — add its meshes to the primary toy, prefer base-named object
+          const entry = byBase.get(base)!
+          if (lower === base) entry.primary = child // prefer exact base name
+          entry.meshes.push(...meshes)
+        }
       } else if (lower.startsWith('zc_')) {
         const config = getToyConfig(lower)
         if (!config) return // not a toy — just a glow member
         const meshes = collectMeshes(child)
-        result.push({
-          obj: child,
-          baseY: child.position.y,
-          label: config.label,
-          soundUrl: config.sound,
-          meshes,
-          animation: config.animation,
-        })
+        byBase.set(lower, { primary: child, meshes })
       }
     })
-    return result
+
+    return Array.from(byBase.entries()).map(([base, { primary, meshes }]) => {
+      const config = getToyConfig(base)
+      return {
+        obj: primary,
+        baseY: primary.position.y,
+        label: config?.label ?? primary.name,
+        soundUrl: config?.sound ?? null,
+        meshes,
+        animation: config?.animation ?? 'spin',
+      } satisfies ToyData
+    })
   }, [scene])
 
   // Per-toy mutable state (not React state — updated in useFrame for performance)
@@ -173,6 +183,8 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
       pointerDown.current = { x: e.clientX, y: e.clientY }
     }
 
+    // Capture phase: fires before R3F's bubble-phase zone/portal click handlers.
+    // If a toy mesh is under the pointer, consume the event so zones don't navigate.
     const onClick = (e: MouseEvent) => {
       if (pointerDown.current) {
         const dx = e.clientX - pointerDown.current.x
@@ -180,16 +192,19 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
         if (dx * dx + dy * dy > 25) return
       }
       const toy = hitTest(e)
-      if (toy) triggerAnimation(toy)
+      if (toy) {
+        e.stopPropagation() // block zone/portal click handlers
+        triggerAnimation(toy)
+      }
     }
 
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('pointerdown', onPointerDown)
-    canvas.addEventListener('click', onClick)
+    canvas.addEventListener('click', onClick, { capture: true })
     return () => {
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerdown', onPointerDown)
-      canvas.removeEventListener('click', onClick)
+      canvas.removeEventListener('click', onClick, { capture: true })
       if (canvas.style.cursor === 'pointer') canvas.style.cursor = ''
     }
   }, [gl, hitTest, triggerAnimation])

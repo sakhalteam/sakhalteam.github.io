@@ -136,26 +136,26 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
   const hotspotTypes: ('portal' | 'zone')[] = []
   const seen = new Set<string>()
 
-  // Pass 1: find portal_/zone_ objects
-  for (const obj of scene.children) {
+  // Pass 1: find portal_/zone_ objects (traverse handles size_all wrappers or any nesting)
+  scene.traverse((obj) => {
     const lower = obj.name.toLowerCase()
 
     if (lower.startsWith("portal_")) {
       const key = lower.replace(/^portal_/, "")
-      if (seen.has(key)) continue
+      if (seen.has(key)) return
       seen.add(key)
       hotspotObjects.push(obj)
       hotspotKeys.push(key)
       hotspotTypes.push('portal')
     } else if (lower.startsWith("zone_")) {
       const key = lower.replace(/^zone_/, "")
-      if (seen.has(key)) continue
+      if (seen.has(key)) return
       seen.add(key)
       hotspotObjects.push(obj)
       hotspotKeys.push(key)
       hotspotTypes.push('zone')
     }
-  }
+  })
 
   // Sort keys longest-first for unambiguous zc_/pc_ matching
   const sortedKeys = [...hotspotKeys].sort((a, b) => b.length - a.length)
