@@ -148,7 +148,7 @@ const nodes: SceneNode[] = [
       'bird_kiwi', 'bird_kiwi2', 'bird_flamingo', 'tree_stump',
     ],
   }),
-  zone('ss_brainfog', 'S.S. Brainfog', { env: 'sunset', children: ['portal_karasu_drop'] }),
+  zone('ss_brainfog', 'S.S. Brainfog', { env: 'sunset', children: ['portal_adhdo', 'portal_karasu_drop'] }),
   zone('cloud_town', 'Cloud Town', { env: 'city' }),
   zone('tower_of_knowledge', 'Tower Of Knowledge', {
     env: 'apartment',
@@ -179,7 +179,7 @@ const nodes: SceneNode[] = [
 
   // ── Portals (external site links inside zones) ─────
   portal('portal_bird_bingo', 'Bird Bingo', '/bird-bingo/', 'bird_sanctuary'),
-  portal('portal_adhdo', 'ADHDO', '/adhdo/', 'island'),
+  portal('portal_adhdo', 'ADHDO', '/adhdo/', 'ss_brainfog'),
   portal('portal_japanese_articles', 'Japanese Articles', '/japanese-articles/', 'island'),
   portal('portal_nikbeat', 'NikBeat', '/nikbeat/', 'island'),
   portal('portal_pokemon_park', 'Pokemon Park', '/pokemon-park/', 'island'),
@@ -205,6 +205,13 @@ const nodes: SceneNode[] = [
   toy('toy_pollywag', 'Poliwag', 'island', { sound: '/sounds/poliwag.ogg' }),
   toy('toy_pigeon_01', 'Pigeon', 'island', { animation: 'hop' }),
   toy('toy_pigeon_02', 'Pigeon', 'island', { animation: 'hop' }),
+  toy('toy_bird_sanctuary_bird_cassowary', 'Cassowary', 'island'),
+  toy('toy_bird_sanctuary_eagle', 'Eagle', 'island'),
+  toy('toy_nessie_object_nessie_umbrella', 'Umbrella', 'island'),
+  toy('toy_nessie_object_nessie_hat', 'Hat', 'island'),
+  // zc_ objects that are ALSO interactive toys (glow with parent zone + hop on click)
+  toy('zc_beach_party_character_mudkip', 'Mudkip', 'island', { animation: 'hop' }),
+  toy('zc_beach_party_character_squirtle', 'Squirtle', 'island', { animation: 'hop' }),
 
   // ── Sister sites (for QuickNav / site map) ─────────
   site('site_adhdo', 'ADHDO', '/adhdo/'),

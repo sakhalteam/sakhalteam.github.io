@@ -70,20 +70,34 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
 
   const toys = useMemo(() => {
     const result: ToyData[] = []
-    for (const child of scene.children) {
+    scene.traverse((child) => {
       const lower = child.name.toLowerCase()
-      if (!lower.startsWith('toy_')) continue
-      const config = getToyConfig(lower)
-      const meshes = collectMeshes(child)
-      result.push({
-        obj: child,
-        baseY: child.position.y,
-        label: config?.label ?? child.name,
-        soundUrl: config?.sound ?? null,
-        meshes,
-        animation: config?.animation ?? 'spin',
-      })
-    }
+      // Pick up toy_ objects (always) and zc_ objects that have a toy config in sceneMap
+      if (lower.startsWith('toy_')) {
+        const config = getToyConfig(lower)
+        const meshes = collectMeshes(child)
+        result.push({
+          obj: child,
+          baseY: child.position.y,
+          label: config?.label ?? child.name,
+          soundUrl: config?.sound ?? null,
+          meshes,
+          animation: config?.animation ?? 'spin',
+        })
+      } else if (lower.startsWith('zc_')) {
+        const config = getToyConfig(lower)
+        if (!config) return // not a toy — just a glow member
+        const meshes = collectMeshes(child)
+        result.push({
+          obj: child,
+          baseY: child.position.y,
+          label: config.label,
+          soundUrl: config.sound,
+          meshes,
+          animation: config.animation,
+        })
+      }
+    })
     return result
   }, [scene])
 
@@ -128,7 +142,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     } else {
       // 'spin' and 'wobble' both use spinState
       if (spinState.current.has(name)) return
-      spinState.current.set(name, { startTime: -1, startRotZ: toy.obj.rotation.z })
+      spinState.current.set(name, { startTime: -1, startRotZ: toy.obj.rotation.y })
     }
     if (toy.soundUrl) playSound(toy.soundUrl)
   }, [])
@@ -199,7 +213,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
         const duration = 0.6
         const progress = Math.min(elapsed / duration, 1)
         const eased = 1 - Math.pow(1 - progress, 3)
-        toy.obj.rotation.z = spin.startRotZ + eased * Math.PI * 2
+        toy.obj.rotation.y = spin.startRotZ + eased * Math.PI * 2
         if (progress >= 1) {
           spinState.current.delete(toy.obj.name)
         }
