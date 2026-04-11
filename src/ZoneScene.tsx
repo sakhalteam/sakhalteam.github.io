@@ -18,6 +18,7 @@ import { useKeyboardControls } from "./useKeyboardControls"
 import { useOptimizedGLTF } from "./useOptimizedGLTF"
 import { useTurntable } from "./useTurntable"
 import { getPortalConfig } from "./sceneMap"
+import ToyInteractor from "./ToyInteractor"
 import Breadcrumbs from "./Breadcrumbs"
 
 function toTitleCase(str: string) {
@@ -253,6 +254,7 @@ function ZoneMesh({
   return (
     <>
       <primitive object={scene} />
+      <ToyInteractor scene={scene} />
       {hotspots.map((hotspot) => (
         <HotspotHitbox
           key={hotspot.name}

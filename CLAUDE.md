@@ -171,7 +171,9 @@ Optimized via gltf-transform: Draco geometry compression + WebP texture compress
 - [x] #9: Crane glow bug — deferred (Blender fix needed)
 - [x] #10: Bird sanctuary permanent bloom — no longer reproducing
 
-**Next up:** Wire train departure animation in zone_the_tunnels, finish famima scaffold
+**Next up:**
+- Wire train departure animation in zone_the_tunnels, finish famima scaffold
+- Shark circle animation: toy_shark in zone_ss_brainfog currently loops idle swim. Nic will add a second Blender action (`shark_circle`) for a big circle swim under the boat. On click: crossfade to circle action, then back to idle. Needs new ToyInteractor animation type (`animation: 'action'`) that swaps named AnimationActions instead of rotating the object.
 
 ## Example user flows (for context)
 - island → `zone_reading_room` → interior scene → `portal_japanese_articles` → /japanese-articles/

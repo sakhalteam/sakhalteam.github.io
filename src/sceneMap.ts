@@ -213,6 +213,9 @@ const nodes: SceneNode[] = [
   toy('zc_beach_party_character_mudkip', 'Mudkip', 'island', { animation: 'hop' }),
   toy('zc_beach_party_character_squirtle', 'Squirtle', 'island', { animation: 'hop' }),
 
+  // ── Zone toys (inside zone GLBs) ──────────────────
+  toy('toy_shark', 'Shark', 'ss_brainfog'),
+
   // ── Sister sites (for QuickNav / site map) ─────────
   site('site_adhdo', 'ADHDO', '/adhdo/'),
   site('site_bird_bingo', 'Bird Bingo', '/bird-bingo/'),
