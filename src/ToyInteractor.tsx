@@ -1,7 +1,7 @@
 import { useRef, useMemo, useEffect, useCallback } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
-import { getToyConfig } from './sceneMap'
+import { getToyConfig, type ToyAnimation } from './sceneMap'
 import * as THREE from 'three'
 
 /** Screen-space radius (px) within which the cursor reveals a toy label */
@@ -17,6 +17,7 @@ interface ToyData {
   label: string
   soundUrl: string | null
   meshes: THREE.Mesh[]
+  animation: ToyAnimation
 }
 
 interface ToyState {
@@ -59,6 +60,7 @@ function collectMeshes(obj: THREE.Object3D): THREE.Mesh[] {
  */
 export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
   const spinState = useRef<Map<string, { startTime: number; startRotZ: number }>>(new Map())
+  const hopState = useRef<Map<string, { startTime: number }>>(new Map())
   const pointerDown = useRef<{ x: number; y: number } | null>(null)
   const mouseScreen = useRef<{ x: number; y: number }>({ x: -9999, y: -9999 })
   const { camera, gl } = useThree()
@@ -79,6 +81,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
         label: config?.label ?? child.name,
         soundUrl: config?.sound ?? null,
         meshes,
+        animation: config?.animation ?? 'spin',
       })
     }
     return result
@@ -117,12 +120,16 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     return null
   }, [gl, camera, raycaster, pointer, allMeshes, meshToToy])
 
-  const triggerSpin = useCallback((toy: ToyData) => {
-    if (spinState.current.has(toy.obj.name)) return
-    spinState.current.set(toy.obj.name, {
-      startTime: -1,
-      startRotZ: toy.obj.rotation.z,
-    })
+  const triggerAnimation = useCallback((toy: ToyData) => {
+    const name = toy.obj.name
+    if (toy.animation === 'hop') {
+      if (hopState.current.has(name)) return
+      hopState.current.set(name, { startTime: -1 })
+    } else {
+      // 'spin' and 'wobble' both use spinState
+      if (spinState.current.has(name)) return
+      spinState.current.set(name, { startTime: -1, startRotZ: toy.obj.rotation.z })
+    }
     if (toy.soundUrl) playSound(toy.soundUrl)
   }, [])
 
@@ -158,7 +165,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
         if (dx * dx + dy * dy > 25) return
       }
       const toy = hitTest(e)
-      if (toy) triggerSpin(toy)
+      if (toy) triggerAnimation(toy)
     }
 
     canvas.addEventListener('pointermove', onPointerMove)
@@ -170,7 +177,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
       canvas.removeEventListener('click', onClick)
       if (canvas.style.cursor === 'pointer') canvas.style.cursor = ''
     }
-  }, [gl, hitTest, triggerSpin])
+  }, [gl, hitTest, triggerAnimation])
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime()
@@ -179,8 +186,10 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     const delta = clock.getDelta() || 1 / 60
 
     for (const toy of toys) {
-      // Gentle bob
-      toy.obj.position.y = toy.baseY + Math.sin(t * 0.8) * 0.06
+      // Gentle bob (skip hop toys — they stay still until clicked)
+      if (toy.animation !== 'hop' && !hopState.current.has(toy.obj.name)) {
+        toy.obj.position.y = toy.baseY + Math.sin(t * 0.8) * 0.06
+      }
 
       // Spin animation
       const spin = spinState.current.get(toy.obj.name)
@@ -193,6 +202,21 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
         toy.obj.rotation.z = spin.startRotZ + eased * Math.PI * 2
         if (progress >= 1) {
           spinState.current.delete(toy.obj.name)
+        }
+      }
+
+      // Pigeon hop animation — quick parabolic Y bounce
+      const hop = hopState.current.get(toy.obj.name)
+      if (hop) {
+        if (hop.startTime < 0) hop.startTime = t
+        const elapsed = t - hop.startTime
+        const duration = 0.35
+        const progress = Math.min(elapsed / duration, 1)
+        // Parabola: peaks at 0.5 progress, returns to 0 at 1.0
+        const hopHeight = 0.25 * 4 * progress * (1 - progress)
+        toy.obj.position.y = toy.baseY + hopHeight
+        if (progress >= 1) {
+          hopState.current.delete(toy.obj.name)
         }
       }
 
@@ -229,6 +253,22 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
         state.opacity = Math.max(state.opacity - FADE_SPEED * delta, 0)
       }
 
+      // Hover glow for labelless toys (hop) — subtle emissive tint
+      if (toy.animation === 'hop') {
+        for (const mesh of toy.meshes) {
+          const mat = mesh.material as THREE.MeshStandardMaterial
+          if (mat.emissive) {
+            if (state.hovered) {
+              mat.emissive.setRGB(0.15, 0.15, 0.2)
+              mat.emissiveIntensity = 0.5
+            } else {
+              mat.emissive.setRGB(0, 0, 0)
+              mat.emissiveIntensity = 0
+            }
+          }
+        }
+      }
+
       // Update DOM directly for performance (no React re-renders per frame)
       if (state.labelDiv) {
         state.labelDiv.style.opacity = String(state.opacity)
@@ -256,7 +296,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
 
   return (
     <>
-      {toys.map((toy) => {
+      {toys.filter(t => t.animation !== 'hop').map((toy) => {
         const box = new THREE.Box3().setFromObject(toy.obj)
         const labelPos = new THREE.Vector3()
         box.getCenter(labelPos)

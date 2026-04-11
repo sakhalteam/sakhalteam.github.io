@@ -77,12 +77,14 @@ function portal(
   }
 }
 
+export type ToyAnimation = 'spin' | 'hop' | 'wobble'
+
 function toy(
   key: string,
   label: string,
   parent: string,
-  opts: { sound?: string } = {}
-): SceneNode & { sound?: string } {
+  opts: { sound?: string; animation?: ToyAnimation } = {}
+): SceneNode & { sound?: string; animation?: ToyAnimation } {
   return {
     key,
     label,
@@ -93,6 +95,7 @@ function toy(
     parent,
     children: [],
     ...(opts.sound && { sound: opts.sound }),
+    ...(opts.animation && { animation: opts.animation }),
   }
 }
 
@@ -131,6 +134,7 @@ const nodes: SceneNode[] = [
       'mystery_zone', 'nessie', 'flower_shop',
       // Toys on the island
       'toy_diglett', 'toy_staryu', 'toy_lapras', 'toy_pollywag',
+      'toy_pigeon_01', 'toy_pigeon_02',
     ],
   },
 
@@ -144,7 +148,7 @@ const nodes: SceneNode[] = [
       'bird_kiwi', 'bird_kiwi2', 'bird_flamingo', 'tree_stump',
     ],
   }),
-  zone('ss_brainfog', 'S.S. Brainfog', { env: 'sunset' }),
+  zone('ss_brainfog', 'S.S. Brainfog', { env: 'sunset', children: ['portal_karasu_drop'] }),
   zone('cloud_town', 'Cloud Town', { env: 'city' }),
   zone('tower_of_knowledge', 'Tower Of Knowledge', {
     env: 'apartment',
@@ -182,6 +186,7 @@ const nodes: SceneNode[] = [
   portal('portal_weather_report', 'Weather Report', '/weather-report/', 'island'),
   portal('portal_famima', 'Family Mart', '/famima/', 'island'),
   portal('portal_jr_jingle_journey', 'JR Jingle Journey', '/jr-jingle-journey/', 'the_tunnels'),
+  portal('portal_karasu_drop', 'Karasu Drop', '/karasu-drop/', 'ss_brainfog'),
 
   // ── Bird sanctuary creatures (non-navigable hotspots) ──
   toy('baby_deku', 'Deku Sprout', 'bird_sanctuary'),
@@ -198,6 +203,8 @@ const nodes: SceneNode[] = [
   toy('toy_staryu', 'Staryu', 'island', { sound: '/sounds/staryu.ogg' }),
   toy('toy_lapras', 'Lapras', 'island', { sound: '/sounds/lapras.ogg' }),
   toy('toy_pollywag', 'Poliwag', 'island', { sound: '/sounds/poliwag.ogg' }),
+  toy('toy_pigeon_01', 'Pigeon', 'island', { animation: 'hop' }),
+  toy('toy_pigeon_02', 'Pigeon', 'island', { animation: 'hop' }),
 
   // ── Sister sites (for QuickNav / site map) ─────────
   site('site_adhdo', 'ADHDO', '/adhdo/'),
@@ -360,8 +367,8 @@ export function getHotspotConfig(objName: string): {
 /**
  * For ToyInteractor: get toy config by object name.
  */
-export function getToyConfig(objName: string): { label: string; sound: string | null } | undefined {
-  const node = sceneMap.get(objName.toLowerCase()) as (SceneNode & { sound?: string }) | undefined
+export function getToyConfig(objName: string): { label: string; sound: string | null; animation: ToyAnimation } | undefined {
+  const node = sceneMap.get(objName.toLowerCase()) as (SceneNode & { sound?: string; animation?: ToyAnimation }) | undefined
   if (!node) return undefined
-  return { label: node.label, sound: node.sound ?? null }
+  return { label: node.label, sound: node.sound ?? null, animation: node.animation ?? 'spin' }
 }
