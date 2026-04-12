@@ -61,6 +61,9 @@ function collectMeshes(obj: THREE.Object3D): THREE.Mesh[] {
 export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
   const spinState = useRef<Map<string, { startTime: number; startRotZ: number }>>(new Map())
   const hopState = useRef<Map<string, { startTime: number }>>(new Map())
+  const growState = useRef<Map<string, { startTime: number; baseScale: THREE.Vector3 }>>(new Map())
+  const wobbleState = useRef<Map<string, { startTime: number; startRotX: number }>>(new Map())
+  const bobState = useRef<Map<string, { startTime: number }>>(new Map())
   const pointerDown = useRef<{ x: number; y: number } | null>(null)
   const mouseScreen = useRef<{ x: number; y: number }>({ x: -9999, y: -9999 })
   const { camera, gl } = useThree()
@@ -90,7 +93,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
           if (lower === base) entry.primary = child // prefer exact base name
           entry.meshes.push(...meshes)
         }
-      } else if (lower.startsWith('zc_')) {
+      } else if (lower.startsWith('zc_') || lower.startsWith('pc_')) {
         const config = getToyConfig(lower)
         if (!config) return // not a toy — just a glow member
         const meshes = collectMeshes(child)
@@ -150,8 +153,17 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     if (toy.animation === 'hop') {
       if (hopState.current.has(name)) return
       hopState.current.set(name, { startTime: -1 })
+    } else if (toy.animation === 'grow') {
+      if (growState.current.has(name)) return
+      growState.current.set(name, { startTime: -1, baseScale: toy.obj.scale.clone() })
+    } else if (toy.animation === 'wobble') {
+      if (wobbleState.current.has(name)) return
+      wobbleState.current.set(name, { startTime: -1, startRotX: toy.obj.rotation.x })
+    } else if (toy.animation === 'bob') {
+      if (bobState.current.has(name)) return
+      bobState.current.set(name, { startTime: -1 })
     } else {
-      // 'spin' and 'wobble' both use spinState
+      // 'spin' (default)
       if (spinState.current.has(name)) return
       spinState.current.set(name, { startTime: -1, startRotZ: toy.obj.rotation.y })
     }
@@ -216,8 +228,10 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     const delta = clock.getDelta() || 1 / 60
 
     for (const toy of toys) {
-      // Gentle bob (skip hop toys and pre-animated toys)
-      if (toy.animation !== 'hop' && toy.animation !== 'none' && !hopState.current.has(toy.obj.name)) {
+      // Gentle bob (skip hop/bob/grow/wobble/none toys — they have their own motion)
+      const anim = toy.animation
+      if (anim !== 'hop' && anim !== 'none' && anim !== 'bob' && anim !== 'grow' && anim !== 'wobble'
+          && !hopState.current.has(toy.obj.name)) {
         toy.obj.position.y = toy.baseY + Math.sin(t * 0.8) * 0.06
       }
 
@@ -247,6 +261,56 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
         toy.obj.position.y = toy.baseY + hopHeight
         if (progress >= 1) {
           hopState.current.delete(toy.obj.name)
+        }
+      }
+
+      // Grow animation — scale pulse (origin at feet, so it "grows" upward)
+      const grow = growState.current.get(toy.obj.name)
+      if (grow) {
+        if (grow.startTime < 0) grow.startTime = t
+        const elapsed = t - grow.startTime
+        const duration = 0.5
+        const progress = Math.min(elapsed / duration, 1)
+        // Sine pulse: 0→1→0, peaks at 30% scale increase
+        const scale = 1 + 0.3 * Math.sin(progress * Math.PI)
+        toy.obj.scale.copy(grow.baseScale).multiplyScalar(scale)
+        if (progress >= 1) {
+          toy.obj.scale.copy(grow.baseScale)
+          growState.current.delete(toy.obj.name)
+        }
+      }
+
+      // Wobble animation — drinky-bird x-axis tip with decay
+      const wobble = wobbleState.current.get(toy.obj.name)
+      if (wobble) {
+        if (wobble.startTime < 0) wobble.startTime = t
+        const elapsed = t - wobble.startTime
+        const duration = 1.5
+        const progress = Math.min(elapsed / duration, 1)
+        // Decaying oscillation: 3 swings, amplitude shrinks to zero
+        const amplitude = 0.5 * (1 - progress) // ~30° peak, decays
+        const oscillation = Math.sin(progress * Math.PI * 6) * amplitude
+        toy.obj.rotation.x = wobble.startRotX + oscillation
+        if (progress >= 1) {
+          toy.obj.rotation.x = wobble.startRotX
+          wobbleState.current.delete(toy.obj.name)
+        }
+      }
+
+      // Bob animation — exaggerated y-axis undulations with decay (eagle)
+      const bob = bobState.current.get(toy.obj.name)
+      if (bob) {
+        if (bob.startTime < 0) bob.startTime = t
+        const elapsed = t - bob.startTime
+        const duration = 2.0
+        const progress = Math.min(elapsed / duration, 1)
+        // 5-6 undulations with decaying amplitude
+        const amplitude = 0.2 * (1 - progress)
+        const undulation = Math.sin(progress * Math.PI * 12) * amplitude
+        toy.obj.position.y = toy.baseY + undulation
+        if (progress >= 1) {
+          toy.obj.position.y = toy.baseY
+          bobState.current.delete(toy.obj.name)
         }
       }
 

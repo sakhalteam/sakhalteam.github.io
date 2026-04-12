@@ -38,8 +38,8 @@ Object name prefixes in GLB files determine behavior:
 | `zone_<key>` | Loads a new 3D scene | `public/zones/zone_<key>.glb` |
 | `portal_<key>` | Navigates to an external sakhalteam minisite | No GLB — it's a URL |
 | `toy_<key>` | Plays animation / interaction, no navigation | Part of parent GLB |
-| `zc_<key>_<name>` | Not clickable — glows with parent zone on hover | Part of parent GLB |
-| `pc_<key>_<name>` | Not clickable — glows with parent portal on hover | Part of parent GLB |
+| `zc_<key>_<name>` | Glows with parent zone on hover. Also clickable if it has a toy entry in sceneMap | Part of parent GLB |
+| `pc_<key>_<name>` | Glows with parent portal on hover. Also clickable if it has a toy entry in sceneMap | Part of parent GLB |
 | *(no prefix)* | Scenery, decoration — not interactive | Part of parent GLB |
 
 **Depth is implicit, not encoded in the prefix.** A `zone_` inside island.glb and a `zone_` inside zone_reading_room.glb behave identically — both load a .glb scene. The hierarchy comes from *which scene contains the object*, not the prefix. This means no `room_`/`nook_`/`cranny_` prefixes — just `zone_` for any scene-loading click at any depth.
@@ -109,7 +109,7 @@ Keep it flat. All zone GLBs live in `public/zones/` regardless of depth in the n
 ### Shared systems
 - **sceneMap.ts**: Single source of truth for all navigation data (see section above).
 - **BloomDriver.tsx**: Shared emissive glow system for hover effects. Clones materials per-mesh, lerps emissive at 35% max tint + 0.08 intensity boost. Preserves texture detail (like a "Screen" blend). Active zones: salmon-orange (`0.9, 0.35, 0.2`). Coming-soon: lavender (`0.55, 0.35, 0.85`).
-- **ToyInteractor.tsx**: Click-to-spin + Pokemon cries + proximity label reveal for toy_ objects. Raycasts actual mesh geometry (not bounding boxes) for pixel-perfect selection. Labels hidden by default, revealed within 120px cursor radius with 1.5s linger. Z-axis spin on click (0.6s ease-out cubic). Sound files: public/sounds/*.ogg (~50KB total from PokeAPI).
+- **ToyInteractor.tsx**: Click animations + sounds + proximity label reveal for toy_/zc_/pc_ objects (any prefix with a toy entry in sceneMap). Raycasts actual mesh geometry (not bounding boxes) for pixel-perfect selection. Labels hidden by default, revealed within 120px cursor radius with 1.5s linger. Animation types: `spin` (y-axis 360°, 0.6s), `hop` (parabolic y bounce, 0.35s), `grow` (scale pulse 1→1.3→1, 0.5s), `wobble` (x-axis drinky-bird with decay, 1.5s), `bob` (exaggerated y undulations with decay, 2s), `none` (pre-animated in Blender, no click behavior). Sound files: public/sounds/ (.ogg for Pokemon cries from PokeAPI, .mp3 for everything else).
 - **useTurntable.ts**: Slow auto-rotation (0.04 rad/s, ~2.4°/s CCW). Auto-resumes after 15s idle (not if manually paused). Returns `{ stop, toggle, playing }`. All scenes have ⏸/⏵ footer button.
 - **useAutoFitCamera.ts**: Auto-positions camera based on bounding box shape. Tall=low angle, flat=high angle, cubic=3/4. Per-zone overrides via `camera` prop.
 - **useKeyboardControls.ts**: WASD pan, QE orbit, RF zoom, ZX vertical, Shift 2x speed. Only active when canvas hovered.
@@ -129,7 +129,7 @@ Keep it flat. All zone GLBs live in `public/zones/` regardless of depth in the n
 Both zone types use bloom (emissive ramp + Bloom pass via BloomDriver.tsx). The Outline approach was abandoned due to @react-three/postprocessing reactivity issues.
 - **Active zones**: Warm salmon-orange bloom glow (`THREE.Color(0.9, 0.35, 0.2)`)
 - **Coming-soon zones**: Lavender bloom glow (`THREE.Color(0.55, 0.35, 0.85)`)
-- **Toys**: No bloom glow — blue proximity labels + cursor change instead
+- **Toys**: No bloom glow — blue proximity labels + cursor change instead. Hop toys (pigeons, eggs) get subtle emissive tint on hover instead of labels.
 
 ## Active zones
 - `zone_bird_sanctuary` → `/zone-bird-sanctuary` → `portal_bird_bingo` → `/bird-bingo/`

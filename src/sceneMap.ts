@@ -77,7 +77,7 @@ function portal(
   }
 }
 
-export type ToyAnimation = 'spin' | 'hop' | 'wobble' | 'none'
+export type ToyAnimation = 'spin' | 'hop' | 'wobble' | 'grow' | 'bob' | 'none'
 
 function toy(
   key: string,
@@ -136,7 +136,23 @@ const nodes: SceneNode[] = [
       'toy_diglett', 'toy_staryu', 'toy_lapras', 'toy_pollywag',
       'toy_pigeon_01', 'toy_pigeon_02',
       'toy_pizza', 'toy_ramen', 'toy_harpy',
-      'toy_king_egg', 'toy_simple_egg',
+      'toy_king_egg', 'toy_egg_green', 'toy_egg_pink',
+      'toy_dinosaur_statue', 'toy_bird_sanctuary_bird_cassowary',
+      'toy_bird_sanctuary_eagle', 'toy_nessie_object_nessie_hat',
+      'toy_nessie_object_nessie_umbrella', 'toy_vending_machine_01',
+      'toy_vending_machine_02',
+      // zc_ objects that are also interactive toys
+      'zc_toy_beach_party_pokemon_mudkip', 'zc_toy_beach_party_pokemon_squirtle',
+      'zc_toy_beach_party_object_beach_ball', 'zc_toy_beach_party_object_beach_chair',
+      'zc_toy_beach_party_object_beach_towel_01', 'zc_toy_beach_party_object_beach_towel_02',
+      'zc_toy_beach_party_object_beach_umbrella',
+      'zc_toy_beach_party_bird_flamingo.a', 'zc_toy_beach_party_bird_flamingo_b',
+      'zc_tower_of_knowledge_crystal_parent',
+      'zc_tower_of_knowledge_character_cat_dingus', 'zc_tower_of_knowledge_character_cat_midge',
+      'zc_tower_of_knowledge_character_cat_croissant', 'zc_tower_of_knowledge_character_cat_benchcats',
+      'zc_tower_of_knowledge_object_blue_mushroom', 'zc_tower_of_knowledge_object_white_mushroom',
+      // pc_ objects that are also interactive
+      'pc_famima_flamingo', 'pc_famima_vending_machine',
     ],
   },
 
@@ -178,7 +194,7 @@ const nodes: SceneNode[] = [
   zone('mystery_zone', 'Mystery Zone', { glbPath: null, path: null, sounds: ['/sounds/thwomp_01.ogg', '/sounds/thwomp_02.ogg'] }),
   zone('nessie', 'Nessie', { glbPath: null, path: null }),
   zone('flower_shop', 'Flower Shop', { glbPath: null, path: null }),
-  zone('warehouse', 'Warehouse', { glbPath: null, path: null }),
+  zone('warehouse', 'Warehouse', { glbPath: null, path: null, sounds: ['/sounds/zone_warehouse.mp3'] }),
 
   // ── Portals (external site links inside zones) ─────
   portal('portal_bird_bingo', 'Bird Bingo', '/bird-bingo/', 'bird_sanctuary'),
@@ -202,24 +218,52 @@ const nodes: SceneNode[] = [
   toy('tree_stump', 'Tree Stump', 'bird_sanctuary'),
 
   // ── Island toys ────────────────────────────────────
+  // Pokemon (spin + cry)
   toy('toy_diglett', 'Diglett', 'island', { sound: '/sounds/diglett.ogg' }),
   toy('toy_staryu', 'Staryu', 'island', { sound: '/sounds/staryu.ogg' }),
   toy('toy_lapras', 'Lapras', 'island', { sound: '/sounds/lapras.ogg' }),
   toy('toy_pollywag', 'Poliwag', 'island', { sound: '/sounds/poliwag.ogg' }),
+  // Pigeons (hop)
   toy('toy_pigeon_01', 'Pigeon', 'island', { animation: 'hop' }),
   toy('toy_pigeon_02', 'Pigeon', 'island', { animation: 'hop' }),
-  toy('toy_bird_sanctuary_bird_cassowary', 'Cassowary', 'island'),
-  toy('toy_bird_sanctuary_eagle', 'Eagle', 'island'),
-  toy('toy_nessie_object_nessie_umbrella', 'Umbrella', 'island'),
-  toy('toy_nessie_object_nessie_hat', 'Hat', 'island'),
+  // Easter eggs (hop)
+  toy('toy_king_egg', 'King Egg', 'island', { animation: 'hop' }),
+  toy('toy_egg_green', 'Green Egg', 'island', { animation: 'hop' }),
+  toy('toy_egg_pink', 'Pink Egg', 'island', { animation: 'hop' }),
+  // Food + objects (spin)
   toy('toy_pizza', 'Pizza', 'island'),
   toy('toy_ramen', 'Ramen', 'island'),
+  toy('toy_nessie_object_nessie_hat', 'Hat', 'island'),
+  toy('toy_nessie_object_nessie_umbrella', 'Umbrella', 'island'),
+  // Animals + creatures
   toy('toy_harpy', 'Harpy', 'island', { animation: 'none' }),
-  toy('toy_king_egg', 'King Egg', 'island', { animation: 'hop' }),
-  toy('toy_simple_egg', 'Egg', 'island', { animation: 'hop' }),
-  // zc_ objects that are ALSO interactive toys (glow with parent zone + hop on click)
-  toy('zc_beach_party_character_mudkip', 'Mudkip', 'island', { animation: 'hop' }),
-  toy('zc_beach_party_character_squirtle', 'Squirtle', 'island', { animation: 'hop' }),
+  toy('toy_bird_sanctuary_bird_cassowary', 'Cassowary', 'island', { sound: '/sounds/southern-cassowary-call.mp3', animation: 'wobble' }),
+  toy('toy_bird_sanctuary_eagle', 'Eagle', 'island', { sound: '/sounds/red-tailed-hawk-call.mp3', animation: 'bob' }),
+  toy('toy_dinosaur_statue', 'Dinosaur', 'island', { sound: '/sounds/toy_dinosaur_statue.mp3' }),
+  // Vending machines (sound)
+  toy('toy_vending_machine_01', 'Vending Machine', 'island', { sound: '/sounds/vending_machine.mp3' }),
+  toy('toy_vending_machine_02', 'Vending Machine', 'island', { sound: '/sounds/vending_machine.mp3' }),
+  // zc_ beach party toys (glow with beach_party zone + interactive)
+  toy('zc_toy_beach_party_pokemon_mudkip', 'Mudkip', 'island', { sound: '/sounds/mudkip.ogg', animation: 'hop' }),
+  toy('zc_toy_beach_party_pokemon_squirtle', 'Squirtle', 'island', { sound: '/sounds/squirtle.ogg', animation: 'hop' }),
+  toy('zc_toy_beach_party_object_beach_ball', 'Beach Ball', 'island'),
+  toy('zc_toy_beach_party_object_beach_chair', 'Beach Chair', 'island'),
+  toy('zc_toy_beach_party_object_beach_towel_01', 'Beach Towel', 'island'),
+  toy('zc_toy_beach_party_object_beach_towel_02', 'Beach Towel', 'island'),
+  toy('zc_toy_beach_party_object_beach_umbrella', 'Beach Umbrella', 'island'),
+  toy('zc_toy_beach_party_bird_flamingo.a', 'Flamingo', 'island', { sound: '/sounds/american-flamingo-call.mp3' }),
+  toy('zc_toy_beach_party_bird_flamingo_b', 'Flamingo', 'island', { sound: '/sounds/american-flamingo-call.mp3' }),
+  // pc_ objects that are also interactive toys
+  toy('pc_famima_flamingo', 'Flamingo', 'island', { sound: '/sounds/american-flamingo-call.mp3' }),
+  toy('pc_famima_vending_machine', 'Vending Machine', 'island', { sound: '/sounds/vending_machine.mp3' }),
+  // zc_ tower of knowledge toys
+  toy('zc_tower_of_knowledge_crystal_parent', 'Crystal', 'island', { sound: '/sounds/zc_tower_of_knowledge_CRYSTAL_PARENT.mp3' }),
+  toy('zc_tower_of_knowledge_character_cat_dingus', 'Dingus', 'island', { sound: '/sounds/zc_tower_of_knowledge_character_cat_dingus.mp3' }),
+  toy('zc_tower_of_knowledge_character_cat_midge', 'Midge', 'island', { sound: '/sounds/zc_tower_of_knowledge_character_cat_midge.mp3' }),
+  toy('zc_tower_of_knowledge_character_cat_croissant', 'Croissant', 'island', { sound: '/sounds/zc_tower_of_knowledge_character_cat_croissant.mp3' }),
+  toy('zc_tower_of_knowledge_character_cat_benchcats', 'Bench Cats', 'island', { sound: '/sounds/zc_tower_of_knowledge_character_cat_benchcats.mp3' }),
+  toy('zc_tower_of_knowledge_object_blue_mushroom', 'Blue Mushroom', 'island', { animation: 'grow' }),
+  toy('zc_tower_of_knowledge_object_white_mushroom', 'White Mushroom', 'island', { animation: 'grow' }),
 
   // ── Zone toys (inside zone GLBs) ──────────────────
   toy('toy_shark', 'Shark', 'ss_brainfog'),
