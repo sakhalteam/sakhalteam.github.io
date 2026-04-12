@@ -143,9 +143,6 @@ const nodes: SceneNode[] = [
       'toy_vending_machine_02',
       // zc_ objects that are also interactive toys
       'zc_toy_beach_party_pokemon_mudkip', 'zc_toy_beach_party_pokemon_squirtle',
-      'zc_toy_beach_party_object_beach_ball', 'zc_toy_beach_party_object_beach_chair',
-      'zc_toy_beach_party_object_beach_towel_01', 'zc_toy_beach_party_object_beach_towel_02',
-      'zc_toy_beach_party_object_beach_umbrella',
       'zc_toy_beach_party_bird_flamingo.a', 'zc_toy_beach_party_bird_flamingo_b',
       'zc_tower_of_knowledge_crystal_parent',
       'zc_tower_of_knowledge_character_cat_dingus', 'zc_tower_of_knowledge_character_cat_midge',
@@ -239,18 +236,13 @@ const nodes: SceneNode[] = [
   toy('toy_harpy', 'Harpy', 'island', { animation: 'none' }),
   toy('toy_bird_sanctuary_bird_cassowary', 'Cassowary', 'island', { sound: '/sounds/southern-cassowary-call.mp3', animation: 'wobble' }),
   toy('toy_bird_sanctuary_eagle', 'Eagle', 'island', { sound: '/sounds/red-tailed-hawk-call.mp3', animation: 'bob' }),
-  toy('toy_dinosaur_statue', 'Dinosaur', 'island', { sound: '/sounds/toy_dinosaur_statue.mp3' }),
+  toy('toy_dinosaur_statue', 'Dinosaur', 'island', { sound: '/sounds/toy_dinosaur_statue.mp3', animation: 'none' }),
   // Vending machines (sound)
   toy('toy_vending_machine_01', 'Vending Machine', 'island', { sound: '/sounds/vending_machine.mp3' }),
   toy('toy_vending_machine_02', 'Vending Machine', 'island', { sound: '/sounds/vending_machine.mp3' }),
   // zc_ beach party toys (glow with beach_party zone + interactive)
   toy('zc_toy_beach_party_pokemon_mudkip', 'Mudkip', 'island', { sound: '/sounds/mudkip.ogg', animation: 'hop' }),
   toy('zc_toy_beach_party_pokemon_squirtle', 'Squirtle', 'island', { sound: '/sounds/squirtle.ogg', animation: 'hop' }),
-  toy('zc_toy_beach_party_object_beach_ball', 'Beach Ball', 'island'),
-  toy('zc_toy_beach_party_object_beach_chair', 'Beach Chair', 'island'),
-  toy('zc_toy_beach_party_object_beach_towel_01', 'Beach Towel', 'island'),
-  toy('zc_toy_beach_party_object_beach_towel_02', 'Beach Towel', 'island'),
-  toy('zc_toy_beach_party_object_beach_umbrella', 'Beach Umbrella', 'island'),
   toy('zc_toy_beach_party_bird_flamingo.a', 'Flamingo', 'island', { sound: '/sounds/american-flamingo-call.mp3' }),
   toy('zc_toy_beach_party_bird_flamingo_b', 'Flamingo', 'island', { sound: '/sounds/american-flamingo-call.mp3' }),
   // pc_ objects that are also interactive toys

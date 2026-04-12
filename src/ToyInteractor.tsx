@@ -83,14 +83,18 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
       const lower = child.name.toLowerCase()
       if (lower.startsWith('toy_')) {
         const base = normalizeName(lower)
+        // Only create entries for objects with a sceneMap config.
+        // Sub-parts (toy_lapras_2 etc.) have no config and get skipped —
+        // their meshes are already collected by the parent's collectMeshes.
+        const config = getToyConfig(base)
+        if (!config) return
         const meshes = collectMeshes(child)
         if (!byBase.has(base)) {
-          // Use the base-named object as primary if it exists, otherwise first found
           byBase.set(base, { primary: child, meshes })
         } else {
-          // Numbered variant — add its meshes to the primary toy, prefer base-named object
+          // Blender .001 duplicate — add its meshes, prefer base-named object
           const entry = byBase.get(base)!
-          if (lower === base) entry.primary = child // prefer exact base name
+          if (lower === base) entry.primary = child
           entry.meshes.push(...meshes)
         }
       } else if (lower.startsWith('zc_') || lower.startsWith('pc_')) {
@@ -148,7 +152,6 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
   }, [gl, camera, raycaster, pointer, allMeshes, meshToToy])
 
   const triggerAnimation = useCallback((toy: ToyData) => {
-    if (toy.animation === 'none') return // pre-animated in Blender, no click behavior
     const name = toy.obj.name
     if (toy.animation === 'hop') {
       if (hopState.current.has(name)) return
@@ -162,11 +165,12 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     } else if (toy.animation === 'bob') {
       if (bobState.current.has(name)) return
       bobState.current.set(name, { startTime: -1 })
-    } else {
+    } else if (toy.animation !== 'none') {
       // 'spin' (default)
       if (spinState.current.has(name)) return
       spinState.current.set(name, { startTime: -1, startRotZ: toy.obj.rotation.y })
     }
+    // Sound plays regardless of animation type (e.g. dinosaur: none + sound)
     if (toy.soundUrl) playSound(toy.soundUrl)
   }, [])
 
