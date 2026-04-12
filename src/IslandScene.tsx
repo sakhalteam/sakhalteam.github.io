@@ -9,6 +9,7 @@ import { useTurntable } from './useTurntable'
 import { AdaptiveLabel } from './AdaptiveLabel'
 import { BloomDriver, collectMeshes, BLOOM_COLOR_ACTIVE, BLOOM_COLOR_COMING_SOON } from './BloomDriver'
 import ToyInteractor from './ToyInteractor'
+import Water from './Water'
 import { getZoneConfig } from './sceneMap'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
@@ -281,6 +282,7 @@ export default function IslandScene({ style, onComingSoon, onTurntableChange }: 
       <directionalLight position={[6, 10, 4]} intensity={1.2} castShadow />
       <directionalLight position={[-4, 3, -6]} intensity={0.3} color="#4488ff" />
       <Environment preset="night" />
+      <Water />
       <Suspense fallback={<LoadingFallback />}>
         <IslandMesh onComingSoon={onComingSoon} navigate={navigate} onHoverChange={onHoverChange} allMeshesRef={allMeshesRef} />
         <BloomDriver

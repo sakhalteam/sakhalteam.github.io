@@ -1,7 +1,7 @@
 import { useRef, useMemo, useEffect, useCallback } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
-import { getToyConfig, type ToyAnimation } from './sceneMap'
+import { getToyConfig, type ToyAnimation, type ToyIdle } from './sceneMap'
 import * as THREE from 'three'
 
 /** Screen-space radius (px) within which the cursor reveals a toy label */
@@ -18,6 +18,7 @@ interface ToyData {
   soundUrl: string | null
   meshes: THREE.Mesh[]
   animation: ToyAnimation
+  idle: ToyIdle
 }
 
 interface ToyState {
@@ -114,6 +115,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
         soundUrl: config?.sound ?? null,
         meshes,
         animation: config?.animation ?? 'spin',
+        idle: config?.idle ?? 'none',
       } satisfies ToyData
     })
   }, [scene])
@@ -232,10 +234,8 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     const delta = clock.getDelta() || 1 / 60
 
     for (const toy of toys) {
-      // Gentle bob (skip hop/bob/grow/wobble/none toys — they have their own motion)
-      const anim = toy.animation
-      if (anim !== 'hop' && anim !== 'none' && anim !== 'bob' && anim !== 'grow' && anim !== 'wobble'
-          && !hopState.current.has(toy.obj.name)) {
+      // Gentle float bob — only for toys with idle: 'float' (water pokemon etc.)
+      if (toy.idle === 'float' && !hopState.current.has(toy.obj.name)) {
         toy.obj.position.y = toy.baseY + Math.sin(t * 0.8) * 0.06
       }
 
