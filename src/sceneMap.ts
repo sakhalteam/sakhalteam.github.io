@@ -81,7 +81,7 @@ function portal(
   };
 }
 
-export type ToyAnimation = "spin" | "hop" | "wobble" | "grow" | "bob" | "none";
+export type ToyAnimation = "spin" | "hop" | "wobble" | "grow" | "bob" | "none" | "action";
 export type ToyIdle = "float" | "none";
 
 function toy(
@@ -146,6 +146,7 @@ const nodes: SceneNode[] = [
       "nessie",
       "flower_shop",
       "warehouse",
+      "crystals",
       // Toys on the island
       "toy_diglett",
       "toy_staryu",
@@ -162,12 +163,20 @@ const nodes: SceneNode[] = [
       "toy_dinosaur_statue",
       "toy_bird_sanctuary_bird_cassowary",
       "toy_bird_sanctuary_eagle",
+      "toy_bird_sanctuary_american_robin",
+      "toy_bird_sanctuary_baltimore_oriole",
+      "toy_bird_sanctuary_blue_jay",
+      "toy_bird_sanctuary_northern_cardinal",
       "toy_nessie_object_nessie_hat",
       "toy_nessie_object_nessie_umbrella",
       "toy_vending_machine_01",
       "toy_vending_machine_02",
       // zc_ objects that are also interactive toys
       "zc_toy_beach_party_pokemon_mudkip",
+      "zc_toy_beach_party_object_beach_umbrella",
+      "zc_toy_beach_party_object_beach_towel_01",
+      "zc_toy_beach_party_object_beach_towel_02",
+      "zc_toy_beach_party_object_beach_ball",
       "zc_toy_beach_party_pokemon_squirtle",
       "zc_toy_beach_party_bird_flamingo.a",
       "zc_toy_beach_party_bird_flamingo_b",
@@ -240,6 +249,11 @@ const nodes: SceneNode[] = [
     path: null,
     sounds: ["/sounds/zone_warehouse.mp3"],
   }),
+  zone("crystals", "Crystals", {
+    glbPath: null,
+    path: null,
+    sounds: ["/sounds/zone_crystals.mp3"],
+  }),
 
   // ── Portals (external site links inside zones) ─────
   portal("portal_bird_bingo", "Bird Bingo", "/bird-bingo/", "bird_sanctuary"),
@@ -269,20 +283,47 @@ const nodes: SceneNode[] = [
 
   // ── Bird sanctuary creatures (non-navigable hotspots) ──
   toy("baby_deku", "Deku Sprout", "bird_sanctuary"),
-  toy("bird_penguin", "Penguin", "bird_sanctuary"),
-  toy("bird_ostrich", "Ostrich", "bird_sanctuary"),
+  toy("bird_penguin", "Penguin", "bird_sanctuary", {
+    sound: "/sounds/emperor-penguin-call.mp3",
+    animation: "wobble",
+  }),
+  toy("bird_ostrich", "Ostrich", "bird_sanctuary", {
+    sound: "/sounds/common-ostrich-call.mp3",
+    animation: "hop",
+  }),
   toy("bird_chocobo", "Chocobo", "bird_sanctuary"),
-  toy("bird_kiwi", "Kiwi", "bird_sanctuary"),
-  toy("bird_kiwi2", "Kiwi", "bird_sanctuary"),
-  toy("bird_flamingo", "Flamingo", "bird_sanctuary"),
+  toy("bird_kiwi", "Kiwi", "bird_sanctuary", {
+    sound: "/sounds/okarito-brown-kiwi-call.mp3",
+    animation: "hop",
+  }),
+  toy("bird_kiwi2", "Kiwi", "bird_sanctuary", {
+    sound: "/sounds/okarito-brown-kiwi-call.mp3",
+    animation: "hop",
+  }),
+  toy("bird_flamingo", "Flamingo", "bird_sanctuary", {
+    sound: "/sounds/american-flamingo-call.mp3",
+    animation: "wobble",
+  }),
   toy("tree_stump", "Tree Stump", "bird_sanctuary"),
 
   // ── Island toys ────────────────────────────────────
   // Pokemon (spin + cry + float on water)
-  toy("toy_diglett", "Diglett", "island", { sound: "/sounds/diglett.ogg", idle: "float" }),
-  toy("toy_staryu", "Staryu", "island", { sound: "/sounds/staryu.ogg", idle: "float" }),
-  toy("toy_lapras", "Lapras", "island", { sound: "/sounds/lapras.ogg", idle: "float" }),
-  toy("toy_pollywag", "Poliwag", "island", { sound: "/sounds/poliwag.ogg", idle: "float" }),
+  toy("toy_diglett", "Diglett", "island", {
+    sound: "/sounds/diglett.ogg",
+    idle: "float",
+  }),
+  toy("toy_staryu", "Staryu", "island", {
+    sound: "/sounds/staryu.ogg",
+    idle: "float",
+  }),
+  toy("toy_lapras", "Lapras", "island", {
+    sound: "/sounds/lapras.ogg",
+    idle: "float",
+  }),
+  toy("toy_pollywag", "Poliwag", "island", {
+    sound: "/sounds/poliwag.ogg",
+    idle: "float",
+  }),
   // Pigeons (hop)
   toy("toy_pigeon_01", "Pigeon", "island", {
     sound: "/sounds/rock-pigeon-call.mp3",
@@ -302,7 +343,7 @@ const nodes: SceneNode[] = [
   toy("toy_nessie_object_nessie_hat", "Hat", "island"),
   toy("toy_nessie_object_nessie_umbrella", "Umbrella", "island"),
   // Animals + creatures
-  toy("toy_harpy", "Harpy", "island", { animation: "bob" }),
+  toy("toy_harpy", "Harpy", "island", { animation: "action" }),
   toy("toy_bird_sanctuary_bird_cassowary", "Cassowary", "island", {
     sound: "/sounds/southern-cassowary-call.mp3",
     animation: "wobble",
@@ -310,6 +351,22 @@ const nodes: SceneNode[] = [
   toy("toy_bird_sanctuary_eagle", "Eagle", "island", {
     sound: "/sounds/red-tailed-hawk-call.mp3",
     animation: "bob",
+  }),
+  toy("toy_bird_sanctuary_american_robin", "American Robin", "island", {
+    sound: "/sounds/american-robin-call.mp3",
+    animation: "hop",
+  }),
+  toy("toy_bird_sanctuary_baltimore_oriole", "Baltimore Oriole", "island", {
+    sound: "/sounds/baltimore-oriole-call.mp3",
+    animation: "hop",
+  }),
+  toy("toy_bird_sanctuary_blue_jay", "Blue Jay", "island", {
+    sound: "/sounds/blue-jay-call.mp3",
+    animation: "hop",
+  }),
+  toy("toy_bird_sanctuary_northern_cardinal", "Northern Cardinal", "island", {
+    sound: "/sounds/northern-cardinal-call.mp3",
+    animation: "hop",
   }),
   toy("toy_dinosaur_statue", "Dinosaur", "island", {
     sound: "/sounds/toy_dinosaur_statue.mp3",
@@ -334,6 +391,10 @@ const nodes: SceneNode[] = [
   toy("zc_toy_beach_party_bird_flamingo.a", "Flamingo", "island", {
     sound: "/sounds/american-flamingo-call.mp3",
   }),
+  toy("zc_toy_beach_party_object_cooler", "Cooler", "island", {
+    sound: "/sounds/zc_toy_beach_party_object_cooler.mp3",
+  }),
+  toy("zc_toy_beach_party_object_beach_umbrella", "Umbrella", "island"),
   toy("zc_toy_beach_party_bird_flamingo_b", "Flamingo", "island", {
     sound: "/sounds/american-flamingo-call.mp3",
   }),
@@ -545,10 +606,13 @@ export function getHotspotConfig(objName: string):
 /**
  * For ToyInteractor: get toy config by object name.
  */
-export function getToyConfig(
-  objName: string,
-):
-  | { label: string; sound: string | null; animation: ToyAnimation; idle: ToyIdle }
+export function getToyConfig(objName: string):
+  | {
+      label: string;
+      sound: string | null;
+      animation: ToyAnimation;
+      idle: ToyIdle;
+    }
   | undefined {
   const node = sceneMap.get(objName.toLowerCase()) as
     | (SceneNode & { sound?: string; animation?: ToyAnimation; idle?: ToyIdle })

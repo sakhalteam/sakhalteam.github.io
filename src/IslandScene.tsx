@@ -111,6 +111,10 @@ function playZoneSound(marker: ZoneMarker) {
   audio.play().catch(() => {})
 }
 
+/** Cap zone hitbox height to prevent tall objects (e.g. deku tree) from
+ *  creating oversized trigger areas that block toy clicks in the canopy. */
+const MAX_HITBOX_HEIGHT = 3.0
+
 const ZoneHitbox = memo(function ZoneHitbox({
   marker, onComingSoon, navigate, onHoverChange,
 }: {
@@ -121,14 +125,20 @@ const ZoneHitbox = memo(function ZoneHitbox({
 }) {
   const [hovered, setHovered] = useState(false)
   const pointerDown = useRef<{ x: number, y: number } | null>(null)
-  const size = useMemo(() => {
+  const { size, center } = useMemo(() => {
     const s = new THREE.Vector3()
     marker.box.getSize(s)
-    return s
-  }, [marker.box])
+    const c = marker.center.clone()
+    // If too tall, shrink hitbox to bottom portion (e.g. tree trunk mouth)
+    if (s.y > MAX_HITBOX_HEIGHT) {
+      c.y = marker.box.min.y + MAX_HITBOX_HEIGHT / 2
+      s.y = MAX_HITBOX_HEIGHT
+    }
+    return { size: s, center: c }
+  }, [marker])
 
   return (
-    <group position={marker.center}>
+    <group position={center}>
       <mesh
         onPointerOver={(e) => {
           e.stopPropagation()
@@ -197,7 +207,7 @@ function IslandMesh({ onComingSoon, navigate, onHoverChange, allMeshesRef }: {
   onHoverChange: (marker: ZoneMarker, hovered: boolean) => void
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>
 }) {
-  const { scene } = useOptimizedGLTF('/island.glb')
+  const { scene, animations } = useOptimizedGLTF('/island.glb')
 
   const markers = useMemo(() => {
     const result = buildZoneMarkers(scene)
@@ -210,7 +220,7 @@ function IslandMesh({ onComingSoon, navigate, onHoverChange, allMeshesRef }: {
   return (
     <>
       <primitive object={scene} />
-      <ToyInteractor scene={scene} />
+      <ToyInteractor scene={scene} animations={animations} />
       {markers.map((marker) => (
         <ZoneHitbox key={marker.name} marker={marker} onComingSoon={onComingSoon} navigate={navigate} onHoverChange={onHoverChange} />
       ))}

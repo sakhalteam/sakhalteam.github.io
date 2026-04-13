@@ -15,10 +15,20 @@ const vertexShader = /* glsl */ `
 
     vec3 modifiedPosition = position;
 
+    // Distance from island center (local XY = world XZ since plane is rotated)
+    float shoreDist = length(position.xy);
+
     // Two overlapping sine waves for organic motion
     float wave1 = sin(position.x * 0.8 + uTime * uWaveSpeed) * uWaveAmplitude;
     float wave2 = sin(position.y * 0.6 + uTime * uWaveSpeed * 0.7 + 1.5) * uWaveAmplitude * 0.6;
-    modifiedPosition.z += wave1 + wave2;
+
+    // Dampen waves near the shoreline so they don't flood the beach
+    float waveScale = smoothstep(4.0, 8.0, shoreDist);
+    modifiedPosition.z += (wave1 + wave2) * waveScale;
+
+    // Push water surface down near the island to prevent beach submersion
+    float shoreDepression = smoothstep(7.0, 3.0, shoreDist) * 0.12;
+    modifiedPosition.z -= shoreDepression;
 
     csm_Position = modifiedPosition;
   }

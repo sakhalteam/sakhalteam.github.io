@@ -59,12 +59,21 @@ function collectMeshes(obj: THREE.Object3D): THREE.Mesh[] {
  * Direct mesh hover shows a brighter highlight. Click triggers a Z-axis
  * spin + Pokemon cry.
  */
-export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
+export default function ToyInteractor({ scene, animations = [] }: { scene: THREE.Object3D; animations?: THREE.AnimationClip[] }) {
   const spinState = useRef<Map<string, { startTime: number; startRotZ: number }>>(new Map())
   const hopState = useRef<Map<string, { startTime: number }>>(new Map())
   const growState = useRef<Map<string, { startTime: number; baseScale: THREE.Vector3 }>>(new Map())
   const wobbleState = useRef<Map<string, { startTime: number; startRotX: number }>>(new Map())
   const bobState = useRef<Map<string, { startTime: number }>>(new Map())
+
+  // AnimationMixer for Blender-authored animations (harpy fly cycle, etc.)
+  // Stores click-triggered actions per toy (keyed by object name)
+  const actionClipsRef = useRef<Map<string, THREE.AnimationAction[]>>(new Map())
+  const mixer = useMemo(() => {
+    if (animations.length === 0) return null
+    const m = new THREE.AnimationMixer(scene)
+    return m
+  }, [scene, animations])
   const pointerDown = useRef<{ x: number; y: number } | null>(null)
   const mouseScreen = useRef<{ x: number; y: number }>({ x: -9999, y: -9999 })
   const { camera, gl } = useThree()
@@ -120,6 +129,52 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     })
   }, [scene])
 
+  // Categorize Blender animations: longest clip = idle loop, shorter clips = click actions
+  useMemo(() => {
+    if (!mixer || animations.length === 0) return
+    actionClipsRef.current.clear()
+
+    const actionToys = toys.filter(t => t.animation === 'action')
+    for (const toy of actionToys) {
+      // Collect all descendant names for matching tracks to this toy
+      const descendants = new Set<string>()
+      toy.obj.traverse(d => { if (d.name) descendants.add(d.name) })
+
+      // Find clips whose tracks reference this toy's descendants
+      const toyClips: THREE.AnimationClip[] = []
+      for (const clip of animations) {
+        if (clip.duration <= 0) continue // skip zero-length clips like "STAY STILL"
+        const hasMatch = clip.tracks.some(track => {
+          const dotIdx = track.name.indexOf('.')
+          if (dotIdx < 0) return false
+          const nodePath = track.name.slice(0, dotIdx)
+          return nodePath.split('/').some(part => descendants.has(part))
+        })
+        if (hasMatch) toyClips.push(clip)
+      }
+
+      if (toyClips.length === 0) continue
+
+      // Sort by duration descending — longest = idle loop
+      toyClips.sort((a, b) => b.duration - a.duration)
+
+      // First clip = idle (loop always)
+      const idleAction = mixer.clipAction(toyClips[0])
+      idleAction.play()
+
+      // Rest = action clips (play once on click)
+      const clickActions: THREE.AnimationAction[] = []
+      for (let i = 1; i < toyClips.length; i++) {
+        const action = mixer.clipAction(toyClips[i])
+        action.setLoop(THREE.LoopOnce, 1)
+        action.clampWhenFinished = false // reset to start after playing
+        clickActions.push(action)
+      }
+
+      actionClipsRef.current.set(toy.obj.name, clickActions)
+    }
+  }, [mixer, animations, toys])
+
   // Per-toy mutable state (not React state — updated in useFrame for performance)
   const toyStates = useRef<Map<string, ToyState>>(new Map())
   // Initialize states
@@ -167,6 +222,14 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     } else if (toy.animation === 'bob') {
       if (bobState.current.has(name)) return
       bobState.current.set(name, { startTime: -1 })
+    } else if (toy.animation === 'action') {
+      // Play Blender-authored action clips once (e.g. harpy loop-de-loop)
+      const actions = actionClipsRef.current.get(name)
+      if (actions) {
+        for (const action of actions) {
+          action.reset().play()
+        }
+      }
     } else if (toy.animation !== 'none') {
       // 'spin' (default)
       if (spinState.current.has(name)) return
@@ -232,6 +295,9 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
     const now = performance.now()
     const rect = gl.domElement.getBoundingClientRect()
     const delta = clock.getDelta() || 1 / 60
+
+    // Advance Blender-authored animations (harpy fly cycle, etc.)
+    if (mixer) mixer.update(delta)
 
     for (const toy of toys) {
       // Gentle float bob — only for toys with idle: 'float' (water pokemon etc.)
@@ -351,8 +417,8 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
         state.opacity = Math.max(state.opacity - FADE_SPEED * delta, 0)
       }
 
-      // Hover glow for labelless toys (hop) — subtle emissive tint
-      if (toy.animation === 'hop') {
+      // Hover glow for labelless toys (hop/bob) — subtle emissive tint
+      if (toy.animation === 'hop' || toy.animation === 'bob') {
         for (const mesh of toy.meshes) {
           const mat = mesh.material as THREE.MeshStandardMaterial
           if (mat.emissive) {
@@ -394,7 +460,7 @@ export default function ToyInteractor({ scene }: { scene: THREE.Object3D }) {
 
   return (
     <>
-      {toys.filter(t => t.animation !== 'hop').map((toy) => {
+      {toys.filter(t => t.animation !== 'hop' && t.animation !== 'bob').map((toy) => {
         const box = new THREE.Box3().setFromObject(toy.obj)
         const labelPos = new THREE.Vector3()
         box.getCenter(labelPos)
