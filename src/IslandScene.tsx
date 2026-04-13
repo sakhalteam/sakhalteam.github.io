@@ -8,7 +8,7 @@ import { useKeyboardControls } from './useKeyboardControls'
 import { useTurntable } from './useTurntable'
 import { AdaptiveLabel } from './AdaptiveLabel'
 import { BloomDriver, collectMeshes, BLOOM_COLOR_ACTIVE, BLOOM_COLOR_COMING_SOON } from './BloomDriver'
-import ToyInteractor from './ToyInteractor'
+import ToyInteractor, { isToyUnderPointer } from './ToyInteractor'
 import Water from './Water'
 import { getZoneConfig } from './sceneMap'
 import { useNavigate } from 'react-router-dom'
@@ -154,6 +154,9 @@ const ZoneHitbox = memo(function ZoneHitbox({
         onPointerDown={(e) => { pointerDown.current = { x: e.clientX, y: e.clientY } }}
         onClick={(e) => {
           e.stopPropagation()
+          // If ToyInteractor detected a toy under the cursor on pointerdown, bail —
+          // let the toy's click handler (DOM capture phase) handle it instead.
+          if (isToyUnderPointer()) return
           if (pointerDown.current) {
             const dx = e.clientX - pointerDown.current.x
             const dy = e.clientY - pointerDown.current.y
