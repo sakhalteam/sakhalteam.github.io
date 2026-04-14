@@ -1,5 +1,5 @@
 import { Suspense, useRef, useMemo, useState, useCallback, useEffect, memo } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Environment, Html } from '@react-three/drei'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import { KernelSize } from 'postprocessing'
@@ -12,7 +12,7 @@ import ToyInteractor from './ToyInteractor'
 import { isToyUnderPointer } from './toyClickFlag'
 import Water from './Water'
 import { getZoneConfig } from './sceneMap'
-import { useNavigate } from 'react-router-dom'
+import { startTransition } from './transitionStore'
 import * as THREE from 'three'
 
 interface ZoneMarker {
@@ -117,11 +117,11 @@ function playZoneSound(marker: ZoneMarker) {
 const MAX_HITBOX_HEIGHT = 3.0
 
 const ZoneHitbox = memo(function ZoneHitbox({
-  marker, onComingSoon, navigate, onHoverChange,
+  marker, onComingSoon, onNavigate, onHoverChange,
 }: {
   marker: ZoneMarker
   onComingSoon: (label: string) => void
-  navigate: (path: string) => void
+  onNavigate: (url: string, internal: boolean, center: THREE.Vector3) => void
   onHoverChange: (marker: ZoneMarker, hovered: boolean) => void
 }) {
   const [hovered, setHovered] = useState(false)
@@ -164,11 +164,7 @@ const ZoneHitbox = memo(function ZoneHitbox({
             if (dx * dx + dy * dy > 25) return
           }
           if (marker.url) {
-            if (marker.internal) {
-              navigate(marker.url)
-            } else {
-              window.location.href = marker.url
-            }
+            onNavigate(marker.url, marker.internal, marker.center)
           } else {
             playZoneSound(marker)
             onComingSoon(marker.label)
@@ -205,13 +201,16 @@ const ZoneHitbox = memo(function ZoneHitbox({
 })
 
 
-function IslandMesh({ onComingSoon, navigate, onHoverChange, allMeshesRef }: {
+function IslandMesh({ onComingSoon, onNavigate, onHoverChange, allMeshesRef, onReady }: {
   onComingSoon: (label: string) => void
-  navigate: (path: string) => void
+  onNavigate: (url: string, internal: boolean, center: THREE.Vector3) => void
   onHoverChange: (marker: ZoneMarker, hovered: boolean) => void
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>
+  onReady?: () => void
 }) {
   const { scene, animations } = useOptimizedGLTF('/island.glb')
+
+  useEffect(() => { onReady?.() }, [scene, onReady])
 
   const markers = useMemo(() => {
     const result = buildZoneMarkers(scene)
@@ -226,7 +225,7 @@ function IslandMesh({ onComingSoon, navigate, onHoverChange, allMeshesRef }: {
       <primitive object={scene} />
       <ToyInteractor scene={scene} animations={animations} />
       {markers.map((marker) => (
-        <ZoneHitbox key={marker.name} marker={marker} onComingSoon={onComingSoon} navigate={navigate} onHoverChange={onHoverChange} />
+        <ZoneHitbox key={marker.name} marker={marker} onComingSoon={onComingSoon} onNavigate={onNavigate} onHoverChange={onHoverChange} />
       ))}
     </>
   )
@@ -240,6 +239,49 @@ function LoadingFallback() {
       </span>
     </Html>
   )
+}
+
+/** Smoothly dollies camera toward a target position when set */
+function CameraDolly({ target, orbitRef }: {
+  target: THREE.Vector3 | null
+  orbitRef: React.RefObject<any>
+}) {
+  const init = useRef<{
+    camPos: THREE.Vector3
+    orbTarget: THREE.Vector3
+    elapsed: number
+  } | null>(null)
+
+  useEffect(() => { init.current = null }, [target])
+
+  useFrame(({ camera }, delta) => {
+    if (!target || !orbitRef.current) return
+
+    if (!init.current) {
+      init.current = {
+        camPos: camera.position.clone(),
+        orbTarget: orbitRef.current.target.clone(),
+        elapsed: 0,
+      }
+      orbitRef.current.enabled = false
+    }
+
+    const s = init.current
+    s.elapsed += delta
+    const t = Math.min(s.elapsed / 1.0, 1) // 1s dolly duration
+    const eased = 1 - Math.pow(1 - t, 2)   // ease-out quadratic — fast start, visible immediately
+
+    // Fly toward zone center, stay a bit above it
+    const endPos = target.clone()
+    endPos.y += 2.5
+    camera.position.lerpVectors(s.camPos, endPos, eased * 0.6)
+
+    // Orbit target tracks the zone center
+    orbitRef.current.target.lerpVectors(s.orbTarget, target, eased * 0.7)
+    orbitRef.current.update()
+  })
+
+  return null
 }
 
 /** Keyboard controls + turntable for the island view */
@@ -265,14 +307,21 @@ interface Props {
   style?: React.CSSProperties
   onComingSoon: (label: string) => void
   onTurntableChange?: (toggle: () => void, playing: boolean) => void
+  onReady?: () => void
 }
 
-export default function IslandScene({ style, onComingSoon, onTurntableChange }: Props) {
-  const navigate = useNavigate()
+export default function IslandScene({ style, onComingSoon, onTurntableChange, onReady }: Props) {
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map())
   const orbitRef = useRef<any>(null)
   const turntableToggleRef = useRef<(() => void) | null>(null)
   const [hoveredZone, setHoveredZone] = useState<ZoneMarker | null>(null)
+  const [dollyTarget, setDollyTarget] = useState<THREE.Vector3 | null>(null)
+
+  const handleNavigate = useCallback((url: string, internal: boolean, center: THREE.Vector3) => {
+    setDollyTarget(center)
+    // Brief camera dolly visible before clouds slide in
+    setTimeout(() => startTransition(url, internal), 300)
+  }, [])
 
   const onHoverChange = useCallback((marker: ZoneMarker, hovered: boolean) => {
     setHoveredZone(hovered ? marker : null)
@@ -298,7 +347,7 @@ export default function IslandScene({ style, onComingSoon, onTurntableChange }: 
       <Environment preset="night" />
       <Water />
       <Suspense fallback={<LoadingFallback />}>
-        <IslandMesh onComingSoon={onComingSoon} navigate={navigate} onHoverChange={onHoverChange} allMeshesRef={allMeshesRef} />
+        <IslandMesh onComingSoon={onComingSoon} onNavigate={handleNavigate} onHoverChange={onHoverChange} allMeshesRef={allMeshesRef} onReady={onReady} />
         <BloomDriver
           allMeshes={allMeshesRef}
           hoveredMeshes={hoveredZone?.meshes ?? []}
@@ -314,6 +363,7 @@ export default function IslandScene({ style, onComingSoon, onTurntableChange }: 
         maxPolarAngle={Math.PI / 2.1}
       />
       <IslandCameraRig orbitRef={orbitRef} turntableToggleRef={turntableToggleRef} onPlayingChange={onPlayingChange} />
+      <CameraDolly target={dollyTarget} orbitRef={orbitRef} />
       <EffectComposer multisampling={0}>
         <Bloom
           intensity={0.2}

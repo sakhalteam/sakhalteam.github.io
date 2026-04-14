@@ -37,6 +37,7 @@
   width: 100%;
   min-height: 0; /* needed for flex children to shrink */
   position: relative;
+  overflow: hidden; /* contain scale transitions */
 }
 
 /* ── Zone markers ───────────────────────── */

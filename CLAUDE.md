@@ -115,6 +115,7 @@ Keep it flat. All zone GLBs live in `public/zones/` regardless of depth in the n
 - **useKeyboardControls.ts**: WASD pan, QE orbit, RF zoom, ZX vertical, Shift 2x speed. Only active when canvas hovered.
 - **AdaptiveLabel.tsx**: Labels that clamp scale between min/max based on camera distance.
 - **useOptimizedGLTF.ts**: GLB loader with Draco + Meshopt decompression support.
+- **Cloud transition system**: Zone-to-zone transitions via cream-colored cloud banks that slide in from top/bottom, hide the loading gap, then part to reveal the new scene. State machine in `transitionStore.ts` (`idle → clouds-in → holding → clouds-out → idle`). `CloudTransition.tsx` + `CloudTransition.css` for the overlay (mounted once in App.tsx). `useSceneTransition.ts` hook for scene components. `CameraDolly` in IslandScene dollies camera toward the clicked zone before clouds cover. Tuning params (cloud color, durations, easing, scale factor) documented in memory file `project_cloud_transitions.md`.
 
 ### UI components
 - **QuickNav.tsx**: Hamburger dropdown (top-left) with direct links to all sister sites. Auto-generated from `getSisterSites()`.

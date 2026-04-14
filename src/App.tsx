@@ -5,6 +5,8 @@ import IslandScene from './IslandScene'
 import BirdSanctuaryScene from './BirdSanctuaryScene'
 import ZoneScene from './ZoneScene'
 import QuickNav from './QuickNav'
+import CloudTransition from './CloudTransition'
+import { useSceneTransition } from './useSceneTransition'
 import { getActiveZones } from './sceneMap'
 
 /** Zones that use ZoneScene (all active zones except bird_sanctuary which has its own component) */
@@ -14,6 +16,8 @@ function HomePage() {
   const [comingSoon, setComingSoon] = useState<string | null>(null)
   const turntableToggleRef = useRef<(() => void) | null>(null)
   const [turntablePlaying, setTurntablePlaying] = useState(true)
+  const [islandReady, setIslandReady] = useState(false)
+  const { wrapStyle } = useSceneTransition(islandReady)
 
   const onTurntableChange = useCallback((toggle: () => void, playing: boolean) => {
     turntableToggleRef.current = toggle
@@ -27,11 +31,12 @@ function HomePage() {
         <p className="site-subtitle">an archipelago of small projects</p>
       </header>
 
-      <div className="map-wrap">
+      <div className="map-wrap" style={wrapStyle}>
         <IslandScene
           style={{ width: '100%', height: '100%' }}
           onComingSoon={setComingSoon}
           onTurntableChange={onTurntableChange}
+          onReady={() => setIslandReady(true)}
         />
       </div>
 
@@ -70,6 +75,7 @@ export default function App() {
   return (
     <>
     <QuickNav />
+    <CloudTransition />
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/zone-bird-sanctuary" element={<BirdSanctuaryScene />} />

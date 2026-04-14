@@ -8,7 +8,6 @@ import { Canvas } from "@react-three/fiber"
 import { EffectComposer, Bloom } from "@react-three/postprocessing"
 import { KernelSize } from "postprocessing"
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
 import * as THREE from "three"
 import "./App.css"
 import { AdaptiveLabel } from "./AdaptiveLabel"
@@ -17,6 +16,7 @@ import { useAutoFitCamera } from "./useAutoFitCamera"
 import { useKeyboardControls } from "./useKeyboardControls"
 import { useOptimizedGLTF } from "./useOptimizedGLTF"
 import { useTurntable } from "./useTurntable"
+import { useSceneTransition } from "./useSceneTransition"
 import { getPortalConfig } from "./sceneMap"
 import ToyInteractor from "./ToyInteractor"
 import Breadcrumbs from "./Breadcrumbs"
@@ -39,11 +39,11 @@ interface Hotspot {
 
 const HotspotHitbox = memo(function HotspotHitbox({
   hotspot,
-  navigate,
+  onNavigate,
   onHoverChange,
 }: {
   hotspot: Hotspot
-  navigate: (path: string) => void
+  onNavigate: (url: string, internal: boolean) => void
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void
 }) {
   const [hovered, setHovered] = useState(false)
@@ -79,11 +79,7 @@ const HotspotHitbox = memo(function HotspotHitbox({
             if (dx * dx + dy * dy > 25) return
           }
           if (hotspot.url) {
-            if (hotspot.internal) {
-              navigate(hotspot.url)
-            } else {
-              window.location.href = hotspot.url
-            }
+            onNavigate(hotspot.url, hotspot.internal)
           }
         }}
       >
@@ -221,13 +217,13 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
 
 function ZoneMesh({
   glbPath,
-  navigate,
+  onNavigate,
   onSceneReady,
   onHoverChange,
   allMeshesRef,
 }: {
   glbPath: string
-  navigate: (path: string) => void
+  onNavigate: (url: string, internal: boolean) => void
   onSceneReady: (scene: THREE.Object3D) => void
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>
@@ -259,7 +255,7 @@ function ZoneMesh({
         <HotspotHitbox
           key={hotspot.name}
           hotspot={hotspot}
-          navigate={navigate}
+          onNavigate={onNavigate}
           onHoverChange={onHoverChange}
         />
       ))}
@@ -337,7 +333,6 @@ export default function ZoneScene({
   camera: cameraOptions,
   environmentPreset = "night",
 }: ZoneSceneProps) {
-  const navigate = useNavigate()
   const orbitRef = useRef<any>(null)
   const turntableToggleRef = useRef<(() => void) | null>(null)
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map())
@@ -345,6 +340,8 @@ export default function ZoneScene({
   const [cameraReady, setCameraReady] = useState(false)
   const [hoveredHotspot, setHoveredHotspot] = useState<Hotspot | null>(null)
   const [turntablePlaying, setTurntablePlaying] = useState(true)
+
+  const { navigateWithTransition, wrapStyle } = useSceneTransition(cameraReady)
 
   const onHoverChange = useCallback((hotspot: Hotspot, hovered: boolean) => {
     setHoveredHotspot(hovered ? hotspot : null)
@@ -362,7 +359,7 @@ export default function ZoneScene({
         <p className="site-subtitle">{subtitle}</p>
       </header>
 
-      <div className="map-wrap">
+      <div className="map-wrap" style={wrapStyle}>
         <Canvas
           camera={{ fov: 50 }}
           style={{ width: "100%", height: "100%", opacity: cameraReady ? 1 : 0 }}
@@ -379,7 +376,7 @@ export default function ZoneScene({
           <Suspense fallback={<LoadingFallback />}>
             <ZoneMesh
               glbPath={glbPath}
-              navigate={navigate}
+              onNavigate={navigateWithTransition}
               onSceneReady={setLoadedScene}
               onHoverChange={onHoverChange}
               allMeshesRef={allMeshesRef}

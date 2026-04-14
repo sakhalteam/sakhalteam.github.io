@@ -12,7 +12,7 @@ import { BloomDriver, collectMeshes, BLOOM_COLOR_ACTIVE } from './BloomDriver'
 import { getHotspotConfig } from './sceneMap'
 import ToyInteractor from './ToyInteractor'
 import Breadcrumbs from './Breadcrumbs'
-import { useNavigate } from 'react-router-dom'
+import { useSceneTransition } from './useSceneTransition'
 import * as THREE from 'three'
 import './App.css'
 
@@ -35,11 +35,11 @@ interface Hotspot {
 
 const HotspotHitbox = memo(function HotspotHitbox({
   hotspot,
-  navigate,
+  onNavigate,
   onHoverChange,
 }: {
   hotspot: Hotspot
-  navigate: (path: string) => void
+  onNavigate: (url: string, internal: boolean) => void
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void
 }) {
   const [hovered, setHovered] = useState(false)
@@ -75,11 +75,7 @@ const HotspotHitbox = memo(function HotspotHitbox({
             if (dx * dx + dy * dy > 25) return
           }
           if (hotspot.url) {
-            if (hotspot.internal) {
-              navigate(hotspot.url)
-            } else {
-              window.location.href = hotspot.url
-            }
+            onNavigate(hotspot.url, hotspot.internal)
           } else {
             setTooltip(true)
           }
@@ -129,12 +125,12 @@ const HotspotHitbox = memo(function HotspotHitbox({
 })
 
 function SanctuaryMesh({
-  navigate,
+  onNavigate,
   onSceneReady,
   onHoverChange,
   allMeshesRef,
 }: {
-  navigate: (path: string) => void
+  onNavigate: (url: string, internal: boolean) => void
   onSceneReady: (scene: THREE.Object3D) => void
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>
@@ -194,7 +190,7 @@ function SanctuaryMesh({
         <HotspotHitbox
           key={hotspot.name}
           hotspot={hotspot}
-          navigate={navigate}
+          onNavigate={onNavigate}
           onHoverChange={onHoverChange}
         />
       ))}
@@ -238,7 +234,6 @@ function CameraRig({ orbitRef, scene, turntableToggleRef, onPlayingChange, onCam
 }
 
 export default function BirdSanctuaryScene() {
-  const navigate = useNavigate()
   const orbitRef = useRef<any>(null)
   const turntableToggleRef = useRef<(() => void) | null>(null)
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map())
@@ -246,6 +241,8 @@ export default function BirdSanctuaryScene() {
   const [cameraReady, setCameraReady] = useState(false)
   const [hoveredHotspot, setHoveredHotspot] = useState<Hotspot | null>(null)
   const [turntablePlaying, setTurntablePlaying] = useState(true)
+
+  const { navigateWithTransition, wrapStyle } = useSceneTransition(cameraReady)
 
   const onHoverChange = useCallback((hotspot: Hotspot, hovered: boolean) => {
     setHoveredHotspot(hovered ? hotspot : null)
@@ -263,7 +260,7 @@ export default function BirdSanctuaryScene() {
         <p className="site-subtitle">click on things to explore</p>
       </header>
 
-      <div className="map-wrap">
+      <div className="map-wrap" style={wrapStyle}>
         <Canvas
           camera={{ fov: 50 }}
           style={{ width: '100%', height: '100%', opacity: cameraReady ? 1 : 0 }}
@@ -275,7 +272,7 @@ export default function BirdSanctuaryScene() {
           <Environment preset="forest" />
           <Suspense fallback={<LoadingFallback />}>
             <SanctuaryMesh
-              navigate={navigate}
+              onNavigate={navigateWithTransition}
               onSceneReady={setLoadedScene}
               onHoverChange={onHoverChange}
               allMeshesRef={allMeshesRef}
