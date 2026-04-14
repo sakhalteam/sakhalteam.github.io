@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
@@ -27,6 +27,7 @@ export function useAutoFitCamera(
   } = {}
 ) {
   const { camera } = useThree()
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     if (!scene) return
@@ -89,5 +90,9 @@ export function useAutoFitCamera(
       controls.maxDistance = radius * 5
       controls.update()
     }
+
+    setReady(true)
   }, [scene, camera, orbitRef, padding, elevationOverride, azimuth])
+
+  return ready
 }

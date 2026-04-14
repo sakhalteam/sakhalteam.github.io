@@ -213,21 +213,26 @@ function LoadingFallback() {
 }
 
 /** Connects keyboard controls + auto-fit camera + turntable to OrbitControls */
-function CameraRig({ orbitRef, scene, turntableToggleRef, onPlayingChange }: {
+function CameraRig({ orbitRef, scene, turntableToggleRef, onPlayingChange, onCameraReady }: {
   orbitRef: React.RefObject<any>
   scene: THREE.Object3D | null
   turntableToggleRef: React.RefObject<(() => void) | null>
   onPlayingChange: (playing: boolean) => void
+  onCameraReady: (ready: boolean) => void
 }) {
   const { stop, toggle, playing } = useTurntable(orbitRef)
   useKeyboardControls(orbitRef, { onInteract: stop })
-  useAutoFitCamera(scene, orbitRef)
+  const ready = useAutoFitCamera(scene, orbitRef)
 
   turntableToggleRef.current = toggle
 
   useEffect(() => {
     onPlayingChange(playing)
   }, [playing, onPlayingChange])
+
+  useEffect(() => {
+    onCameraReady(ready)
+  }, [ready, onCameraReady])
 
   return null
 }
@@ -238,6 +243,7 @@ export default function BirdSanctuaryScene() {
   const turntableToggleRef = useRef<(() => void) | null>(null)
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map())
   const [loadedScene, setLoadedScene] = useState<THREE.Object3D | null>(null)
+  const [cameraReady, setCameraReady] = useState(false)
   const [hoveredHotspot, setHoveredHotspot] = useState<Hotspot | null>(null)
   const [turntablePlaying, setTurntablePlaying] = useState(true)
 
@@ -260,7 +266,7 @@ export default function BirdSanctuaryScene() {
       <div className="map-wrap">
         <Canvas
           camera={{ fov: 50 }}
-          style={{ width: '100%', height: '100%', opacity: loadedScene ? 1 : 0 }}
+          style={{ width: '100%', height: '100%', opacity: cameraReady ? 1 : 0 }}
           gl={{ antialias: true, alpha: true }}
         >
           <ambientLight intensity={0.5} />
@@ -286,7 +292,7 @@ export default function BirdSanctuaryScene() {
             mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
             maxPolarAngle={Math.PI / 2.1}
           />
-          <CameraRig orbitRef={orbitRef} scene={loadedScene} turntableToggleRef={turntableToggleRef} onPlayingChange={onPlayingChange} />
+          <CameraRig orbitRef={orbitRef} scene={loadedScene} turntableToggleRef={turntableToggleRef} onPlayingChange={onPlayingChange} onCameraReady={setCameraReady} />
           <EffectComposer multisampling={0}>
             <Bloom
               intensity={0.2}

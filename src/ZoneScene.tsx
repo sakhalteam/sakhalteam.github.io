@@ -280,16 +280,17 @@ function LoadingFallback() {
 }
 
 /** Connects keyboard controls + auto-fit camera + turntable to OrbitControls */
-function CameraRig({ orbitRef, scene, cameraOptions, turntableToggleRef, onPlayingChange }: {
+function CameraRig({ orbitRef, scene, cameraOptions, turntableToggleRef, onPlayingChange, onCameraReady }: {
   orbitRef: React.RefObject<any>
   scene: THREE.Object3D | null
   cameraOptions?: { padding?: number; elevation?: number; azimuth?: number }
   turntableToggleRef: React.RefObject<(() => void) | null>
   onPlayingChange: (playing: boolean) => void
+  onCameraReady: (ready: boolean) => void
 }) {
   const { stop, toggle, playing } = useTurntable(orbitRef)
   useKeyboardControls(orbitRef, { onInteract: stop })
-  useAutoFitCamera(scene, orbitRef, {
+  const ready = useAutoFitCamera(scene, orbitRef, {
     ...(cameraOptions?.padding != null && { padding: cameraOptions.padding }),
     ...(cameraOptions?.elevation != null && { elevation: cameraOptions.elevation }),
     ...(cameraOptions?.azimuth != null && { azimuth: cameraOptions.azimuth }),
@@ -300,6 +301,10 @@ function CameraRig({ orbitRef, scene, cameraOptions, turntableToggleRef, onPlayi
   useEffect(() => {
     onPlayingChange(playing)
   }, [playing, onPlayingChange])
+
+  useEffect(() => {
+    onCameraReady(ready)
+  }, [ready, onCameraReady])
 
   return null
 }
@@ -337,6 +342,7 @@ export default function ZoneScene({
   const turntableToggleRef = useRef<(() => void) | null>(null)
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map())
   const [loadedScene, setLoadedScene] = useState<THREE.Object3D | null>(null)
+  const [cameraReady, setCameraReady] = useState(false)
   const [hoveredHotspot, setHoveredHotspot] = useState<Hotspot | null>(null)
   const [turntablePlaying, setTurntablePlaying] = useState(true)
 
@@ -359,7 +365,7 @@ export default function ZoneScene({
       <div className="map-wrap">
         <Canvas
           camera={{ fov: 50 }}
-          style={{ width: "100%", height: "100%", opacity: loadedScene ? 1 : 0 }}
+          style={{ width: "100%", height: "100%", opacity: cameraReady ? 1 : 0 }}
           gl={{ antialias: true, alpha: true }}
         >
           <ambientLight intensity={0.5} />
@@ -394,7 +400,7 @@ export default function ZoneScene({
             }}
             maxPolarAngle={Math.PI / 2.1}
           />
-          <CameraRig orbitRef={orbitRef} scene={loadedScene} cameraOptions={cameraOptions} turntableToggleRef={turntableToggleRef} onPlayingChange={onPlayingChange} />
+          <CameraRig orbitRef={orbitRef} scene={loadedScene} cameraOptions={cameraOptions} turntableToggleRef={turntableToggleRef} onPlayingChange={onPlayingChange} onCameraReady={setCameraReady} />
           <EffectComposer multisampling={0}>
             <Bloom
               intensity={0.2}
