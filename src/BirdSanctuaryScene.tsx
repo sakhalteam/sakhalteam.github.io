@@ -10,16 +10,16 @@ import { useTurntable } from './useTurntable'
 import { AdaptiveLabel } from './AdaptiveLabel'
 import { BloomDriver, collectMeshes, BLOOM_COLOR_ACTIVE } from './BloomDriver'
 import { getHotspotConfig } from './sceneMap'
+import ToyInteractor from './ToyInteractor'
 import Breadcrumbs from './Breadcrumbs'
 import { useNavigate } from 'react-router-dom'
 import * as THREE from 'three'
 import './App.css'
 
-/** Keys of objects in the GLB that are interactive hotspots */
+/** Keys of objects in the GLB that are interactive hotspots (non-toy) */
 const HOTSPOT_KEYS = [
   'portal_bird_bingo',
-  'baby_deku', 'bird_penguin', 'bird_ostrich', 'bird_chocobo',
-  'bird_kiwi2', 'bird_flamingo', 'tree_stump',
+  'baby_deku', 'bs_tree_stump',
 ]
 
 interface Hotspot {
@@ -189,6 +189,7 @@ function SanctuaryMesh({
   return (
     <>
       <primitive object={scene} />
+      <ToyInteractor scene={scene} />
       {hotspots.map((hotspot) => (
         <HotspotHitbox
           key={hotspot.name}
@@ -259,7 +260,7 @@ export default function BirdSanctuaryScene() {
       <div className="map-wrap">
         <Canvas
           camera={{ fov: 50 }}
-          style={{ width: '100%', height: '100%' }}
+          style={{ width: '100%', height: '100%', opacity: loadedScene ? 1 : 0 }}
           gl={{ antialias: true, alpha: true }}
         >
           <ambientLight intensity={0.5} />

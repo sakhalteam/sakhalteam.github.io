@@ -200,13 +200,13 @@ const nodes: SceneNode[] = [
     children: [
       "portal_bird_bingo",
       "baby_deku",
-      "bird_penguin",
-      "bird_ostrich",
-      "bird_chocobo",
-      "bird_kiwi",
-      "bird_kiwi2",
-      "bird_flamingo",
-      "tree_stump",
+      "bs_toy_penguin",
+      "bs_toy_ostrich",
+      "bs_toy_chocobo",
+      "bs_toy_kiwi_01",
+      "bs_toy_kiwi_02",
+      "bs_toy_flamingo",
+      "bs_toy_puffin",
     ],
   }),
   zone("ss_brainfog", "S.S. Brainfog", {
@@ -281,30 +281,35 @@ const nodes: SceneNode[] = [
   ),
   portal("portal_karasu_drop", "Karasu Drop", "/karasu-drop/", "ss_brainfog"),
 
-  // ── Bird sanctuary creatures (non-navigable hotspots) ──
-  toy("baby_deku", "Deku Sprout", "bird_sanctuary"),
-  toy("bird_penguin", "Penguin", "bird_sanctuary", {
-    sound: "/sounds/emperor-penguin-call.mp3",
+  // ── Bird sanctuary creatures (bs_ prefix = zone_bird_sanctuary namespace) ──
+  toy("bs_toy_penguin", "Penguin", "bird_sanctuary", {
+    sound: "/sounds/tobimasen.mp3",
     animation: "wobble",
   }),
-  toy("bird_ostrich", "Ostrich", "bird_sanctuary", {
+  toy("bs_toy_ostrich", "Ostrich", "bird_sanctuary", {
     sound: "/sounds/common-ostrich-call.mp3",
     animation: "hop",
   }),
-  toy("bird_chocobo", "Chocobo", "bird_sanctuary"),
-  toy("bird_kiwi", "Kiwi", "bird_sanctuary", {
+  toy("bs_toy_chocobo", "Chocobo", "bird_sanctuary", {
+    sound: "/sounds/bs_toy_chocobo.mp3",
+    animation: "hop",
+  }),
+  toy("bs_toy_kiwi_01", "Kiwi", "bird_sanctuary", {
     sound: "/sounds/okarito-brown-kiwi-call.mp3",
     animation: "hop",
   }),
-  toy("bird_kiwi2", "Kiwi", "bird_sanctuary", {
+  toy("bs_toy_kiwi_02", "Kiwi", "bird_sanctuary", {
     sound: "/sounds/okarito-brown-kiwi-call.mp3",
     animation: "hop",
   }),
-  toy("bird_flamingo", "Flamingo", "bird_sanctuary", {
+  toy("bs_toy_flamingo", "Flamingo", "bird_sanctuary", {
     sound: "/sounds/american-flamingo-call.mp3",
     animation: "wobble",
   }),
-  toy("tree_stump", "Tree Stump", "bird_sanctuary"),
+  toy("bs_toy_puffin", "Puffin", "bird_sanctuary", {
+    sound: "/sounds/atlantic-puffin-call.mp3",
+    animation: "wobble",
+  }),
 
   // ── Island toys ────────────────────────────────────
   // Pokemon (spin + cry + float on water)

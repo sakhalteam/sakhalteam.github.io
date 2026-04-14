@@ -49,14 +49,7 @@ function collectMeshes(obj: THREE.Object3D): THREE.Mesh[] {
   return meshes
 }
 
-/**
- * Module-level flag: set in capture-phase pointerdown when a toy mesh is
- * under the cursor. ZoneHitbox checks this in its R3F onClick to bail out —
- * R3F synthesizes clicks from pointerdown/pointerup, not DOM 'click',
- * so ToyInteractor's DOM stopPropagation doesn't block zone navigation.
- */
-let _toyUnderPointer = false
-export function isToyUnderPointer() { return _toyUnderPointer }
+import { setToyUnderPointer } from './toyClickFlag'
 
 /**
  * ToyInteractor — gentle bob + click-to-spin + sound + proximity labels.
@@ -100,7 +93,7 @@ export default function ToyInteractor({ scene, animations = [] }: { scene: THREE
 
     scene.traverse((child) => {
       const lower = child.name.toLowerCase()
-      if (lower.startsWith('toy_')) {
+      if (lower.startsWith('toy_') || lower.startsWith('bs_toy_')) {
         const base = normalizeName(lower)
         // Only create entries for objects with a sceneMap config.
         // Sub-parts (toy_lapras_2 etc.) have no config and get skipped —
@@ -272,7 +265,7 @@ export default function ToyInteractor({ scene, animations = [] }: { scene: THREE
     const onPointerDown = (e: PointerEvent) => {
       pointerDown.current = { x: e.clientX, y: e.clientY }
       // Flag for ZoneHitbox: a toy is under the cursor, don't navigate
-      _toyUnderPointer = !!hitTest(e)
+      setToyUnderPointer(!!hitTest(e))
     }
 
     // Capture phase: fires before R3F's bubble-phase zone/portal click handlers.

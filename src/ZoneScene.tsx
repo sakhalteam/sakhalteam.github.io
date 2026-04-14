@@ -359,7 +359,7 @@ export default function ZoneScene({
       <div className="map-wrap">
         <Canvas
           camera={{ fov: 50 }}
-          style={{ width: "100%", height: "100%" }}
+          style={{ width: "100%", height: "100%", opacity: loadedScene ? 1 : 0 }}
           gl={{ antialias: true, alpha: true }}
         >
           <ambientLight intensity={0.5} />
