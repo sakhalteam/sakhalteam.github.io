@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { useThree } from '@react-three/fiber'
-import * as THREE from 'three'
+import { useEffect, useState } from "react";
+import { useThree } from "@react-three/fiber";
+import * as THREE from "three";
 
 /**
  * Automatically positions the camera to frame the entire scene nicely.
@@ -24,75 +24,75 @@ export function useAutoFitCamera(
     elevation: elevationOverride = null as number | null,
     /** Azimuth offset in radians (rotates camera around Y axis). Default: slight 3/4 angle */
     azimuth = 0.4,
-  } = {}
+  } = {},
 ) {
-  const { camera } = useThree()
-  const [ready, setReady] = useState(false)
+  const { camera } = useThree();
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!scene) return
+    if (!scene) return;
 
-    const box = new THREE.Box3().setFromObject(scene)
-    if (box.isEmpty()) return
+    const box = new THREE.Box3().setFromObject(scene);
+    if (box.isEmpty()) return;
 
-    const center = new THREE.Vector3()
-    box.getCenter(center)
+    const center = new THREE.Vector3();
+    box.getCenter(center);
 
-    const size = new THREE.Vector3()
-    box.getSize(size)
+    const size = new THREE.Vector3();
+    box.getSize(size);
 
-    const sphere = new THREE.Sphere()
-    box.getBoundingSphere(sphere)
-    const radius = sphere.radius
+    const sphere = new THREE.Sphere();
+    box.getBoundingSphere(sphere);
+    const radius = sphere.radius;
 
     // Auto-detect elevation from bounding box aspect ratio
-    let elevation: number
+    let elevation: number;
     if (elevationOverride !== null) {
-      elevation = elevationOverride
+      elevation = elevationOverride;
     } else {
-      const horizontalExtent = Math.max(size.x, size.z)
-      const heightRatio = size.y / horizontalExtent
+      const horizontalExtent = Math.max(size.x, size.z);
+      const heightRatio = size.y / horizontalExtent;
 
       if (heightRatio > 2.0) {
         // Very tall (e.g. tower): look mostly straight at it
-        elevation = 0.3
+        elevation = 0.3;
       } else if (heightRatio > 1.0) {
         // Tallish: moderate angle
-        elevation = 0.45
+        elevation = 0.45;
       } else if (heightRatio < 0.15) {
         // Extremely flat (e.g. a floor plane): slightly higher isometric
-        elevation = 0.65
+        elevation = 0.65;
       } else {
         // Everything else (cubic, wide, moderately flat): nice 3/4 view
-        elevation = 0.55
+        elevation = 0.55;
       }
     }
 
     // Calculate distance needed to fit the sphere in view
-    const fov = (camera as THREE.PerspectiveCamera).fov
-    const fovRad = THREE.MathUtils.degToRad(fov)
-    const distance = (radius * padding) / Math.sin(fovRad / 2)
+    const fov = (camera as THREE.PerspectiveCamera).fov;
+    const fovRad = THREE.MathUtils.degToRad(fov);
+    const distance = (radius * padding) / Math.sin(fovRad / 2);
 
     // Position camera with elevation + azimuth for a 3/4 perspective
     const cameraOffset = new THREE.Vector3(
       Math.sin(azimuth) * Math.cos(elevation) * distance,
       Math.sin(elevation) * distance,
       Math.cos(azimuth) * Math.cos(elevation) * distance,
-    )
-    camera.position.copy(center).add(cameraOffset)
-    camera.lookAt(center)
+    );
+    camera.position.copy(center).add(cameraOffset);
+    camera.lookAt(center);
 
     // Update orbit controls
-    const controls = orbitRef.current
+    const controls = orbitRef.current;
     if (controls) {
-      controls.target.copy(center)
-      controls.minDistance = radius * 0.3
-      controls.maxDistance = radius * 5
-      controls.update()
+      controls.target.copy(center);
+      controls.minDistance = radius * 0.3;
+      controls.maxDistance = radius * 7;
+      controls.update();
     }
 
-    setReady(true)
-  }, [scene, camera, orbitRef, padding, elevationOverride, azimuth])
+    setReady(true);
+  }, [scene, camera, orbitRef, padding, elevationOverride, azimuth]);
 
-  return ready
+  return ready;
 }

@@ -68,7 +68,7 @@ const fragmentShader = /* glsl */ `
 `;
 
 interface WhirlpoolProps {
-  /** World position of the whirlpool center */
+  /** World position of the whirlpool center (used when orbitEnabled is false) */
   position?: [number, number, number];
   /** Disc radius in world units */
   size?: number;
@@ -78,6 +78,16 @@ interface WhirlpoolProps {
   arms?: number;
   /** How tightly the spiral curves inward (higher = tighter) */
   twist?: number;
+  /** If true, orbit around the island origin instead of staying at `position` */
+  orbitEnabled?: boolean;
+  /** Orbit radius in world units (distance from island center) */
+  orbitRadius?: number;
+  /** Orbit angular speed in rad/s (positive = CCW from above) */
+  orbitSpeed?: number;
+  /** Starting orbit angle in radians */
+  orbitPhase?: number;
+  /** Y height used while orbiting */
+  orbitY?: number;
 }
 
 /**
@@ -90,8 +100,14 @@ export default function Whirlpool({
   spinSpeed = 1.6,
   arms = 5,
   twist = 8,
+  orbitEnabled = true,
+  orbitRadius = 15,
+  orbitSpeed = 0.08,
+  orbitPhase = 0,
+  orbitY = 0.08,
 }: WhirlpoolProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
+  const groupRef = useRef<THREE.Group>(null);
 
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -115,15 +131,28 @@ export default function Whirlpool({
   }, [spinSpeed, arms, twist]);
 
   useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
     if (matRef.current) {
-      matRef.current.uniforms.uTime.value = clock.getElapsedTime();
+      matRef.current.uniforms.uTime.value = t;
+    }
+    if (orbitEnabled && groupRef.current) {
+      const theta = t * orbitSpeed + orbitPhase;
+      groupRef.current.position.x = Math.cos(theta) * orbitRadius;
+      groupRef.current.position.z = Math.sin(theta) * orbitRadius;
+      groupRef.current.position.y = orbitY;
     }
   });
 
+  const initialPosition: [number, number, number] = orbitEnabled
+    ? [Math.cos(orbitPhase) * orbitRadius, orbitY, Math.sin(orbitPhase) * orbitRadius]
+    : position;
+
   return (
-    <mesh position={position} rotation-x={-Math.PI / 2} renderOrder={0}>
-      <circleGeometry args={[size, 96]} />
-      <primitive object={material} ref={matRef} attach="material" />
-    </mesh>
+    <group ref={groupRef} position={initialPosition}>
+      <mesh rotation-x={-Math.PI / 2} renderOrder={0}>
+        <circleGeometry args={[size, 96]} />
+        <primitive object={material} ref={matRef} attach="material" />
+      </mesh>
+    </group>
   );
 }
