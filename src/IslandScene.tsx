@@ -11,6 +11,7 @@ import { BloomDriver, collectMeshes, BLOOM_COLOR_ACTIVE, BLOOM_COLOR_COMING_SOON
 import ToyInteractor from './ToyInteractor'
 import { isToyUnderPointer } from './toyClickFlag'
 import Water from './Water'
+import Whirlpool from './Whirlpool'
 import { getZoneConfig } from './sceneMap'
 import { startTransition } from './transitionStore'
 import * as THREE from 'three'
@@ -346,6 +347,7 @@ export default function IslandScene({ style, onComingSoon, onTurntableChange, on
       <directionalLight position={[-4, 3, -6]} intensity={0.3} color="#4488ff" />
       <Environment preset="night" />
       <Water />
+      <Whirlpool />
       <Suspense fallback={<LoadingFallback />}>
         <IslandMesh onComingSoon={onComingSoon} onNavigate={handleNavigate} onHoverChange={onHoverChange} allMeshesRef={allMeshesRef} onReady={onReady} />
         <BloomDriver
