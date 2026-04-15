@@ -1,20 +1,15 @@
-// App.tsx
-
 import { useState, useRef, useCallback } from "react";
 import { Routes, Route } from "react-router-dom";
 import "./App.css";
 import IslandScene from "./IslandScene";
-import BirdSanctuaryScene from "./BirdSanctuaryScene";
 import ZoneScene from "./ZoneScene";
 import QuickNav from "./QuickNav";
 import CloudTransition from "./CloudTransition";
 import { useSceneTransition } from "./useSceneTransition";
 import { getActiveZones } from "./sceneMap";
 
-/** Zones that use ZoneScene (all active zones except bird_sanctuary which has its own component) */
-const zoneRoutes = getActiveZones().filter(
-  (z) => z.key !== "bird_sanctuary" && z.key !== "island",
-);
+/** Zones that use ZoneScene (all active zones except the island root) */
+const zoneRoutes = getActiveZones().filter((z) => z.key !== "island");
 
 function HomePage() {
   const [comingSoon, setComingSoon] = useState<string | null>(null);
@@ -89,7 +84,6 @@ export default function App() {
       <CloudTransition />
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/zone-bird-sanctuary" element={<BirdSanctuaryScene />} />
         {zoneRoutes.map((z) => (
           <Route
             key={z.key}
