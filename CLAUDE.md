@@ -3,6 +3,7 @@
 > Parent context: `../CLAUDE.md` has universal preferences and conventions. Keep it updated with anything universal you learn here.
 
 ## Memory system
+
 - **At conversation start and after context compaction**, always read `MEMORY.md` and scan relevant memory files before proceeding. This prevents re-asking questions or losing context from prior sessions.
 - Keep `~/.claude/projects/` memory files updated (user profile, project state, feedback)
 - If you discover something **universal** (interaction prefs, conventions, cross-project patterns), note it so Nic can update `Code/CLAUDE.md`. Don't put project-specific info in other repos' CLAUDE.md files.
@@ -10,6 +11,7 @@
 - When upgrading dependencies, always verify CI pipeline (deploy.yaml Node version, tsconfig compatibility) before pushing.
 
 ## Org-wide conventions
+
 - **Stack**: Vite 8 + React 19 + TypeScript 6. Node 22+ required (nvm use 22.14.0). `"types": ["vite/client"]` required in tsconfig.app.json.
 - **Deploy**: GitHub Actions (Node 22) → GitHub Pages.
 - **Shared pattern**: HomeBtn component (fixed top-left, links to sakhalteam.github.io). Every sub-site should have one.
@@ -17,9 +19,11 @@
 - **Design philosophy**: Animal Crossing museum model — layered depth, available but never imposed. Playful, approachable, never overwhelming.
 
 ## What this is
+
 The main portfolio/hub site for sakhalteam. Features an interactive 3D island map built with React Three Fiber. Clickable zones and portals link to each project. Long-term vision is **Cosmic Osmo / Myst** — click a zone, enter a 3D environment, interact with objects, discover portals to actual sites. The journey is the point. Some zones may be dead ends, puzzles, or easter eggs with no portal at all.
 
 ## Stack
+
 - Vite 8 + React 19 + TypeScript 6 (does NOT use Tailwind — custom CSS only)
 - React Router 7 for internal routes
 - Three.js + @react-three/fiber + @react-three/drei + @react-three/postprocessing for 3D
@@ -29,20 +33,20 @@ The main portfolio/hub site for sakhalteam. Features an interactive 3D island ma
 
 ## Navigation terminology (the naming contract)
 
-**The prefix is the verb. The key is the noun.** Prefixes encode *what happens on click*, keys encode *the destination/target*.
+**The prefix is the verb. The key is the noun.** Prefixes encode _what happens on click_, keys encode _the destination/target_.
 
 Object name prefixes in GLB files determine behavior:
 
-| Prefix | Behavior (what happens on click) | File location |
-|--------|----------------------------------|---------------|
-| `zone_<key>` | Loads a new 3D scene | `public/zones/zone_<key>.glb` |
-| `portal_<key>` | Navigates to an external sakhalteam minisite | No GLB — it's a URL |
-| `toy_<key>` | Plays animation / interaction, no navigation | Part of parent GLB |
-| `zc_<key>_<name>` | Glows with parent zone on hover. Also clickable if it has a toy entry in sceneMap | Part of parent GLB |
-| `pc_<key>_<name>` | Glows with parent portal on hover. Also clickable if it has a toy entry in sceneMap | Part of parent GLB |
-| *(no prefix)* | Scenery, decoration — not interactive | Part of parent GLB |
+| Prefix            | Behavior (what happens on click)                                                    | File location                 |
+| ----------------- | ----------------------------------------------------------------------------------- | ----------------------------- |
+| `zone_<key>`      | Loads a new 3D scene                                                                | `public/zones/zone_<key>.glb` |
+| `portal_<key>`    | Navigates to an external sakhalteam minisite                                        | No GLB — it's a URL           |
+| `toy_<key>`       | Plays animation / interaction, no navigation                                        | Part of parent GLB            |
+| `zc_<key>_<name>` | Glows with parent zone on hover. Also clickable if it has a toy entry in sceneMap   | Part of parent GLB            |
+| `pc_<key>_<name>` | Glows with parent portal on hover. Also clickable if it has a toy entry in sceneMap | Part of parent GLB            |
+| _(no prefix)_     | Scenery, decoration — not interactive                                               | Part of parent GLB            |
 
-**Depth is implicit, not encoded in the prefix.** A `zone_` inside island.glb and a `zone_` inside zone_reading_room.glb behave identically — both load a .glb scene. The hierarchy comes from *which scene contains the object*, not the prefix. This means no `room_`/`nook_`/`cranny_` prefixes — just `zone_` for any scene-loading click at any depth.
+**Depth is implicit, not encoded in the prefix.** A `zone_` inside island.glb and a `zone_` inside zone*reading_room.glb behave identically — both load a .glb scene. The hierarchy comes from *which scene contains the object*, not the prefix. This means no `room*`/`nook*`/`cranny*`prefixes — just`zone\_` for any scene-loading click at any depth.
 
 **Zone names describe destinations, not the clickable object.** The boombox mesh on the island is `zone_beach_party` (the place you arrive at), not `zone_boombox` (the thing you clicked). Exception: if the zone IS the object (e.g., a ship named S.S. Brainfog), naming after the object is fine.
 
@@ -63,6 +67,7 @@ Not every path ends in a portal. Dead-end zones are valid (puzzles, easter eggs,
 `sceneMap.ts` encodes the entire site navigation tree. **All zone, portal, toy, and sister site data lives here.** No more scattered constants — every consumer imports from sceneMap.
 
 **What it replaced:**
+
 - `ZONE_URLS` / `ZONE_LABELS` / `getZoneConfig()` in IslandScene.tsx
 - `PORTAL_URLS` in ZoneScene.tsx
 - `HOTSPOTS` in BirdSanctuaryScene.tsx
@@ -71,6 +76,7 @@ Not every path ends in a portal. Dead-end zones are valid (puzzles, easter eggs,
 - Hardcoded `<Route>` elements in App.tsx
 
 **Exports:**
+
 - `sceneMap` — `Map<string, SceneNode>` of all nodes
 - `getZoneConfig(objName)` — IslandScene zone label/url/type lookup
 - `getPortalConfig(key)` — ZoneScene portal URL lookup
@@ -84,6 +90,7 @@ Not every path ends in a portal. Dead-end zones are valid (puzzles, easter eggs,
 **To add a new zone:** Add a `zone()` call in sceneMap.ts, add a GLB file to public/zones/, and it auto-generates routes, labels, bloom config, and nav entries. No other files need editing.
 
 ## Folder structure
+
 ```
 public/
 ├── island.glb                          # Hub scene
@@ -96,20 +103,22 @@ public/
     ├── zone_bird_sanctuary.glb         # Zone scenes (any depth — sub-zones go here too)
     └── zone_*.glb
 ```
+
 Keep it flat. All zone GLBs live in `public/zones/` regardless of depth in the navigation tree. The scene map encodes parent-child relationships, not the folder structure.
 
 ## Architecture
 
 ### Core scene components
-- **IslandScene.tsx**: Main 3D hub scene. Scans island.glb for `zone_`/`portal_` objects, uses `getZoneConfig()` from sceneMap. Renders ToyInteractor for toy_ objects.
+
+- **IslandScene.tsx**: Main 3D hub scene. Scans island.glb for `zone_`/`portal_` objects, uses `getZoneConfig()` from sceneMap. Renders ToyInteractor for toy\_ objects.
 - **ZoneScene.tsx**: Generic zone scene component. Props: `glbPath`, `title`, `subtitle`, `environmentPreset`, optional `camera` overrides. Uses `getPortalConfig()` from sceneMap. Auto-detects camera angle from model shape.
-- **BirdSanctuaryScene.tsx**: Custom zone scene for bird sanctuary. Uses `getHotspotConfig()` from sceneMap. Has special "chirp" tooltip for bird toys.
 - **App.tsx**: Routes auto-generated from `getActiveZones()`. Bird sanctuary has its own route/component, everything else goes through ZoneScene.
 
 ### Shared systems
+
 - **sceneMap.ts**: Single source of truth for all navigation data (see section above).
 - **BloomDriver.tsx**: Shared emissive glow system for hover effects. Clones materials per-mesh, lerps emissive at 35% max tint + 0.08 intensity boost. Preserves texture detail (like a "Screen" blend). Active zones: salmon-orange (`0.9, 0.35, 0.2`). Coming-soon: lavender (`0.55, 0.35, 0.85`).
-- **ToyInteractor.tsx**: Click animations + sounds + proximity label reveal for toy_/zc_/pc_ objects (any prefix with a toy entry in sceneMap). Raycasts actual mesh geometry (not bounding boxes) for pixel-perfect selection. Labels hidden by default, revealed within 120px cursor radius with 1.5s linger. Animation types: `spin` (y-axis 360°, 0.6s), `hop` (parabolic y bounce, 0.35s), `grow` (scale pulse 1→1.3→1, 0.5s), `wobble` (x-axis drinky-bird with decay, 1.5s), `bob` (exaggerated y undulations with decay, 2s), `none` (pre-animated in Blender, no click behavior). Sound files: public/sounds/ (.ogg for Pokemon cries from PokeAPI, .mp3 for everything else).
+- **ToyInteractor.tsx**: Click animations + sounds + proximity label reveal for toy*/zc*/pc\_ objects (any prefix with a toy entry in sceneMap). Raycasts actual mesh geometry (not bounding boxes) for pixel-perfect selection. Labels hidden by default, revealed within 120px cursor radius with 1.5s linger. Animation types: `spin` (y-axis 360°, 0.6s), `hop` (parabolic y bounce, 0.35s), `grow` (scale pulse 1→1.3→1, 0.5s), `wobble` (x-axis drinky-bird with decay, 1.5s), `bob` (exaggerated y undulations with decay, 2s), `none` (pre-animated in Blender, no click behavior). Sound files: public/sounds/ (.ogg for Pokemon cries from PokeAPI, .mp3 for everything else).
 - **useTurntable.ts**: Slow auto-rotation (0.04 rad/s, ~2.4°/s CCW). Auto-resumes after 15s idle (not if manually paused). Returns `{ stop, toggle, playing }`. All scenes have ⏸/⏵ footer button.
 - **useAutoFitCamera.ts**: Auto-positions camera based on bounding box shape. Tall=low angle, flat=high angle, cubic=3/4. Per-zone overrides via `camera` prop.
 - **useKeyboardControls.ts**: WASD pan, QE orbit, RF zoom, ZX vertical, Shift 2x speed. Only active when canvas hovered.
@@ -118,21 +127,26 @@ Keep it flat. All zone GLBs live in `public/zones/` regardless of depth in the n
 - **Cloud transition system**: Zone-to-zone transitions via cream-colored cloud banks that slide in from top/bottom, hide the loading gap, then part to reveal the new scene. State machine in `transitionStore.ts` (`idle → clouds-in → holding → clouds-out → idle`). `CloudTransition.tsx` + `CloudTransition.css` for the overlay (mounted once in App.tsx). `useSceneTransition.ts` hook for scene components. `CameraDolly` in IslandScene dollies camera toward the clicked zone before clouds cover. Tuning params (cloud color, durations, easing, scale factor) documented in memory file `project_cloud_transitions.md`.
 
 ### UI components
+
 - **QuickNav.tsx**: Hamburger dropdown (top-left) with direct links to all sister sites. Auto-generated from `getSisterSites()`.
 - **App.css**: All styling (no Tailwind). Frosted glass modals, zone cards, quick-nav dropdown, turntable toggle.
 
 ### Scripts & config
+
 - **scripts/optimize-glb.sh**: GLB optimization (Draco + WebP + texture resize 2048px). Run via `npm run optimize`.
 - **NOTES.md**: Quick reference for Nic — camera overrides, keyboard controls, adding zones.
 - **TODO.md**: Planned features and priority order.
 
 ## Hover effects
+
 Both zone types use bloom (emissive ramp + Bloom pass via BloomDriver.tsx). The Outline approach was abandoned due to @react-three/postprocessing reactivity issues.
+
 - **Active zones**: Warm salmon-orange bloom glow (`THREE.Color(0.9, 0.35, 0.2)`)
 - **Coming-soon zones**: Lavender bloom glow (`THREE.Color(0.55, 0.35, 0.85)`)
 - **Toys**: No bloom glow — blue proximity labels + cursor change instead. Hop toys (pigeons, eggs) get subtle emissive tint on hover instead of labels.
 
 ## Active zones
+
 - `zone_bird_sanctuary` → `/zone-bird-sanctuary` → `portal_bird_bingo` → `/bird-bingo/`
 - `zone_ss_brainfog` → `/zone-ss-brainfog` → `portal_adhdo` → `/adhdo/`
 - `zone_cloud_town` → `/zone-cloud-town` → `portal_weather_report` → `/weather-report/`
@@ -143,24 +157,31 @@ Both zone types use bloom (emissive ramp + Bloom pass via BloomDriver.tsx). The 
 - `zone_beach_party` → `/zone-beach-party` → `portal_nikbeat` → `/nikbeat/`
 
 ## Coming-soon zones (meshes exist in island.glb, not yet wired to sites)
+
 zone_crystals, zone_flower_shop, zone_mystery_zone, zone_nessie, zone_warehouse
 
 ## Blender naming (no parenting needed)
+
 All objects should be flat at the scene root — no `empty_zone_x` wrappers, no parenting hierarchy. Use `zc_<key>_<name>` prefix to include meshes in a zone's hover glow. Cranes use `zc_` prefix on their respective zones (e.g., `zc_crystals_crane.004`).
 
 ## GLB optimization
+
 Optimized via gltf-transform: Draco geometry compression + WebP texture compression + 2048px texture cap.
+
 - island.glb: 33 MB → 6.5 MB
 - zone_bird_sanctuary.glb: 52 MB → 8.8 MB
 - Run `npm run optimize` after adding/updating GLBs. Hierarchy-safe (no flatten/join/simplify).
 
 ## SPA routing
+
 `404.html` is copied from `index.html` during build (`npm run build`). This fixes GitHub Pages 404 on refresh for internal routes like `/zone-bird-sanctuary`.
 
 ## Known issues
-- **Bug #9 (cranes glow purple)**: All cranes on the island glow purple when hovering The Tunnels zone. Caused by GPU-instanced meshes (`EXT_mesh_gpu_instancing`) with unnamed nodes that can't be matched by the zc_ scanner. **Deferred** — Nic will redo cranes in Blender as separate top-level objects.
+
+- **Bug #9 (cranes glow purple)**: All cranes on the island glow purple when hovering The Tunnels zone. Caused by GPU-instanced meshes (`EXT_mesh_gpu_instancing`) with unnamed nodes that can't be matched by the zc\_ scanner. **Deferred** — Nic will redo cranes in Blender as separate top-level objects.
 
 ## TODO status (as of 2026-04-08)
+
 - [x] #1: Unified glow system (BloomDriver.tsx) — done
 - [x] #2: Breadcrumb navigation — done (Breadcrumbs.tsx) — `getBreadcrumbs()` ready in sceneMap, UI not built
 - [x] #3: Site map / quick-jump menu — done (QuickNav rewrite) — QuickNav exists but only shows sister sites
@@ -173,10 +194,12 @@ Optimized via gltf-transform: Draco geometry compression + WebP texture compress
 - [x] #10: Bird sanctuary permanent bloom — no longer reproducing
 
 **Next up:**
+
 - Wire train departure animation in zone_the_tunnels, finish famima scaffold
 - Shark circle animation: toy_shark in zone_ss_brainfog currently loops idle swim. Nic will add a second Blender action (`shark_circle`) for a big circle swim under the boat. On click: crossfade to circle action, then back to idle. Needs new ToyInteractor animation type (`animation: 'action'`) that swaps named AnimationActions instead of rotating the object.
 
 ## Example user flows (for context)
+
 - island → `zone_reading_room` → interior scene → `portal_japanese_articles` → /japanese-articles/
 - island → `zone_reading_room` → interior scene → `zone_computer_desk` → minigame vignette (component, not separate site)
 - island → `zone_bird_sanctuary` → `toy_kiwi` (dance animation) → `zone_deku_sprout` → zoomed-in scene → back → `portal_bird_bingo` → /bird-bingo/
@@ -184,4 +207,5 @@ Optimized via gltf-transform: Draco geometry compression + WebP texture compress
 - island → `zone_beach_party` → `toy_maracas` (shake) → `portal_nikbeat` → /nikbeat/
 
 ## Important
+
 Nic does the Blender modeling himself. Claude helps with the React/Three.js wiring, not the 3D asset creation. When Nic adds a `zone_x` object to a GLB, check that `zone_x.glb` exists in `public/zones/` — flag if missing.

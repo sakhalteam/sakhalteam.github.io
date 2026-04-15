@@ -6,9 +6,21 @@ import * as THREE from "three";
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
+  uniform float uFunnelRadius;
+  uniform float uFunnelDepth;
+  uniform float uDiscRadius;
+
   void main() {
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec3 p = position;
+    // Disc is rotated -π/2 on X (same as water), so local +Z becomes world +Y.
+    // Subtracting z here pushes the disc DOWN in world space to match the water crater.
+    float d = length(p.xy);
+    float funnel = smoothstep(uFunnelRadius, 0.0, d);
+    p.z -= funnel * funnel * uFunnelDepth;
+    // Clamp displacement to 0 outside the visible disc so the rim stays flat at water level
+    if (d > uDiscRadius) p.z = position.z;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   }
 `;
 
@@ -90,6 +102,12 @@ interface WhirlpoolProps {
   orbitPhase?: number;
   /** Y height used while orbiting */
   orbitY?: number;
+  /** Ref that receives the whirlpool's world position each frame (consumed by Water for the funnel) */
+  centerRef?: React.RefObject<THREE.Vector3>;
+  /** Radius of the water funnel (should match or slightly exceed disc size) */
+  funnelRadius?: number;
+  /** Depth of the funnel displacement applied to the disc */
+  funnelDepth?: number;
 }
 
 /**
@@ -103,10 +121,13 @@ export default function Whirlpool({
   arms = 5,
   twist = 8,
   orbitEnabled = true,
-  orbitRadius = 15,
+  orbitRadius = 13.5,
   orbitSpeed = 0.08,
   orbitPhase = 0,
   orbitY = 0.08,
+  centerRef,
+  funnelRadius = 2.8,
+  funnelDepth = 1,
 }: WhirlpoolProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const groupRef = useRef<THREE.Group>(null);
@@ -125,12 +146,15 @@ export default function Whirlpool({
         uTwist: { value: twist },
         uFoamColor: { value: new THREE.Color("#e8fcff") },
         uMidColor: { value: new THREE.Color("#0877a7") },
-        uDeepColor: { value: new THREE.Color("#5D3FD3") },
-        uPitColor: { value: new THREE.Color("#020814") },
+        uDeepColor: { value: new THREE.Color("#352d7f") },
+        uPitColor: { value: new THREE.Color("#123d6b") },
         uEdgeColor: { value: new THREE.Color("#0b6fb8") },
+        uFunnelRadius: { value: funnelRadius },
+        uFunnelDepth: { value: funnelDepth },
+        uDiscRadius: { value: size },
       },
     });
-  }, [spinSpeed, arms, twist]);
+  }, [spinSpeed, arms, twist, funnelRadius, funnelDepth, size]);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
@@ -143,6 +167,9 @@ export default function Whirlpool({
       groupRef.current.position.z = Math.sin(theta) * orbitRadius;
       groupRef.current.position.y = orbitY;
     }
+    if (centerRef?.current && groupRef.current) {
+      centerRef.current.copy(groupRef.current.position);
+    }
   });
 
   const initialPosition: [number, number, number] = orbitEnabled
@@ -153,10 +180,15 @@ export default function Whirlpool({
       ]
     : position;
 
+  // Plane is 2*size so the disc (radius=size) fits with a square bounding box;
+  // fragment shader discards r > 0.5 in UV space to preserve the circular shape.
+  // Needs segments for vertex displacement (CircleGeometry has no interior verts).
+  const planeSize = size * 2;
+
   return (
     <group ref={groupRef} position={initialPosition}>
       <mesh rotation-x={-Math.PI / 2} renderOrder={0}>
-        <circleGeometry args={[size, 96]} />
+        <planeGeometry args={[planeSize, planeSize, 64, 64]} />
         <primitive object={material} ref={matRef} attach="material" />
       </mesh>
     </group>

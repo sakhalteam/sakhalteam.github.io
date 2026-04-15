@@ -11,6 +11,9 @@ const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform float uWaveSpeed;
   uniform float uWaveAmplitude;
+  uniform vec2 uFunnelCenter;
+  uniform float uFunnelRadius;
+  uniform float uFunnelDepth;
 
   void main() {
     csm_vUv = uv;
@@ -20,17 +23,26 @@ const vertexShader = /* glsl */ `
     // Distance from island center (local XY = world XZ since plane is rotated)
     float shoreDist = length(position.xy);
 
+    // Plane is rotated -π/2 on X, so local +Y maps to world -Z.
+    // Vertex world XZ = (position.x, -position.y).
+    vec2 vertexWorldXZ = vec2(position.x, -position.y);
+    float funnelDist = length(vertexWorldXZ - uFunnelCenter);
+    float funnel = smoothstep(uFunnelRadius, 0.0, funnelDist);
+    float funnelDepression = funnel * funnel * uFunnelDepth;
+
     // Two overlapping sine waves for organic motion
     float wave1 = sin(position.x * 0.8 + uTime * uWaveSpeed) * uWaveAmplitude;
     float wave2 = sin(position.y * 0.6 + uTime * uWaveSpeed * 0.7 + 1.5) * uWaveAmplitude * 0.6;
 
-    // Dampen waves near the shoreline so they don't flood the beach
-    float waveScale = smoothstep(4.0, 8.0, shoreDist);
+    // Dampen waves near shoreline AND inside the funnel so the crater stays clean
+    float waveScale = smoothstep(4.0, 8.0, shoreDist) * (1.0 - funnel);
     modifiedPosition.z += (wave1 + wave2) * waveScale;
 
     // Push water surface down near the island to prevent beach submersion
     float shoreDepression = smoothstep(7.0, 3.0, shoreDist) * 0.12;
     modifiedPosition.z -= shoreDepression;
+
+    modifiedPosition.z -= funnelDepression;
 
     csm_Position = modifiedPosition;
   }
@@ -42,6 +54,11 @@ const fragmentShader = /* glsl */ `
   uniform float uTime;
   uniform vec3 uColorFar;
   uniform float uTextureSize;
+  uniform vec2 uFunnelCenter;
+  uniform float uFunnelRadius;
+  uniform float uHoleRadius;
+  uniform float uHoleFeather;
+  uniform float uPlaneSize;
 
   float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -97,6 +114,19 @@ const fragmentShader = /* glsl */ `
     // Fade alpha at edges for soft boundary
     alpha *= (1.0 - edgeFade);
 
+    // Cut a soft hole in the water where the whirlpool mouth is
+    vec2 worldXZ = vec2(
+      (csm_vUv.x - 0.5) * uPlaneSize,
+      -(csm_vUv.y - 0.5) * uPlaneSize
+    );
+    float funnelDist = length(worldXZ - uFunnelCenter);
+    float holeMask = smoothstep(
+      uHoleRadius - uHoleFeather,
+      uHoleRadius,
+      funnelDist
+    );
+    alpha *= holeMask;
+
     csm_FragColor = vec4(finalColor, alpha);
   }
 `;
@@ -106,9 +136,21 @@ interface WaterProps {
   waterLevel?: number;
   /** Size of the plane (will be square) */
   size?: number;
+  /** Ref to a world-space position whose XZ gets a funnel depression (e.g. the whirlpool) */
+  funnelCenter?: React.RefObject<THREE.Vector3>;
+  /** Radius of the funnel falloff in world units */
+  funnelRadius?: number;
+  /** Max depth of the funnel in world units */
+  funnelDepth?: number;
 }
 
-export default function Water({ waterLevel = -0.03, size = 80 }: WaterProps) {
+export default function Water({
+  waterLevel = -0.03,
+  size = 80,
+  funnelCenter,
+  funnelRadius = 3.8,
+  funnelDepth = 0.85,
+}: WaterProps) {
   const materialRef = useRef<CustomShaderMaterial>(null);
 
   const material = useMemo(() => {
@@ -126,13 +168,23 @@ export default function Water({ waterLevel = -0.03, size = 80 }: WaterProps) {
         uWaveAmplitude: { value: 0.04 },
         uColorFar: { value: new THREE.Color("#0b6fb8") },
         uTextureSize: { value: 92.0 },
+        uFunnelCenter: { value: new THREE.Vector2(9999, 9999) },
+        uFunnelRadius: { value: funnelRadius },
+        uFunnelDepth: { value: funnelDepth },
+        uHoleRadius: { value: funnelRadius * 0.35 },
+        uHoleFeather: { value: 0.9 },
+        uPlaneSize: { value: size },
       },
     });
-  }, []);
+  }, [size, funnelRadius, funnelDepth]);
 
   useFrame(({ clock }) => {
     if (materialRef.current) {
       materialRef.current.uniforms.uTime.value = clock.getElapsedTime();
+      if (funnelCenter?.current) {
+        const c = funnelCenter.current;
+        materialRef.current.uniforms.uFunnelCenter.value.set(c.x, c.z);
+      }
     }
   });
 

@@ -102,7 +102,6 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
     const box = new THREE.Box3().setFromObject(obj);
     const center = new THREE.Vector3();
     box.getCenter(center);
-
     result.push({
       name: obj.name,
       key,
@@ -388,7 +387,10 @@ export default function IslandScene({
   const turntableToggleRef = useRef<(() => void) | null>(null);
   const [hoveredZone, setHoveredZone] = useState<ZoneMarker | null>(null);
   const [dollyTarget, setDollyTarget] = useState<THREE.Vector3 | null>(null);
-
+  // Shared world position for the whirlpool so Water can carve a funnel underneath it.
+  const whirlpoolCenterRef = useRef<THREE.Vector3>(
+    new THREE.Vector3(15, 0.08, 0),
+  );
   const handleNavigate = useCallback(
     (url: string, internal: boolean, center: THREE.Vector3) => {
       setDollyTarget(center);
@@ -430,8 +432,8 @@ export default function IslandScene({
         color="#4488ff"
       />
       <Environment preset="night" />
-      <Water />
-      <Whirlpool />
+      <Water funnelCenter={whirlpoolCenterRef} />
+      <Whirlpool centerRef={whirlpoolCenterRef} />
       <Suspense fallback={<LoadingFallback />}>
         <IslandMesh
           onComingSoon={onComingSoon}
