@@ -300,19 +300,32 @@ function CameraRig({
 }: {
   orbitRef: React.RefObject<any>;
   scene: THREE.Object3D | null;
-  cameraOptions?: { padding?: number; elevation?: number; azimuth?: number };
+  cameraOptions?: {
+    padding?: number;
+    elevation?: number;
+    azimuth?: number;
+    minZoomMultiplier?: number;
+    maxZoomMultiplier?: number;
+  };
   turntableToggleRef: React.RefObject<(() => void) | null>;
   onPlayingChange: (playing: boolean) => void;
   onCameraReady: (ready: boolean) => void;
 }) {
   const { stop, toggle, playing } = useTurntable(orbitRef);
   useKeyboardControls(orbitRef, { onInteract: stop });
+
   const ready = useAutoFitCamera(scene, orbitRef, {
     ...(cameraOptions?.padding != null && { padding: cameraOptions.padding }),
     ...(cameraOptions?.elevation != null && {
       elevation: cameraOptions.elevation,
     }),
     ...(cameraOptions?.azimuth != null && { azimuth: cameraOptions.azimuth }),
+    ...(cameraOptions?.minZoomMultiplier != null && {
+      minZoomMultiplier: cameraOptions.minZoomMultiplier,
+    }),
+    ...(cameraOptions?.maxZoomMultiplier != null && {
+      maxZoomMultiplier: cameraOptions.maxZoomMultiplier,
+    }),
   });
 
   turntableToggleRef.current = toggle;
@@ -334,7 +347,13 @@ interface ZoneSceneProps {
   title: string;
   subtitle?: string;
   /** Override auto-fit camera. elevation/azimuth in radians, padding multiplier. */
-  camera?: { padding?: number; elevation?: number; azimuth?: number };
+  camera?: {
+    padding?: number;
+    elevation?: number;
+    azimuth?: number;
+    minZoomMultiplier?: number;
+    maxZoomMultiplier?: number;
+  };
   environmentPreset?:
     | "night"
     | "forest"
