@@ -24,6 +24,10 @@ export function useAutoFitCamera(
     elevation: elevationOverride = null as number | null,
     /** Azimuth offset in radians (rotates camera around Y axis). Default: slight 3/4 angle */
     azimuth = 0.4,
+    /** OrbitControls min zoom distance as a multiplier of model radius */
+    minZoomMultiplier = 0.3,
+    /** OrbitControls max zoom distance as a multiplier of model radius */
+    maxZoomMultiplier = 7,
   } = {},
 ) {
   const { camera } = useThree();
@@ -86,13 +90,22 @@ export function useAutoFitCamera(
     const controls = orbitRef.current;
     if (controls) {
       controls.target.copy(center);
-      controls.minDistance = radius * 0.3;
-      controls.maxDistance = radius * 7;
+      controls.minDistance = radius * minZoomMultiplier;
+      controls.maxDistance = radius * maxZoomMultiplier;
       controls.update();
     }
 
     setReady(true);
-  }, [scene, camera, orbitRef, padding, elevationOverride, azimuth]);
+  }, [
+    scene,
+    camera,
+    orbitRef,
+    padding,
+    elevationOverride,
+    azimuth,
+    minZoomMultiplier,
+    maxZoomMultiplier,
+  ]);
 
   return ready;
 }
