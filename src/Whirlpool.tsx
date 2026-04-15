@@ -144,7 +144,11 @@ export default function Whirlpool({
   });
 
   const initialPosition: [number, number, number] = orbitEnabled
-    ? [Math.cos(orbitPhase) * orbitRadius, orbitY, Math.sin(orbitPhase) * orbitRadius]
+    ? [
+        Math.cos(orbitPhase) * orbitRadius,
+        orbitY,
+        Math.sin(orbitPhase) * orbitRadius,
+      ]
     : position;
 
   return (
