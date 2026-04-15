@@ -11,18 +11,14 @@ import {
 } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Environment, Html } from "@react-three/drei";
-import { EffectComposer, Bloom } from "@react-three/postprocessing";
-import { KernelSize } from "postprocessing";
+import { EffectComposer } from "@react-three/postprocessing";
 import { useOptimizedGLTF } from "./useOptimizedGLTF";
 import { useKeyboardControls } from "./useKeyboardControls";
 import { useTurntable } from "./useTurntable";
+import OutlineController from "./Outline";
+import { KernelSize, BlendFunction } from "postprocessing";
 import { AdaptiveLabel } from "./AdaptiveLabel";
-import {
-  BloomDriver,
-  collectMeshes,
-  BLOOM_COLOR_ACTIVE,
-  BLOOM_COLOR_COMING_SOON,
-} from "./BloomDriver";
+import { collectMeshes } from "./BloomDriver";
 import ToyInteractor from "./ToyInteractor";
 import { isToyUnderPointer } from "./toyClickFlag";
 import Water from "./Water";
@@ -386,6 +382,7 @@ export default function IslandScene({
   const orbitRef = useRef<any>(null);
   const turntableToggleRef = useRef<(() => void) | null>(null);
   const [hoveredZone, setHoveredZone] = useState<ZoneMarker | null>(null);
+  const [outlinedObjects, setOutlinedObjects] = useState<THREE.Object3D[]>([]);
   const [dollyTarget, setDollyTarget] = useState<THREE.Vector3 | null>(null);
   // Shared world position for the whirlpool so Water can carve a funnel underneath it.
   const whirlpoolCenterRef = useRef<THREE.Vector3>(
@@ -402,6 +399,7 @@ export default function IslandScene({
 
   const onHoverChange = useCallback((marker: ZoneMarker, hovered: boolean) => {
     setHoveredZone(hovered ? marker : null);
+    setOutlinedObjects(hovered ? marker.meshes : []);
   }, []);
 
   const onPlayingChange = useCallback(
@@ -412,11 +410,6 @@ export default function IslandScene({
     },
     [onTurntableChange],
   );
-
-  const bloomColor =
-    hoveredZone?.type === "active"
-      ? BLOOM_COLOR_ACTIVE
-      : BLOOM_COLOR_COMING_SOON;
 
   return (
     <Canvas
@@ -442,11 +435,6 @@ export default function IslandScene({
           allMeshesRef={allMeshesRef}
           onReady={onReady}
         />
-        <BloomDriver
-          allMeshes={allMeshesRef}
-          hoveredMeshes={hoveredZone?.meshes ?? []}
-          color={bloomColor}
-        />
       </Suspense>
       <OrbitControls
         ref={orbitRef}
@@ -466,13 +454,21 @@ export default function IslandScene({
         onPlayingChange={onPlayingChange}
       />
       <CameraDolly target={dollyTarget} orbitRef={orbitRef} />
-      <EffectComposer multisampling={0}>
-        <Bloom
-          intensity={0.2}
-          luminanceThreshold={0.85}
-          luminanceSmoothing={0.3}
-          kernelSize={KernelSize.SMALL}
-          mipmapBlur
+      <EffectComposer multisampling={0} autoClear={false}>
+        <OutlineController
+          selectedObjects={outlinedObjects}
+          settings={{
+            enabled: true,
+            blur: false,
+            xRay: false,
+            edgeStrength: 2.0,
+            pulseSpeed: 0,
+            visibleEdgeColor:
+              hoveredZone?.type === "active" ? 0x00e5ff : 0xc8b6ff,
+            hiddenEdgeColor: 0x000000,
+            kernelSize: KernelSize.VERY_SMALL,
+            blendFunction: BlendFunction.ALPHA,
+          }}
         />
       </EffectComposer>
     </Canvas>
