@@ -1,3 +1,5 @@
+// toyClickFlag.ts
+
 /**
  * Coordination flag between ToyInteractor and ZoneHitbox.
  *
@@ -8,7 +10,11 @@
  * Lives in its own module so ToyInteractor.tsx only exports React
  * components — required by Vite's Fast Refresh.
  */
-let _toyUnderPointer = false
+let _toyUnderPointer = false;
 
-export function setToyUnderPointer(v: boolean) { _toyUnderPointer = v }
-export function isToyUnderPointer() { return _toyUnderPointer }
+export function setToyUnderPointer(v: boolean) {
+  _toyUnderPointer = v;
+}
+export function isToyUnderPointer() {
+  return _toyUnderPointer;
+}

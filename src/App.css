@@ -1,3 +1,5 @@
+/* App.css */
+
 /* ── Layout ─────────────────────────────── */
 
 .ocean {
@@ -69,8 +71,14 @@
 
 /* Pulse ring animation for active zones */
 @keyframes pulse-out {
-  0%   { transform: scale(1);   opacity: 0.65; }
-  100% { transform: scale(2.8); opacity: 0; }
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
 }
 
 .pulse-ring {
@@ -178,7 +186,9 @@
   cursor: pointer;
   font-family: inherit;
   text-transform: uppercase;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .modal-close:hover {
@@ -211,7 +221,9 @@
   text-transform: uppercase;
   padding: 0.4rem 0.7rem;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .quick-nav-toggle:hover {
@@ -234,8 +246,14 @@
 }
 
 @keyframes nav-fade-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .quick-nav-section {
@@ -268,7 +286,9 @@
   font-family: inherit;
   cursor: pointer;
   text-align: left;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 
 .quick-nav-item:hover:not(:disabled) {
@@ -378,7 +398,9 @@
   justify-content: center;
   border-radius: 50%;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
 }
 

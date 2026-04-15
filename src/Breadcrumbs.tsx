@@ -1,5 +1,7 @@
-import { useNavigate } from 'react-router-dom'
-import { getBreadcrumbs } from './sceneMap'
+// Breadcrumbs.tsx
+
+import { useNavigate } from "react-router-dom";
+import { getBreadcrumbs } from "./sceneMap";
 
 /**
  * Breadcrumb trail for zone scenes.
@@ -8,20 +10,24 @@ import { getBreadcrumbs } from './sceneMap'
  * The current zone (last crumb) is plain text, not a link.
  */
 export default function Breadcrumbs({ zoneKey }: { zoneKey: string }) {
-  const navigate = useNavigate()
-  const crumbs = getBreadcrumbs(zoneKey)
+  const navigate = useNavigate();
+  const crumbs = getBreadcrumbs(zoneKey);
 
-  if (crumbs.length <= 1) return null
+  if (crumbs.length <= 1) return null;
 
   return (
     <nav className="breadcrumbs" aria-label="Breadcrumb">
       {crumbs.map((node, i) => {
-        const isLast = i === crumbs.length - 1
-        const isClickable = !isLast && node.path
+        const isLast = i === crumbs.length - 1;
+        const isClickable = !isLast && node.path;
 
         return (
           <span key={node.key} className="breadcrumb-item">
-            {i > 0 && <span className="breadcrumb-sep" aria-hidden="true">»</span>}
+            {i > 0 && (
+              <span className="breadcrumb-sep" aria-hidden="true">
+                »
+              </span>
+            )}
             {isClickable ? (
               <button
                 className="breadcrumb-link"
@@ -30,13 +36,15 @@ export default function Breadcrumbs({ zoneKey }: { zoneKey: string }) {
                 {node.label}
               </button>
             ) : (
-              <span className={isLast ? 'breadcrumb-current' : 'breadcrumb-text'}>
+              <span
+                className={isLast ? "breadcrumb-current" : "breadcrumb-text"}
+              >
                 {node.label}
               </span>
             )}
           </span>
-        )
+        );
       })}
     </nav>
-  )
+  );
 }

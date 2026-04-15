@@ -1,3 +1,5 @@
+// sceneMap.ts
+
 /**
  * sceneMap.ts — single source of truth for the entire site navigation tree.
  *
@@ -81,7 +83,14 @@ function portal(
   };
 }
 
-export type ToyAnimation = "spin" | "hop" | "wobble" | "grow" | "bob" | "none" | "action";
+export type ToyAnimation =
+  | "spin"
+  | "hop"
+  | "wobble"
+  | "grow"
+  | "bob"
+  | "none"
+  | "action";
 export type ToyIdle = "float" | "none";
 
 function toy(

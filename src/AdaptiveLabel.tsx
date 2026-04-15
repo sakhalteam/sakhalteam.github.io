@@ -1,7 +1,9 @@
-import { useRef } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
-import * as THREE from 'three'
+// AdaptiveLabel.tsx
+
+import { useRef } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import { Html } from "@react-three/drei";
+import * as THREE from "three";
 
 /**
  * A label that stays readable at all zoom levels.
@@ -25,25 +27,25 @@ export function AdaptiveLabel({
   /** Maximum scale (when camera is far) */
   maxScale = 1.6,
 }: {
-  position: [number, number, number] | THREE.Vector3
-  children: React.ReactNode
-  nearDistance?: number
-  farDistance?: number
-  minScale?: number
-  maxScale?: number
+  position: [number, number, number] | THREE.Vector3;
+  children: React.ReactNode;
+  nearDistance?: number;
+  farDistance?: number;
+  minScale?: number;
+  maxScale?: number;
 }) {
-  const groupRef = useRef<THREE.Group>(null)
-  const { camera } = useThree()
+  const groupRef = useRef<THREE.Group>(null);
+  const { camera } = useThree();
 
   useFrame(() => {
-    if (!groupRef.current) return
+    if (!groupRef.current) return;
 
     // Get world position of the label
-    const worldPos = new THREE.Vector3()
-    groupRef.current.getWorldPosition(worldPos)
+    const worldPos = new THREE.Vector3();
+    groupRef.current.getWorldPosition(worldPos);
 
     // Calculate distance from camera
-    const dist = camera.position.distanceTo(worldPos)
+    const dist = camera.position.distanceTo(worldPos);
 
     // Smoothly interpolate scale based on distance
     // When close (< nearDistance): minScale
@@ -51,18 +53,19 @@ export function AdaptiveLabel({
     // In between: smooth lerp
     const t = THREE.MathUtils.clamp(
       (dist - nearDistance) / (farDistance - nearDistance),
-      0, 1
-    )
-    const scale = THREE.MathUtils.lerp(minScale, maxScale, t)
+      0,
+      1,
+    );
+    const scale = THREE.MathUtils.lerp(minScale, maxScale, t);
 
-    groupRef.current.scale.setScalar(scale)
-  })
+    groupRef.current.scale.setScalar(scale);
+  });
 
   return (
     <group ref={groupRef} position={position}>
-      <Html center style={{ pointerEvents: 'none', userSelect: 'none' }}>
+      <Html center style={{ pointerEvents: "none", userSelect: "none" }}>
         {children}
       </Html>
     </group>
-  )
+  );
 }

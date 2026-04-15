@@ -1,4 +1,8 @@
-*, *::before, *::after {
+/* index.css */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -13,17 +17,26 @@
   --card-border: #1a2e4a;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
 }
 
 body {
   background-color: var(--ocean);
   /* water dot pattern */
-  background-image: radial-gradient(circle, rgba(40, 80, 160, 0.13) 1px, transparent 1px);
+  background-image: radial-gradient(
+    circle,
+    rgba(40, 80, 160, 0.13) 1px,
+    transparent 1px
+  );
   background-size: 28px 28px;
   color: var(--text);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
