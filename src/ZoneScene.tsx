@@ -7,8 +7,8 @@ import {
   useAnimations,
 } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { EffectComposer, Bloom } from "@react-three/postprocessing";
-import { KernelSize } from "postprocessing";
+import { EffectComposer } from "@react-three/postprocessing";
+import { KernelSize, BlendFunction } from "postprocessing";
 import {
   memo,
   Suspense,
@@ -21,19 +21,21 @@ import {
 import * as THREE from "three";
 import "./App.css";
 import { AdaptiveLabel } from "./AdaptiveLabel";
-import { BloomDriver, collectMeshes, BLOOM_COLOR_ACTIVE } from "./BloomDriver";
+import OutlineController from "./Outline";
+import { collectMeshes } from "./BloomDriver";
 import { useAutoFitCamera } from "./useAutoFitCamera";
 import { useKeyboardControls } from "./useKeyboardControls";
 import { useOptimizedGLTF } from "./useOptimizedGLTF";
 import { useTurntable } from "./useTurntable";
 import { useSceneTransition } from "./useSceneTransition";
-import { getPortalConfig } from "./sceneMap";
+import {
+  getPortalConfig,
+  getZoneConfig,
+  findNodeByObjectName,
+  sceneMap,
+} from "./sceneMap";
 import ToyInteractor from "./ToyInteractor";
 import Breadcrumbs from "./Breadcrumbs";
-
-function toTitleCase(str: string) {
-  return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 interface Hotspot {
   name: string;
@@ -43,17 +45,22 @@ interface Hotspot {
   label: string;
   url: string | null;
   internal: boolean;
+  type: "active" | "coming-soon";
   sceneObj: THREE.Object3D;
   meshes: THREE.Mesh[];
 }
 
+type OutlineKind = "active" | "inactive" | "toy";
+
 const HotspotHitbox = memo(function HotspotHitbox({
   hotspot,
   onNavigate,
+  onComingSoon,
   onHoverChange,
 }: {
   hotspot: Hotspot;
   onNavigate: (url: string, internal: boolean) => void;
+  onComingSoon: (label: string) => void;
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -90,6 +97,8 @@ const HotspotHitbox = memo(function HotspotHitbox({
           }
           if (hotspot.url) {
             onNavigate(hotspot.url, hotspot.internal);
+          } else {
+            onComingSoon(hotspot.label);
           }
         }}
       >
@@ -137,95 +146,90 @@ const HotspotHitbox = memo(function HotspotHitbox({
 });
 
 /**
- * Build hotspots from a zone GLB scene, collecting portal_/zone_ objects
- * and associating zc_/pc_ (child) meshes for glow membership.
+ * Build hotspots by scanning the zone GLB for zone_/portal_ objects and
+ * grouping toys by sceneMap `parent`. `<zone_name>_hitbox` overrides bbox.
  */
 function buildHotspots(scene: THREE.Object3D): Hotspot[] {
+  // Pass 1: find zone_/portal_ objects at scene root + _hitbox colliders.
   const hotspotObjects: THREE.Object3D[] = [];
-  const hotspotKeys: string[] = [];
-  const hotspotTypes: ("portal" | "zone")[] = [];
+  const hitboxMap = new Map<string, THREE.Object3D>();
   const seen = new Set<string>();
 
-  // Pass 1: find portal_/zone_ objects (traverse handles size_all wrappers or any nesting)
-  scene.traverse((obj) => {
-    const lower = obj.name.toLowerCase();
-
-    if (lower.startsWith("portal_")) {
-      const key = lower.replace(/^portal_/, "");
-      if (seen.has(key)) return;
-      seen.add(key);
-      hotspotObjects.push(obj);
-      hotspotKeys.push(key);
-      hotspotTypes.push("portal");
-    } else if (lower.startsWith("zone_")) {
-      const key = lower.replace(/^zone_/, "");
-      if (seen.has(key)) return;
-      seen.add(key);
-      hotspotObjects.push(obj);
-      hotspotKeys.push(key);
-      hotspotTypes.push("zone");
-    }
-  });
-
-  // Sort keys longest-first for unambiguous zc_/pc_ matching
-  const sortedKeys = [...hotspotKeys].sort((a, b) => b.length - a.length);
-
-  // Pass 2: collect zc_/pc_ meshes and associate with their parent
-  const childMap = new Map<string, THREE.Mesh[]>(
-    hotspotKeys.map((k) => [k, []]),
-  );
   for (const child of scene.children) {
     const lower = child.name.toLowerCase();
-    if (!lower.startsWith("zc_") && !lower.startsWith("pc_")) continue;
-    const suffix = lower.slice(3); // strip prefix
-    for (const key of sortedKeys) {
-      if (suffix.startsWith(key + "_") || suffix === key) {
-        collectMeshes(child).forEach((m) => childMap.get(key)!.push(m));
-        break;
-      }
+    if (lower.startsWith("zone_") || lower.startsWith("portal_")) {
+      if (seen.has(lower)) continue;
+      seen.add(lower);
+      hotspotObjects.push(child);
     }
   }
 
-  // Build hotspots
+  scene.traverse((obj) => {
+    const lower = obj.name.toLowerCase();
+    if (lower.endsWith("_hitbox")) {
+      const target = lower.slice(0, -"_hitbox".length);
+      hitboxMap.set(target, obj);
+    }
+  });
+
+  // Pass 2: group toy meshes by sceneMap parent key.
+  const toysByParent = new Map<string, THREE.Mesh[]>();
+  scene.traverse((obj) => {
+    if (!obj.name) return;
+    const node = sceneMap.get(obj.name.toLowerCase());
+    if (!node || node.type !== "toy" || !node.parent) return;
+    const list = toysByParent.get(node.parent) ?? [];
+    list.push(...collectMeshes(obj));
+    toysByParent.set(node.parent, list);
+  });
+
+  // Pass 3: build hotspots.
   const result: Hotspot[] = [];
-  for (let i = 0; i < hotspotObjects.length; i++) {
-    const obj = hotspotObjects[i];
-    const key = hotspotKeys[i];
-    const type = hotspotTypes[i];
-    const box = new THREE.Box3().setFromObject(obj);
+  for (const obj of hotspotObjects) {
+    const lower = obj.name.toLowerCase();
+    const key = lower.replace(/^(portal_|zone_)/, "");
+    const canonicalKey = findNodeByObjectName(obj.name)?.key ?? key;
+    const config = lower.startsWith("portal_")
+      ? (() => {
+          const p = getPortalConfig(key);
+          return {
+            label: p?.label ?? key,
+            url: p?.url ?? null,
+            internal: false,
+            type: (p ? "active" : "coming-soon") as "active" | "coming-soon",
+          };
+        })()
+      : getZoneConfig(obj.name);
+
+    const objMeshes = collectMeshes(obj);
+    const memberMeshes = toysByParent.get(canonicalKey) ?? [];
+
+    const hitboxObj = hitboxMap.get(lower);
+    let box: THREE.Box3;
+    if (hitboxObj) {
+      box = new THREE.Box3().setFromObject(hitboxObj);
+      hitboxObj.traverse((m) => {
+        if ((m as THREE.Mesh).isMesh) (m as THREE.Mesh).visible = false;
+      });
+    } else {
+      box = new THREE.Box3().setFromObject(obj);
+    }
+
     const center = new THREE.Vector3();
     box.getCenter(center);
 
-    const objMeshes = collectMeshes(obj);
-    const childMeshes = childMap.get(key) ?? [];
-    const allMeshes = [...objMeshes, ...childMeshes];
-
-    if (type === "portal") {
-      const entry = getPortalConfig(key);
-      result.push({
-        name: obj.name,
-        key,
-        box,
-        center,
-        label: entry?.label ?? toTitleCase(key),
-        url: entry?.url ?? null,
-        internal: false,
-        sceneObj: obj,
-        meshes: allMeshes,
-      });
-    } else {
-      result.push({
-        name: obj.name,
-        key,
-        box,
-        center,
-        label: toTitleCase(key),
-        url: `/zone-${key.replace(/_/g, "-")}`,
-        internal: true,
-        sceneObj: obj,
-        meshes: allMeshes,
-      });
-    }
+    result.push({
+      name: obj.name,
+      key,
+      box,
+      center,
+      label: config.label,
+      url: config.url,
+      internal: config.internal,
+      type: config.type,
+      sceneObj: obj,
+      meshes: [...objMeshes, ...memberMeshes],
+    });
   }
 
   return result;
@@ -234,14 +238,18 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
 function ZoneMesh({
   glbPath,
   onNavigate,
+  onComingSoon,
   onSceneReady,
   onHoverChange,
+  onToyHoverChange,
   allMeshesRef,
 }: {
   glbPath: string;
   onNavigate: (url: string, internal: boolean) => void;
+  onComingSoon: (label: string) => void;
   onSceneReady: (scene: THREE.Object3D) => void;
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void;
+  onToyHoverChange: (objects: THREE.Object3D[], hovered: boolean) => void;
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>;
 }) {
   const { scene, animations } = useOptimizedGLTF(glbPath);
@@ -266,12 +274,13 @@ function ZoneMesh({
   return (
     <>
       <primitive object={scene} />
-      <ToyInteractor scene={scene} />
+      <ToyInteractor scene={scene} onHoverChange={onToyHoverChange} />
       {hotspots.map((hotspot) => (
         <HotspotHitbox
           key={hotspot.name}
           hotspot={hotspot}
           onNavigate={onNavigate}
+          onComingSoon={onComingSoon}
           onHoverChange={onHoverChange}
         />
       ))}
@@ -382,18 +391,87 @@ export default function ZoneScene({
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map());
   const [loadedScene, setLoadedScene] = useState<THREE.Object3D | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
-  const [hoveredHotspot, setHoveredHotspot] = useState<Hotspot | null>(null);
   const [turntablePlaying, setTurntablePlaying] = useState(true);
+  const [outlinedObjects, setOutlinedObjects] = useState<THREE.Object3D[]>([]);
+  const [outlineKind, setOutlineKind] = useState<OutlineKind>("active");
+  const [comingSoon, setComingSoon] = useState<string | null>(null);
 
   const { navigateWithTransition, wrapStyle } = useSceneTransition(cameraReady);
 
   const onHoverChange = useCallback((hotspot: Hotspot, hovered: boolean) => {
-    setHoveredHotspot(hovered ? hotspot : null);
+    setOutlinedObjects(hovered ? hotspot.meshes : []);
+    setOutlineKind(
+      hovered
+        ? hotspot.type === "active"
+          ? "active"
+          : "inactive"
+        : "active",
+    );
   }, []);
+
+  const onToyHoverChange = useCallback(
+    (objects: THREE.Object3D[], hovered: boolean) => {
+      setOutlinedObjects(hovered ? objects : []);
+      setOutlineKind(hovered ? "toy" : "active");
+    },
+    [],
+  );
 
   const onPlayingChange = useCallback((playing: boolean) => {
     setTurntablePlaying(playing);
   }, []);
+
+  const activeOutlineSettings = {
+    enabled: true,
+    blur: false,
+    xRay: false,
+    edgeStrength: 2.0,
+    pulseSpeed: 0,
+    visibleEdgeColor: 0x00e5ff,
+    hiddenEdgeColor: 0x000000,
+    kernelSize: KernelSize.SMALL,
+    blendFunction: BlendFunction.ALPHA,
+    width: undefined,
+    height: undefined,
+    patternTexture: undefined,
+  };
+
+  const inactiveOutlineSettings = {
+    enabled: true,
+    blur: false,
+    xRay: false,
+    edgeStrength: 2.0,
+    pulseSpeed: 0,
+    visibleEdgeColor: 0xc8b6ff,
+    hiddenEdgeColor: 0x000000,
+    kernelSize: KernelSize.SMALL,
+    blendFunction: BlendFunction.ALPHA,
+    width: undefined,
+    height: undefined,
+    patternTexture: undefined,
+  };
+
+  const toyOutlineSettings = {
+    enabled: true,
+    blur: false,
+    xRay: false,
+    edgeStrength: 2.0,
+    pulseSpeed: 0,
+    visibleEdgeColor: 0x9ca3af,
+    hiddenEdgeColor: 0x000000,
+    kernelSize: KernelSize.SMALL,
+    blendFunction: BlendFunction.ALPHA,
+    width: undefined,
+    height: undefined,
+    patternTexture: undefined,
+  };
+
+  const outlineSettings =
+    outlineKind === "inactive"
+      ? inactiveOutlineSettings
+      : outlineKind === "toy"
+        ? toyOutlineSettings
+        : activeOutlineSettings;
 
   return (
     <div className="ocean">
@@ -425,14 +503,11 @@ export default function ZoneScene({
             <ZoneMesh
               glbPath={glbPath}
               onNavigate={navigateWithTransition}
+              onComingSoon={setComingSoon}
               onSceneReady={setLoadedScene}
               onHoverChange={onHoverChange}
+              onToyHoverChange={onToyHoverChange}
               allMeshesRef={allMeshesRef}
-            />
-            <BloomDriver
-              allMeshes={allMeshesRef}
-              hoveredMeshes={hoveredHotspot?.meshes ?? []}
-              color={BLOOM_COLOR_ACTIVE}
             />
           </Suspense>
           <OrbitControls
@@ -453,13 +528,10 @@ export default function ZoneScene({
             onPlayingChange={onPlayingChange}
             onCameraReady={setCameraReady}
           />
-          <EffectComposer multisampling={0}>
-            <Bloom
-              intensity={0.2}
-              luminanceThreshold={0.85}
-              luminanceSmoothing={0.3}
-              kernelSize={KernelSize.SMALL}
-              mipmapBlur
+          <EffectComposer multisampling={0} autoClear={false}>
+            <OutlineController
+              selectedObjects={outlinedObjects}
+              settings={outlineSettings}
             />
           </EffectComposer>
         </Canvas>
@@ -478,6 +550,21 @@ export default function ZoneScene({
           {turntablePlaying ? "\u23F8" : "\u23F5"}
         </button>
       </footer>
+
+      {comingSoon && (
+        <div className="modal-overlay" onClick={() => setComingSoon(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-tag">⚑ COMING SOON</div>
+            <h2 className="modal-name">{comingSoon}</h2>
+            <p className="modal-text">
+              This zone is still under construction. Check back later.
+            </p>
+            <button className="modal-close" onClick={() => setComingSoon(null)}>
+              close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

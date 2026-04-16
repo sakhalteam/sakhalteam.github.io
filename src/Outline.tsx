@@ -1,4 +1,3 @@
-// Outline.tsx
 import { Outline } from "@react-three/postprocessing";
 import { KernelSize, BlendFunction } from "postprocessing";
 import * as THREE from "three";
@@ -20,16 +19,16 @@ export interface OutlineSettings {
 
 export const DEFAULT_OUTLINE_SETTINGS: OutlineSettings = {
   enabled: true,
-  blur: true,
+  blur: false,
   xRay: false,
-  edgeStrength: 6,
+  edgeStrength: 2.0,
   pulseSpeed: 0,
   visibleEdgeColor: 0xffd76a,
-  hiddenEdgeColor: 0x6b3d00,
+  hiddenEdgeColor: 0x000000,
   width: undefined,
   height: undefined,
-  kernelSize: KernelSize.MEDIUM,
-  blendFunction: BlendFunction.NORMAL,
+  kernelSize: KernelSize.SMALL,
+  blendFunction: BlendFunction.ALPHA,
   patternTexture: undefined,
 };
 
@@ -42,10 +41,6 @@ export default function OutlineController({
 }) {
   if (!settings.enabled) return null;
 
-  // Always render Outline (even with an empty selection) so the EffectComposer
-  // keeps the same render pipeline in hover vs. non-hover states. Otherwise the
-  // composer falls back to a pass-through when selection is empty, and the
-  // scene appears to "brighten" on hover when really the render path changed.
   return (
     <Outline
       selection={selectedObjects}

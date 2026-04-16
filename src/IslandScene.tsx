@@ -23,7 +23,7 @@ import ToyInteractor from "./ToyInteractor";
 import { isToyUnderPointer } from "./toyClickFlag";
 import Water from "./Water";
 import Whirlpool from "./Whirlpool";
-import { getZoneConfig } from "./sceneMap";
+import { getZoneConfig, findNodeByObjectName, sceneMap } from "./sceneMap";
 import { startTransition } from "./transitionStore";
 import * as THREE from "three";
 
@@ -42,60 +42,68 @@ interface ZoneMarker {
 }
 
 /**
- * Build zone markers by scanning the scene for zone_/portal_ objects
- * and associating zc_ (zone child) meshes with their parent zones.
+ * Build zone markers by scanning the scene for zone_/portal_ objects and
+ * grouping toy meshes by sceneMap `parent`. No prefix heuristics.
  *
  * Convention:
- *   zone_<key>        — clickable zone (hitbox + label + glow source)
- *   zc_<key>_<name>   — glows with zone_<key> on hover, not a trigger itself
- *   portal_<key>      — navigates to a site
- *   (no prefix)       — scenery, no interaction
+ *   zone_<key>                 clickable zone (hitbox + label + glow source)
+ *   portal_<key>                navigates to a site
+ *   <zone_name>_hitbox          optional click collider — overrides bbox and is hidden
+ *   toys with sceneMap.parent   glow with their parent zone/portal on hover
  */
 function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
+  // Pass 1: find zone_/portal_ objects at scene root + locate any _hitbox colliders.
   const zoneObjects: THREE.Object3D[] = [];
-  const zoneKeys: string[] = [];
+  const hitboxMap = new Map<string, THREE.Object3D>();
 
-  // Pass 1: find zone_/portal_ objects among scene children
   for (const child of scene.children) {
     const lower = child.name.toLowerCase();
     if (lower.startsWith("zone_") || lower.startsWith("portal_")) {
       zoneObjects.push(child);
-      zoneKeys.push(lower.replace(/^(zone|portal)_/, ""));
     }
   }
 
-  // Sort keys longest-first so zc_ matching is unambiguous
-  // (e.g. "pokemon_park" matches before "pokemon")
-  const sortedKeys = [...zoneKeys].sort((a, b) => b.length - a.length);
-
-  // Pass 2: collect zc_ meshes and associate with their zone
-  const zcMap = new Map<string, THREE.Mesh[]>(zoneKeys.map((k) => [k, []]));
-  for (const child of scene.children) {
-    const lower = child.name.toLowerCase();
-    if (!lower.startsWith("zc_")) continue;
-    const suffix = lower.slice(3); // strip 'zc_'
-    for (const key of sortedKeys) {
-      if (suffix.startsWith(key + "_") || suffix === key) {
-        // Collect this object + any mesh descendants
-        collectMeshes(child).forEach((m) => zcMap.get(key)!.push(m));
-        break;
-      }
+  scene.traverse((obj) => {
+    const lower = obj.name.toLowerCase();
+    if (lower.endsWith("_hitbox")) {
+      const target = lower.slice(0, -"_hitbox".length);
+      hitboxMap.set(target, obj);
     }
-  }
+  });
 
-  // Build markers with combined meshes and expanded bounding boxes
+  // Pass 2: group toy meshes by their sceneMap parent key.
+  const toysByParent = new Map<string, THREE.Mesh[]>();
+  scene.traverse((obj) => {
+    if (!obj.name) return;
+    const node = sceneMap.get(obj.name.toLowerCase());
+    if (!node || node.type !== "toy" || !node.parent) return;
+    const list = toysByParent.get(node.parent) ?? [];
+    list.push(...collectMeshes(obj));
+    toysByParent.set(node.parent, list);
+  });
+
+  // Pass 3: build markers.
   const result: ZoneMarker[] = [];
   for (const obj of zoneObjects) {
-    const key = obj.name.toLowerCase().replace(/^(zone|portal)_/, "");
+    const lower = obj.name.toLowerCase();
+    const key = lower.replace(/^(zone|portal)_/, "");
+    const canonicalKey = findNodeByObjectName(obj.name)?.key ?? key;
     const config = getZoneConfig(obj.name);
-    const zoneMeshes = collectMeshes(obj);
-    const zcMeshes = zcMap.get(key) ?? [];
-    const allMeshes = [...zoneMeshes, ...zcMeshes];
 
-    // Hitbox covers only the zone_ object itself — NOT zc_ children.
-    // This prevents tall objects like cranes from creating huge overlapping hitboxes.
-    // The zc_ meshes still glow via the meshes array.
-    const box = new THREE.Box3().setFromObject(obj);
+    const zoneMeshes = collectMeshes(obj);
+    const memberMeshes = toysByParent.get(canonicalKey) ?? [];
+
+    const hitboxObj = hitboxMap.get(lower);
+    let box: THREE.Box3;
+    if (hitboxObj) {
+      box = new THREE.Box3().setFromObject(hitboxObj);
+      hitboxObj.traverse((m) => {
+        if ((m as THREE.Mesh).isMesh) (m as THREE.Mesh).visible = false;
+      });
+    } else {
+      box = new THREE.Box3().setFromObject(obj);
+    }
+
     const center = new THREE.Vector3();
     box.getCenter(center);
     result.push({
@@ -104,7 +112,7 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
       box,
       center,
       sceneObj: obj,
-      meshes: allMeshes,
+      meshes: [...zoneMeshes, ...memberMeshes],
       ...config,
     });
   }
@@ -130,10 +138,6 @@ function playZoneSound(marker: ZoneMarker) {
   audio.play().catch(() => {});
 }
 
-/** Cap zone hitbox height to prevent tall objects (e.g. deku tree) from
- *  creating oversized trigger areas that block toy clicks in the canopy. */
-const MAX_HITBOX_HEIGHT = 3.0;
-
 const ZoneHitbox = memo(function ZoneHitbox({
   marker,
   onComingSoon,
@@ -150,13 +154,7 @@ const ZoneHitbox = memo(function ZoneHitbox({
   const { size, center } = useMemo(() => {
     const s = new THREE.Vector3();
     marker.box.getSize(s);
-    const c = marker.center.clone();
-    // If too tall, shrink hitbox to bottom portion (e.g. tree trunk mouth)
-    if (s.y > MAX_HITBOX_HEIGHT) {
-      c.y = marker.box.min.y + MAX_HITBOX_HEIGHT / 2;
-      s.y = MAX_HITBOX_HEIGHT;
-    }
-    return { size: s, center: c };
+    return { size: s, center: marker.center.clone() };
   }, [marker]);
 
   return (
@@ -243,12 +241,14 @@ function IslandMesh({
   onComingSoon,
   onNavigate,
   onHoverChange,
+  onToyHoverChange,
   allMeshesRef,
   onReady,
 }: {
   onComingSoon: (label: string) => void;
   onNavigate: (url: string, internal: boolean, center: THREE.Vector3) => void;
   onHoverChange: (marker: ZoneMarker, hovered: boolean) => void;
+  onToyHoverChange: (objects: THREE.Object3D[], hovered: boolean) => void;
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>;
   onReady?: () => void;
 }) {
@@ -269,7 +269,11 @@ function IslandMesh({
   return (
     <>
       <primitive object={scene} />
-      <ToyInteractor scene={scene} animations={animations} />
+      <ToyInteractor
+        scene={scene}
+        animations={animations}
+        onHoverChange={onToyHoverChange}
+      />
       {markers.map((marker) => (
         <ZoneHitbox
           key={marker.name}
@@ -381,9 +385,12 @@ export default function IslandScene({
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map());
   const orbitRef = useRef<any>(null);
   const turntableToggleRef = useRef<(() => void) | null>(null);
-  const [hoveredZone, setHoveredZone] = useState<ZoneMarker | null>(null);
   const [outlinedObjects, setOutlinedObjects] = useState<THREE.Object3D[]>([]);
+  const [outlineKind, setOutlineKind] = useState<"active" | "inactive" | "toy">(
+    "active",
+  );
   const [dollyTarget, setDollyTarget] = useState<THREE.Vector3 | null>(null);
+
   // Shared world position for the whirlpool so Water can carve a funnel underneath it.
   const whirlpoolCenterRef = useRef<THREE.Vector3>(
     new THREE.Vector3(15, 0.08, 0),
@@ -398,9 +405,19 @@ export default function IslandScene({
   );
 
   const onHoverChange = useCallback((marker: ZoneMarker, hovered: boolean) => {
-    setHoveredZone(hovered ? marker : null);
     setOutlinedObjects(hovered ? marker.meshes : []);
+    setOutlineKind(
+      hovered ? (marker.type === "active" ? "active" : "inactive") : "active",
+    );
   }, []);
+
+  const onToyHoverChange = useCallback(
+    (objects: THREE.Object3D[], hovered: boolean) => {
+      setOutlinedObjects(hovered ? objects : []);
+      setOutlineKind(hovered ? "toy" : "active");
+    },
+    [],
+  );
 
   const onPlayingChange = useCallback(
     (playing: boolean) => {
@@ -410,6 +427,58 @@ export default function IslandScene({
     },
     [onTurntableChange],
   );
+
+  const activeOutlineSettings = {
+    enabled: true,
+    blur: false,
+    xRay: false,
+    edgeStrength: 2.0,
+    pulseSpeed: 0,
+    visibleEdgeColor: 0x00e5ff,
+    hiddenEdgeColor: 0x000000,
+    kernelSize: KernelSize.SMALL,
+    blendFunction: BlendFunction.ALPHA,
+    width: undefined,
+    height: undefined,
+    patternTexture: undefined,
+  };
+
+  const inactiveOutlineSettings = {
+    enabled: true,
+    blur: false,
+    xRay: false,
+    edgeStrength: 2.0,
+    pulseSpeed: 0,
+    visibleEdgeColor: 0xc8b6ff,
+    hiddenEdgeColor: 0x000000,
+    kernelSize: KernelSize.SMALL,
+    blendFunction: BlendFunction.ALPHA,
+    width: undefined,
+    height: undefined,
+    patternTexture: undefined,
+  };
+
+  const toyOutlineSettings = {
+    enabled: true,
+    blur: false,
+    xRay: false,
+    edgeStrength: 2.0,
+    pulseSpeed: 0,
+    visibleEdgeColor: 0x9ca3af,
+    hiddenEdgeColor: 0x000000,
+    kernelSize: KernelSize.SMALL,
+    blendFunction: BlendFunction.ALPHA,
+    width: undefined,
+    height: undefined,
+    patternTexture: undefined,
+  };
+
+  const outlineSettings =
+    outlineKind === "inactive"
+      ? inactiveOutlineSettings
+      : outlineKind === "toy"
+        ? toyOutlineSettings
+        : activeOutlineSettings;
 
   return (
     <Canvas
@@ -432,6 +501,7 @@ export default function IslandScene({
           onComingSoon={onComingSoon}
           onNavigate={handleNavigate}
           onHoverChange={onHoverChange}
+          onToyHoverChange={onToyHoverChange}
           allMeshesRef={allMeshesRef}
           onReady={onReady}
         />
@@ -457,18 +527,7 @@ export default function IslandScene({
       <EffectComposer multisampling={0} autoClear={false}>
         <OutlineController
           selectedObjects={outlinedObjects}
-          settings={{
-            enabled: true,
-            blur: false,
-            xRay: false,
-            edgeStrength: 2.0,
-            pulseSpeed: 0,
-            visibleEdgeColor:
-              hoveredZone?.type === "active" ? 0x00e5ff : 0xc8b6ff,
-            hiddenEdgeColor: 0x000000,
-            kernelSize: KernelSize.VERY_SMALL,
-            blendFunction: BlendFunction.ALPHA,
-          }}
+          settings={outlineSettings}
         />
       </EffectComposer>
     </Canvas>

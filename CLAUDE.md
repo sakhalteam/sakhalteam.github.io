@@ -33,24 +33,29 @@ The main portfolio/hub site for sakhalteam. Features an interactive 3D island ma
 
 ## Navigation terminology (the naming contract)
 
-**The prefix is the verb. The key is the noun.** Prefixes encode _what happens on click_, keys encode _the destination/target_.
+**Grouping is done via `sceneMap.parent`, NOT prefix parsing.** Object names are human-readable hints; the sceneMap is authoritative for behavior and membership.
 
-Object name prefixes in GLB files determine behavior:
+Object name conventions in GLB files:
 
-| Prefix            | Behavior (what happens on click)                                                    | File location                 |
-| ----------------- | ----------------------------------------------------------------------------------- | ----------------------------- |
-| `zone_<key>`      | Loads a new 3D scene                                                                | `public/zones/zone_<key>.glb` |
-| `portal_<key>`    | Navigates to an external sakhalteam minisite                                        | No GLB — it's a URL           |
-| `toy_<key>`       | Plays animation / interaction, no navigation                                        | Part of parent GLB            |
-| `zc_<key>_<name>` | Glows with parent zone on hover. Also clickable if it has a toy entry in sceneMap   | Part of parent GLB            |
-| `pc_<key>_<name>` | Glows with parent portal on hover. Also clickable if it has a toy entry in sceneMap | Part of parent GLB            |
-| _(no prefix)_     | Scenery, decoration — not interactive                                               | Part of parent GLB            |
+| Name pattern              | Behavior                                                                            | File location                 |
+| ------------------------- | ----------------------------------------------------------------------------------- | ----------------------------- |
+| `zone_<key>`              | Loads a new 3D scene (or shows coming-soon modal if no GLB)                         | `public/zones/zone_<key>.glb` |
+| `portal_<key>`            | Navigates to an external sakhalteam minisite                                        | No GLB — it's a URL           |
+| `i_toy_<name>`            | Standalone island toy (parent: island)                                              | Part of island.glb            |
+| `i_<zoneKey>_toy_<name>`  | Island toy grouped with a zone/portal — glows with that zone on hover               | Part of island.glb            |
+| `<zoneKey>_toy_<name>`    | Toy inside a zone's own GLB (parent: that zoneKey)                                  | Part of zone_<zoneKey>.glb    |
+| `<zone_name>_hitbox`      | Optional click collider — overrides bbox. Mesh is auto-hidden at runtime            | Part of parent GLB            |
+| _(no entry in sceneMap)_  | Scenery, decoration — not interactive                                               | Part of parent GLB            |
 
-**Depth is implicit, not encoded in the prefix.** A `zone_` inside island.glb and a `zone_` inside zone*reading_room.glb behave identically — both load a .glb scene. The hierarchy comes from *which scene contains the object*, not the prefix. This means no `room*`/`nook*`/`cranny*`prefixes — just`zone\_` for any scene-loading click at any depth.
+**Toy behavior flags (in sceneMap `toy()` calls):**
+- `interactive: false` — toy is not clickable and has no animation/sound. Still glows with parent zone. Used for structural/decorative members (bridges, walls, sand ground, cranes). Shortcut: `structural(key, label, parent)`.
+- `quiet: true` — toy has no own hover label and does not emit its own toy-level outline. Still belongs to parent zone/portal's outline group.
+
+**Depth is implicit, not encoded in the prefix.** A `zone_` inside island.glb and a `zone_` inside zone_cloud_town.glb behave identically — both load a .glb scene (or show coming-soon). The hierarchy comes from which scene contains the object, not the prefix.
 
 **Zone names describe destinations, not the clickable object.** The boombox mesh on the island is `zone_beach_party` (the place you arrive at), not `zone_boombox` (the thing you clicked). Exception: if the zone IS the object (e.g., a ship named S.S. Brainfog), naming after the object is fine.
 
-**`zc_` convention (zone children):** Objects prefixed `zc_<key>_` are siblings (NOT children) of `zone_<key>` in Blender. They receive the bloom glow when the zone is hovered but don't create hitboxes or labels. This decouples glow membership from Blender parenting, allowing free animation. Matching uses longest-key-first to avoid ambiguity. No `empty_zone_x` wrappers needed — everything should be flat at the scene root.
+**Legacy prefixes `zc_`/`pc_`/`bs_toy_` were migrated out in 2026-04.** Grouping is now purely driven by `sceneMap.parent`.
 
 **Hierarchy:** Hub (island.glb) → Zone → Sub-zone → ... → Portal (or dead end)
 
@@ -197,6 +202,11 @@ Optimized via gltf-transform: Draco geometry compression + WebP texture compress
 
 - Wire train departure animation in zone_the_tunnels, finish famima scaffold
 - Shark circle animation: toy_shark in zone_ss_brainfog currently loops idle swim. Nic will add a second Blender action (`shark_circle`) for a big circle swim under the boat. On click: crossfade to circle action, then back to idle. Needs new ToyInteractor animation type (`animation: 'action'`) that swaps named AnimationActions instead of rotating the object.
+- **NES player component (for zone_reading_room)**: `reading_room_toy_nes` should open a small popup player UI with a scrollable list of classic NES themes. Nic will source the audio files later. Cycles through tracks on user selection. Needs a new component (like the breadcrumbs — lightweight overlay) that mounts on click of the NES toy.
+- **Proto-Typing site (portal_proto_typing in zone_reading_room)**: Unreleased minigame site. URL is `/proto-typing/`. Needs a new repo scaffolded (sakhalteam convention: Vite 8 + React 19 + TS 6, `base: '/proto-typing/'`). Content TBD — some kind of typing minigame.
+- **Cloud town toy sounds**: `cloud_town_toy_ladder` will sway back and forth (needs animation). `cloud_town_toy_metal_gear_rex` needs a Metal Gear sound effect. `cloud_town_toy_keyboard` needs a typing click-clack sound effect. Nic to source.
+- **Reading room toys**: `reading_room_toy_TV` should eventually play a looping GIF of a gameboy pokemon battle scene. `reading_room_toy_bed` needs a snoring sound effect (or cute "lights off" interaction).
+- **Bird sanctuary**: `bird_sanctuary_toy_baby_deku` and `bird_sanctuary_toy_tree_stump` are placeholders — Nic hasn't decided their behavior yet. Entries exist in sceneMap to remind him.
 
 ## Example user flows (for context)
 

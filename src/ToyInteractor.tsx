@@ -21,6 +21,7 @@ interface ToyData {
   meshes: THREE.Mesh[];
   animation: ToyAnimation;
   idle: ToyIdle;
+  quiet: boolean;
 }
 
 interface ToyState {
@@ -66,10 +67,13 @@ import { setToyUnderPointer } from "./toyClickFlag";
 export default function ToyInteractor({
   scene,
   animations = [],
+  onHoverChange,
 }: {
   scene: THREE.Object3D;
   animations?: THREE.AnimationClip[];
+  onHoverChange?: (objects: THREE.Object3D[], hovered: boolean) => void;
 }) {
+  const lastHoveredToy = useRef<ToyData | null>(null);
   const spinState = useRef<
     Map<string, { startTime: number; startRotZ: number }>
   >(new Map());
@@ -100,52 +104,48 @@ export default function ToyInteractor({
   const tmpVec3 = useMemo(() => new THREE.Vector3(), []);
 
   const toys = useMemo(() => {
-    // Normalize Blender's .001/.002 dot-notation duplicates to base name.
-    // Only strip dot-suffixes — underscore numbers like _01/_02 are intentional names.
+    // Traverse the scene, consult sceneMap per object. No prefix heuristics.
+    // Blender's .001/.002 dot-notation duplicates are normalized to base name
+    // so meshes from duplicates fold into the base toy entry.
     const normalizeName = (lower: string) => lower.replace(/\.\d+$/, "");
 
-    // Collect all toy_ and eligible zc_ objects, grouping numbered Blender variants
     const byBase = new Map<
       string,
-      { primary: THREE.Object3D; meshes: THREE.Mesh[] }
+      {
+        primary: THREE.Object3D;
+        meshes: THREE.Mesh[];
+        config: NonNullable<ReturnType<typeof getToyConfig>>;
+      }
     >();
 
     scene.traverse((child) => {
-      const lower = child.name.toLowerCase();
-      if (lower.startsWith("toy_") || lower.startsWith("bs_toy_")) {
-        const base = normalizeName(lower);
-        // Only create entries for objects with a sceneMap config.
-        // Sub-parts (toy_lapras_2 etc.) have no config and get skipped —
-        // their meshes are already collected by the parent's collectMeshes.
-        const config = getToyConfig(base);
-        if (!config) return;
-        const meshes = collectMeshes(child);
-        if (!byBase.has(base)) {
-          byBase.set(base, { primary: child, meshes });
-        } else {
-          // Blender .001 duplicate — add its meshes, prefer base-named object
-          const entry = byBase.get(base)!;
-          if (lower === base) entry.primary = child;
-          entry.meshes.push(...meshes);
-        }
-      } else if (lower.startsWith("zc_") || lower.startsWith("pc_")) {
-        const config = getToyConfig(lower);
-        if (!config) return; // not a toy — just a glow member
-        const meshes = collectMeshes(child);
-        byBase.set(lower, { primary: child, meshes });
+      if (!child.name) return;
+      const base = normalizeName(child.name.toLowerCase());
+      const config = getToyConfig(base);
+      if (!config) return;
+      if (config.interactive === false) return; // structural member — skip
+
+      const meshes = collectMeshes(child);
+      const existing = byBase.get(base);
+      if (!existing) {
+        byBase.set(base, { primary: child, meshes, config });
+      } else {
+        // Dot-suffix duplicate — merge meshes, prefer base-named primary
+        if (child.name.toLowerCase() === base) existing.primary = child;
+        existing.meshes.push(...meshes);
       }
     });
 
-    return Array.from(byBase.entries()).map(([base, { primary, meshes }]) => {
-      const config = getToyConfig(base);
+    return Array.from(byBase.values()).map(({ primary, meshes, config }) => {
       return {
         obj: primary,
         baseY: primary.position.y,
-        label: config?.label ?? primary.name,
-        soundUrl: config?.sound ?? null,
+        label: config.label,
+        soundUrl: config.sound,
         meshes,
-        animation: config?.animation ?? "spin",
-        idle: config?.idle ?? "none",
+        animation: config.animation,
+        idle: config.idle,
+        quiet: config.quiet,
       } satisfies ToyData;
     });
   }, [scene]);
@@ -293,6 +293,17 @@ export default function ToyInteractor({
       for (const [name, state] of toyStates.current) {
         state.hovered = toy?.obj.name === name;
       }
+
+      // Notify parent when hovered toy changes. Quiet toys belong to their
+      // parent zone's outline group instead of emitting a toy-level outline.
+      if (toy?.obj.name !== lastHoveredToy.current?.obj.name) {
+        if (lastHoveredToy.current && !lastHoveredToy.current.quiet) {
+          onHoverChange?.([], false);
+        }
+        if (toy && !toy.quiet) onHoverChange?.(toy.meshes, true);
+        lastHoveredToy.current = toy ?? null;
+      }
+
       if (toy) {
         canvas.style.cursor = "pointer";
       } else if (canvas.style.cursor === "pointer") {
@@ -329,8 +340,12 @@ export default function ToyInteractor({
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("click", onClick, { capture: true });
       if (canvas.style.cursor === "pointer") canvas.style.cursor = "";
+      if (lastHoveredToy.current) {
+        if (!lastHoveredToy.current.quiet) onHoverChange?.([], false);
+        lastHoveredToy.current = null;
+      }
     };
-  }, [gl, hitTest, triggerAnimation]);
+  }, [gl, hitTest, triggerAnimation, onHoverChange]);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
@@ -506,7 +521,10 @@ export default function ToyInteractor({
   return (
     <>
       {toys
-        .filter((t) => t.animation !== "hop" && t.animation !== "bob")
+        .filter(
+          (t) =>
+            !t.quiet && t.animation !== "hop" && t.animation !== "bob",
+        )
         .map((toy) => {
           const box = new THREE.Box3().setFromObject(toy.obj);
           const labelPos = new THREE.Vector3();

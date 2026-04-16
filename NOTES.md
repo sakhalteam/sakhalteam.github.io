@@ -45,22 +45,28 @@ All scenes slowly rotate counter-clockwise until the user interacts. Defined in 
 
 ## GLB naming cheat sheet
 
-| Prefix | What happens on click |
-|--------|----------------------|
-| `zone_<key>` | Loads `public/zones/zone_<key>.glb` as a new scene |
-| `portal_<key>` | Navigates to an external site |
-| `toy_<key>` | Plays animation, no navigation |
-| `zc_<key>_<name>` | Not clickable, glows with parent zone |
-| (no prefix) | Scenery, not interactive |
+All behavior is driven by entries in [src/sceneMap.ts](src/sceneMap.ts). The name prefix is a human-readable hint only — grouping/behavior comes from sceneMap fields.
+
+| Name pattern | Meaning |
+|--------------|---------|
+| `zone_<key>` | Zone doorway. Loads `public/zones/zone_<key>.glb` (or shows coming-soon modal if no GLB) |
+| `portal_<key>` | External site navigation |
+| `i_toy_<name>` | Standalone island toy (parent: island) |
+| `i_<zoneKey>_toy_<name>` | Island toy grouped with a zone/portal hotspot — glows with that zone on hover |
+| `<zoneKey>_toy_<name>` | Toy inside a zone's own GLB (parent: that zone) |
+| `<zone_name>_hitbox` | Optional child/sibling collider. If present, overrides bbox for click — mesh is auto-hidden |
+| (no entry in sceneMap) | Scenery, not interactive |
+
+**Toy behavior flags (in sceneMap `toy()` calls):**
+- `interactive: false` — not clickable, no animation/sound. Still glows with parent zone. Used for structural members (bridges, walls, sand ground, cranes).
+- `quiet: true` — toy has no hover label and does not emit its own outline. Still belongs to parent's outline group.
 
 ## Adding a new zone
 
 1. Export `.glb` from Blender with objects at scene root (flat, no parenting)
 2. Run `npm run optimize` to compress
 3. Drop the `.glb` in `public/zones/`
-4. Add a route in `src/App.tsx`
-5. Add URL mapping in `IslandScene.tsx` → `ZONE_URLS` (if it's on the island)
-6. Optionally add a display name in `ZONE_LABELS` (otherwise auto-derived from key)
+4. Add a `zone()` entry in [src/sceneMap.ts](src/sceneMap.ts) — routes, labels, nav, and outline groups auto-generate from it
 
 ## Environment presets
 
