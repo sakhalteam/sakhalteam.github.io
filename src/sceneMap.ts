@@ -1,5 +1,7 @@
 // sceneMap.ts
 
+import type { AtmosphereSubsystem, Weather } from "./environment/presets";
+
 /**
  * sceneMap.ts — single source of truth for the entire site navigation tree.
  *
@@ -18,6 +20,29 @@
  */
 
 export type NodeType = "zone" | "portal" | "toy" | "site";
+
+/**
+ * Per-zone atmosphere config. Absent → zone uses the legacy hardcoded lights
+ * (no sky / clouds / weather). Present → mounts the chosen subsystems with
+ * the given defaults, optionally exposing user-facing controls.
+ */
+export interface AtmosphereConfig {
+  /** Subsystems to mount (sky, sun, ambient, clouds, stars, fog, ...). */
+  enabled: AtmosphereSubsystem[];
+  /** Initial values (panel can change these at runtime if controls = true). */
+  defaults?: {
+    /** 0..23. Defaults to 12 (noon). */
+    hour?: number;
+    /** 0..59. Defaults to 0. */
+    minute?: number;
+    weather?: Weather;
+    /** Game-minutes per real-second. 0 = frozen (default). Try ~60 for a visible sun arc. */
+    timescale?: number;
+  };
+  /** Show the ⚙ settings panel? Default false. */
+  controls?: boolean;
+}
+
 export type ToyAnimation =
   | "spin"
   | "hop"
@@ -36,6 +61,7 @@ export interface SceneNode {
   url: string | null;
   glbPath: string | null;
   environmentPreset?: string;
+  atmosphere?: AtmosphereConfig;
   parent: string | null;
   children: string[];
   sounds?: string[];
@@ -57,6 +83,7 @@ function zone(
     path?: string | null;
     glbPath?: string | null;
     env?: string;
+    atmosphere?: AtmosphereConfig;
     parent?: string;
     children?: string[];
     sounds?: string[];
@@ -76,6 +103,7 @@ function zone(
     environmentPreset: opts.env ?? "night",
     parent: opts.parent ?? "island",
     children: opts.children ?? [],
+    ...(opts.atmosphere && { atmosphere: opts.atmosphere }),
     ...(opts.sounds && { sounds: opts.sounds }),
   };
 }
@@ -219,6 +247,20 @@ const nodes: SceneNode[] = [
   }),
   zone("cloud_town", "Cloud Town", {
     env: "city",
+    atmosphere: {
+      enabled: [
+        "sky",
+        "sun",
+        "ambient",
+        "clouds",
+        "sky_clouds",
+        "celestials",
+        "stars",
+        "fog",
+      ],
+      defaults: { hour: 12, minute: 0, weather: "partly_cloudy", timescale: 0 },
+      controls: true,
+    },
     children: [
       "portal_weather_report",
       "cloud_town_toy_ladder",

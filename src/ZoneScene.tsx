@@ -7,8 +7,8 @@ import {
   useAnimations,
 } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { EffectComposer } from "@react-three/postprocessing";
-import { KernelSize, BlendFunction } from "postprocessing";
+import { EffectComposer, ToneMapping } from "@react-three/postprocessing";
+import { KernelSize, BlendFunction, ToneMappingMode } from "postprocessing";
 import {
   memo,
   Suspense,
@@ -33,9 +33,11 @@ import {
   getZoneConfig,
   findNodeByObjectName,
   sceneMap,
+  getNode,
 } from "./sceneMap";
 import ToyInteractor from "./ToyInteractor";
 import Breadcrumbs from "./Breadcrumbs";
+import { Atmosphere, AtmosphereProvider, AtmospherePanel } from "./environment";
 
 interface Hotspot {
   name: string;
@@ -260,6 +262,13 @@ function ZoneMesh({
   }, [actions]);
 
   useEffect(() => {
+    scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
     onSceneReady(scene);
   }, [scene, onSceneReady]);
 
@@ -376,8 +385,6 @@ interface ZoneSceneProps {
     | "lobby"
     | "studio"
     | "warehouse";
-  /** Optional extra scene content (sky, weather, ambient props) rendered inside the Canvas. */
-  extras?: React.ReactNode;
 }
 
 export default function ZoneScene({
@@ -387,8 +394,8 @@ export default function ZoneScene({
   subtitle = "click on things to explore",
   camera: cameraOptions,
   environmentPreset = "night",
-  extras,
 }: ZoneSceneProps) {
+  const atmosphereConfig = getNode(zoneKey)?.atmosphere;
   const orbitRef = useRef<any>(null);
   const turntableToggleRef = useRef<(() => void) | null>(null);
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map());
@@ -404,11 +411,7 @@ export default function ZoneScene({
   const onHoverChange = useCallback((hotspot: Hotspot, hovered: boolean) => {
     setOutlinedObjects(hovered ? hotspot.meshes : []);
     setOutlineKind(
-      hovered
-        ? hotspot.type === "active"
-          ? "active"
-          : "inactive"
-        : "active",
+      hovered ? (hotspot.type === "active" ? "active" : "inactive") : "active",
     );
   }, []);
 
@@ -476,7 +479,12 @@ export default function ZoneScene({
         ? toyOutlineSettings
         : activeOutlineSettings;
 
-  return (
+  // When a zone declares an atmosphere config, the listed subsystems own the
+  // lighting (sun + ambient). Otherwise fall back to the legacy hardcoded
+  // three-light setup so existing zones look identical.
+  const useAtmosphere = !!atmosphereConfig;
+
+  const sceneInner = (
     <div className="ocean">
       <header className="site-header">
         <Breadcrumbs zoneKey={zoneKey} />
@@ -487,22 +495,40 @@ export default function ZoneScene({
       <div className="map-wrap" style={wrapStyle}>
         <Canvas
           camera={{ fov: 50 }}
+          shadows
           style={{
             width: "100%",
             height: "100%",
             opacity: cameraReady ? 1 : 0,
           }}
           gl={{ antialias: true, alpha: true }}
+          onCreated={({ gl }) => {
+            if (useAtmosphere) {
+              gl.toneMappingExposure = 1.0;
+            }
+          }}
         >
-          <ambientLight intensity={0.5} />
-          <directionalLight position={[5, 8, 3]} intensity={1.0} castShadow />
-          <directionalLight
-            position={[-3, 2, -4]}
-            intensity={0.2}
-            color="#88aaff"
+          {useAtmosphere ? (
+            <Atmosphere enabled={atmosphereConfig!.enabled} />
+          ) : (
+            <>
+              <ambientLight intensity={0.5} />
+              <directionalLight
+                position={[5, 8, 3]}
+                intensity={1.0}
+                castShadow
+              />
+              <directionalLight
+                position={[-3, 2, -4]}
+                intensity={0.2}
+                color="#88aaff"
+              />
+            </>
+          )}
+          <Environment
+            preset={environmentPreset}
+            background={!useAtmosphere}
           />
-          <Environment preset={environmentPreset} />
-          {extras}
           <Suspense fallback={<LoadingFallback />}>
             <ZoneMesh
               glbPath={glbPath}
@@ -537,6 +563,14 @@ export default function ZoneScene({
               selectedObjects={outlinedObjects}
               settings={outlineSettings}
             />
+            {useAtmosphere ? (
+              <ToneMapping
+                mode={ToneMappingMode.ACES_FILMIC}
+                adaptive={false}
+              />
+            ) : (
+              <></>
+            )}
           </EffectComposer>
         </Canvas>
       </div>
@@ -569,6 +603,20 @@ export default function ZoneScene({
           </div>
         </div>
       )}
+      {useAtmosphere && atmosphereConfig!.controls && <AtmospherePanel />}
     </div>
+  );
+
+  if (!useAtmosphere) return sceneInner;
+
+  return (
+    <AtmosphereProvider
+      initialHour={atmosphereConfig!.defaults?.hour}
+      initialMinute={atmosphereConfig!.defaults?.minute}
+      initialWeather={atmosphereConfig!.defaults?.weather}
+      initialTimescale={atmosphereConfig!.defaults?.timescale}
+    >
+      {sceneInner}
+    </AtmosphereProvider>
   );
 }
