@@ -10,6 +10,8 @@
 
 import * as THREE from "three";
 
+//#region types
+
 export type TimeOfDay = "dawn" | "morning" | "noon" | "sunset" | "night";
 export type Weather =
   | "clear"
@@ -224,6 +226,8 @@ interface WeatherMod {
   fogFar: number;
 }
 
+//#endregion types
+
 const WEATHER_MODS: Record<Weather, WeatherMod> = {
   clear: {
     turbidityAdd: 0,
@@ -351,7 +355,7 @@ const NIGHT_HOURS = 24 - DAYLIGHT_HOURS;
 
 function sunDirection(hour: number): THREE.Vector3 {
   const h = ((hour % 24) + 24) % 24;
-  const sinceSunrise = ((h - SUNRISE_HOUR) % 24 + 24) % 24;
+  const sinceSunrise = (((h - SUNRISE_HOUR) % 24) + 24) % 24;
 
   let elev: number;
   let azim: number;
@@ -385,7 +389,8 @@ export function resolveAtmosphere(
 
   const rayleigh = lerp(a.rayleigh, b.rayleigh, t) * w.rayleighMul;
   const turbidity = lerp(a.turbidity, b.turbidity, t) + w.turbidityAdd;
-  const sunIntensity = lerp(a.sunIntensity, b.sunIntensity, t) * w.sunIntensityMul;
+  const sunIntensity =
+    lerp(a.sunIntensity, b.sunIntensity, t) * w.sunIntensityMul;
   const ambientIntensity =
     lerp(a.ambientIntensity, b.ambientIntensity, t) * w.ambientIntensityMul;
   const starOpacity = lerp(a.starOpacity, b.starOpacity, t);
