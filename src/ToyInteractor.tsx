@@ -384,7 +384,7 @@ export default function ToyInteractor({
         const duration = 0.35;
         const progress = Math.min(elapsed / duration, 1);
         // Parabola: peaks at 0.5 progress, returns to 0 at 1.0
-        const hopHeight = 0.25 * 4 * progress * (1 - progress);
+        const hopHeight = 0.75 * 8 * progress * (1 - progress);
         toy.obj.position.y = toy.baseY + hopHeight;
         if (progress >= 1) {
           hopState.current.delete(toy.obj.name);
@@ -432,7 +432,7 @@ export default function ToyInteractor({
         const duration = 2.0;
         const progress = Math.min(elapsed / duration, 1);
         // 5-6 undulations with decaying amplitude
-        const amplitude = 0.2 * (1 - progress);
+        const amplitude = 0.9 * (1 - progress);
         const undulation = Math.sin(progress * Math.PI * 12) * amplitude;
         toy.obj.position.y = toy.baseY + undulation;
         if (progress >= 1) {
@@ -522,8 +522,7 @@ export default function ToyInteractor({
     <>
       {toys
         .filter(
-          (t) =>
-            !t.quiet && t.animation !== "hop" && t.animation !== "bob",
+          (t) => !t.quiet && t.animation !== "hop" && t.animation !== "bob",
         )
         .map((toy) => {
           const box = new THREE.Box3().setFromObject(toy.obj);

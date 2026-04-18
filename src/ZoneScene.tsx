@@ -376,6 +376,8 @@ interface ZoneSceneProps {
     | "lobby"
     | "studio"
     | "warehouse";
+  /** Optional extra scene content (sky, weather, ambient props) rendered inside the Canvas. */
+  extras?: React.ReactNode;
 }
 
 export default function ZoneScene({
@@ -385,6 +387,7 @@ export default function ZoneScene({
   subtitle = "click on things to explore",
   camera: cameraOptions,
   environmentPreset = "night",
+  extras,
 }: ZoneSceneProps) {
   const orbitRef = useRef<any>(null);
   const turntableToggleRef = useRef<(() => void) | null>(null);
@@ -499,6 +502,7 @@ export default function ZoneScene({
             color="#88aaff"
           />
           <Environment preset={environmentPreset} />
+          {extras}
           <Suspense fallback={<LoadingFallback />}>
             <ZoneMesh
               glbPath={glbPath}

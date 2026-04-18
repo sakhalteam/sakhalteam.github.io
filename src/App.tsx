@@ -5,6 +5,7 @@ import IslandScene from "./IslandScene";
 import ZoneScene from "./ZoneScene";
 import QuickNav from "./QuickNav";
 import CloudTransition from "./CloudTransition";
+import CloudTownExtras from "./CloudTownExtras";
 import { useSceneTransition } from "./useSceneTransition";
 import { getActiveZones } from "./sceneMap";
 
@@ -94,6 +95,7 @@ export default function App() {
                 zoneKey={z.key}
                 title={z.label.toUpperCase()}
                 environmentPreset={z.environmentPreset as any}
+                extras={z.key === "cloud_town" ? <CloudTownExtras /> : null}
               />
             }
           />

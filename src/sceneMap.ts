@@ -145,11 +145,7 @@ const cry = (id: number) =>
   `https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/${id}.ogg`;
 
 /** Shortcut for structural/decorative members — quiet, non-interactive grouping member. */
-const structural = (
-  key: string,
-  label: string,
-  parent: string,
-): SceneNode =>
+const structural = (key: string, label: string, parent: string): SceneNode =>
   toy(key, label, parent, { interactive: false, quiet: true });
 
 // ─── The map ────────────────────────────────────────────────────────
@@ -332,6 +328,26 @@ const nodes: SceneNode[] = [
     path: null,
     sounds: ["/sounds/zone_warehouse.mp3"],
   }),
+  zone("the_epipelagic", "The Epipelagic", {
+    glbPath: null,
+    path: null,
+  }),
+  zone("the_mesopelagic", "The Mesopelagic", {
+    glbPath: null,
+    path: null,
+  }),
+  zone("the_bathypelagic", "The Bathypelagic", {
+    glbPath: null,
+    path: null,
+  }),
+  zone("the_abyssalpelagic", "The Abyssalpelagic", {
+    glbPath: null,
+    path: null,
+  }),
+  zone("the_hadalpelagic", "The Hadalpelagic", {
+    glbPath: null,
+    path: null,
+  }),
   zone("crystals", "Crystals", {
     glbPath: null,
     path: null,
@@ -361,7 +377,12 @@ const nodes: SceneNode[] = [
   portal("bird_bingo", "Bird Bingo", "/bird-bingo/", "bird_sanctuary"),
   portal("adhdo", "ADHDO", "/adhdo/", "ss_brainfog"),
   portal("karasu_drop", "Karasu Drop", "/karasu-drop/", "ss_brainfog"),
-  portal("japanese_articles", "Japanese Articles", "/japanese-articles/", "reading_room"),
+  portal(
+    "japanese_articles",
+    "Japanese Articles",
+    "/japanese-articles/",
+    "reading_room",
+  ),
   portal("proto_typing", "Proto-Typing", "/proto-typing/", "reading_room"),
   portal("nikbeat", "NikBeat", "/nikbeat/", "beach_party"),
   portal("pokemon_park", "Pokemon Park", "/pokemon-park/", "pokemon_island"),
@@ -436,22 +457,37 @@ const nodes: SceneNode[] = [
     sound: "/sounds/red-tailed-hawk-call.mp3",
     animation: "bob",
   }),
-  toy("i_bird_sanctuary_toy_american_robin", "American Robin", "bird_sanctuary", {
-    sound: "/sounds/american-robin-call.mp3",
-    animation: "hop",
-  }),
-  toy("i_bird_sanctuary_toy_baltimore_oriole", "Baltimore Oriole", "bird_sanctuary", {
-    sound: "/sounds/baltimore-oriole-call.mp3",
-    animation: "hop",
-  }),
+  toy(
+    "i_bird_sanctuary_toy_american_robin",
+    "American Robin",
+    "bird_sanctuary",
+    {
+      sound: "/sounds/american-robin-call.mp3",
+      animation: "hop",
+    },
+  ),
+  toy(
+    "i_bird_sanctuary_toy_baltimore_oriole",
+    "Baltimore Oriole",
+    "bird_sanctuary",
+    {
+      sound: "/sounds/baltimore-oriole-call.mp3",
+      animation: "hop",
+    },
+  ),
   toy("i_bird_sanctuary_toy_blue_jay", "Blue Jay", "bird_sanctuary", {
     sound: "/sounds/blue-jay-call.mp3",
     animation: "hop",
   }),
-  toy("i_bird_sanctuary_toy_northern_cardinal", "Northern Cardinal", "bird_sanctuary", {
-    sound: "/sounds/northern-cardinal-call.mp3",
-    animation: "hop",
-  }),
+  toy(
+    "i_bird_sanctuary_toy_northern_cardinal",
+    "Northern Cardinal",
+    "bird_sanctuary",
+    {
+      sound: "/sounds/northern-cardinal-call.mp3",
+      animation: "hop",
+    },
+  ),
   toy("i_bird_sanctuary_toy_king_egg", "King Egg", "bird_sanctuary", {
     animation: "hop",
   }),
@@ -502,24 +538,60 @@ const nodes: SceneNode[] = [
     sound: "/sounds/zc_tower_of_knowledge_character_cat_midge.mp3",
     animation: "hop",
   }),
-  toy("i_tower_of_knowledge_toy_cat_croissant", "Croissant", "tower_of_knowledge", {
-    sound: "/sounds/zc_tower_of_knowledge_character_cat_croissant.mp3",
-    animation: "hop",
-  }),
-  toy("i_tower_of_knowledge_toy_cat_benchcats", "Bench Cats", "tower_of_knowledge", {
-    sound: "/sounds/zc_tower_of_knowledge_character_cat_benchcats.mp3",
-    animation: "hop",
-  }),
-  toy("i_tower_of_knowledge_toy_blue_mushroom", "Blue Mushroom", "tower_of_knowledge", {
-    animation: "grow",
-  }),
-  toy("i_tower_of_knowledge_toy_white_mushroom", "White Mushroom", "tower_of_knowledge", {
-    animation: "grow",
-  }),
-  toy("i_tower_of_knowledge_toy_fish_on_cutting_board", "Fish on Cutting Board", "tower_of_knowledge"),
-  toy("i_tower_of_knowledge_toy_save_point", "Save Point", "tower_of_knowledge"),
-  structural("i_tower_of_knowledge_toy_castle_wall", "Castle Wall", "tower_of_knowledge"),
-  structural("i_tower_of_knowledge_toy_stonewallpatch", "Stone Wall Patch", "tower_of_knowledge"),
+  toy(
+    "i_tower_of_knowledge_toy_cat_croissant",
+    "Croissant",
+    "tower_of_knowledge",
+    {
+      sound: "/sounds/zc_tower_of_knowledge_character_cat_croissant.mp3",
+      animation: "hop",
+    },
+  ),
+  toy(
+    "i_tower_of_knowledge_toy_cat_benchcats",
+    "Bench Cats",
+    "tower_of_knowledge",
+    {
+      sound: "/sounds/zc_tower_of_knowledge_character_cat_benchcats.mp3",
+      animation: "hop",
+    },
+  ),
+  toy(
+    "i_tower_of_knowledge_toy_blue_mushroom",
+    "Blue Mushroom",
+    "tower_of_knowledge",
+    {
+      animation: "grow",
+    },
+  ),
+  toy(
+    "i_tower_of_knowledge_toy_white_mushroom",
+    "White Mushroom",
+    "tower_of_knowledge",
+    {
+      animation: "grow",
+    },
+  ),
+  toy(
+    "i_tower_of_knowledge_toy_fish_on_cutting_board",
+    "Fish on Cutting Board",
+    "tower_of_knowledge",
+  ),
+  toy(
+    "i_tower_of_knowledge_toy_save_point",
+    "Save Point",
+    "tower_of_knowledge",
+  ),
+  structural(
+    "i_tower_of_knowledge_toy_castle_wall",
+    "Castle Wall",
+    "tower_of_knowledge",
+  ),
+  structural(
+    "i_tower_of_knowledge_toy_stonewallpatch",
+    "Stone Wall Patch",
+    "tower_of_knowledge",
+  ),
 
   // Coming-soon crane zones (all deferred until Bug #9 crane fix)
   structural("i_crystals_toy_crane", "Crane", "crystals"),
@@ -554,7 +626,7 @@ const nodes: SceneNode[] = [
   // ── Toys inside zone_bird_sanctuary.glb (parent: bird_sanctuary) ──
   toy("bird_sanctuary_toy_penguin", "Penguin", "bird_sanctuary", {
     sound: "/sounds/tobimasen.mp3",
-    animation: "wobble",
+    animation: "hop",
   }),
   toy("bird_sanctuary_toy_ostrich", "Ostrich", "bird_sanctuary", {
     sound: "/sounds/common-ostrich-call.mp3",
@@ -574,11 +646,11 @@ const nodes: SceneNode[] = [
   }),
   toy("bird_sanctuary_toy_flamingo", "Flamingo", "bird_sanctuary", {
     sound: "/sounds/american-flamingo-call.mp3",
-    animation: "wobble",
+    animation: "bob",
   }),
   toy("bird_sanctuary_toy_puffin", "Puffin", "bird_sanctuary", {
     sound: "/sounds/atlantic-puffin-call.mp3",
-    animation: "wobble",
+    animation: "hop",
   }),
   toy("bird_sanctuary_toy_baby_deku", "Baby Deku", "bird_sanctuary"),
   toy("bird_sanctuary_toy_tree_stump", "Tree Stump", "bird_sanctuary"),
@@ -598,38 +670,66 @@ const nodes: SceneNode[] = [
   toy("reading_room_toy_nes", "NES", "reading_room"),
 
   // ── Toys inside zone_pokemon_island.glb (parent: pokemon_island) ──
-  toy("pokemon_island_toy_ekans", "Ekans", "pokemon_island", { sound: cry(23) }),
-  toy("pokemon_island_toy_espeon", "Espeon", "pokemon_island", { sound: cry(196) }),
-  toy("pokemon_island_toy_glaceon", "Glaceon", "pokemon_island", { sound: cry(471) }),
+  toy("pokemon_island_toy_ekans", "Ekans", "pokemon_island", {
+    sound: cry(23),
+  }),
+  toy("pokemon_island_toy_espeon", "Espeon", "pokemon_island", {
+    sound: cry(196),
+  }),
+  toy("pokemon_island_toy_glaceon", "Glaceon", "pokemon_island", {
+    sound: cry(471),
+  }),
   toy("pokemon_island_toy_goldeen", "Goldeen", "pokemon_island", {
     sound: cry(118),
     idle: "float",
   }),
-  toy("pokemon_island_toy_haunter", "Haunter", "pokemon_island", { sound: cry(93) }),
-  toy("pokemon_island_toy_ho_oh", "Ho-Oh", "pokemon_island", { sound: cry(250) }),
+  toy("pokemon_island_toy_haunter", "Haunter", "pokemon_island", {
+    sound: cry(93),
+  }),
+  toy("pokemon_island_toy_ho_oh", "Ho-Oh", "pokemon_island", {
+    sound: cry(250),
+  }),
   toy("pokemon_island_toy_horsea", "Horsea", "pokemon_island", {
     sound: cry(116),
     idle: "float",
   }),
-  toy("pokemon_island_toy_krabby", "Krabby", "pokemon_island", { sound: cry(98) }),
+  toy("pokemon_island_toy_krabby", "Krabby", "pokemon_island", {
+    sound: cry(98),
+  }),
   toy("pokemon_island_toy_lapras", "Lapras", "pokemon_island", {
     sound: "/sounds/lapras.ogg",
     idle: "float",
   }),
   toy("pokemon_island_toy_map", "Map", "pokemon_island"),
-  toy("pokemon_island_toy_metapod", "Metapod", "pokemon_island", { sound: cry(11) }),
+  toy("pokemon_island_toy_metapod", "Metapod", "pokemon_island", {
+    sound: cry(11),
+  }),
   toy("pokemon_island_toy_mew", "Mew", "pokemon_island", { sound: cry(151) }),
-  toy("pokemon_island_toy_nidoking", "Nidoking", "pokemon_island", { sound: cry(34) }),
-  toy("pokemon_island_toy_nidoqueen", "Nidoqueen", "pokemon_island", { sound: cry(31) }),
-  toy("pokemon_island_toy_ninetails", "Ninetales", "pokemon_island", { sound: cry(38) }),
-  toy("pokemon_island_toy_oddish_01", "Oddish", "pokemon_island", { sound: cry(43) }),
-  toy("pokemon_island_toy_oddish_02", "Oddish", "pokemon_island", { sound: cry(43) }),
+  toy("pokemon_island_toy_nidoking", "Nidoking", "pokemon_island", {
+    sound: cry(34),
+  }),
+  toy("pokemon_island_toy_nidoqueen", "Nidoqueen", "pokemon_island", {
+    sound: cry(31),
+  }),
+  toy("pokemon_island_toy_ninetails", "Ninetales", "pokemon_island", {
+    sound: cry(38),
+  }),
+  toy("pokemon_island_toy_oddish_01", "Oddish", "pokemon_island", {
+    sound: cry(43),
+  }),
+  toy("pokemon_island_toy_oddish_02", "Oddish", "pokemon_island", {
+    sound: cry(43),
+  }),
   toy("pokemon_island_toy_omanyte", "Omanyte", "pokemon_island", {
     sound: cry(138),
     idle: "float",
   }),
-  toy("pokemon_island_toy_psyduck", "Psyduck", "pokemon_island", { sound: cry(54) }),
-  toy("pokemon_island_toy_rapidash", "Rapidash", "pokemon_island", { sound: cry(78) }),
+  toy("pokemon_island_toy_psyduck", "Psyduck", "pokemon_island", {
+    sound: cry(54),
+  }),
+  toy("pokemon_island_toy_rapidash", "Rapidash", "pokemon_island", {
+    sound: cry(78),
+  }),
   toy("pokemon_island_toy_squirtle_01", "Squirtle", "pokemon_island", {
     sound: "/sounds/squirtle.ogg",
   }),
@@ -652,7 +752,9 @@ const nodes: SceneNode[] = [
     sound: "/sounds/staryu.ogg",
     idle: "float",
   }),
-  toy("pokemon_island_toy_umbreon", "Umbreon", "pokemon_island", { sound: cry(197) }),
+  toy("pokemon_island_toy_umbreon", "Umbreon", "pokemon_island", {
+    sound: cry(197),
+  }),
 
   // ── Sister sites (for QuickNav / site map) ─────────
   site("site_adhdo", "ADHDO", "/adhdo/"),
