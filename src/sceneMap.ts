@@ -100,9 +100,9 @@ function zone(
     url: null,
     glbPath:
       opts.glbPath === null ? null : (opts.glbPath ?? `/zones/zone_${key}.glb`),
-    environmentPreset: opts.env ?? "night",
     parent: opts.parent ?? "island",
     children: opts.children ?? [],
+    ...(opts.env !== undefined && { environmentPreset: opts.env }),
     ...(opts.atmosphere && { atmosphere: opts.atmosphere }),
     ...(opts.sounds && { sounds: opts.sounds }),
   };
@@ -293,33 +293,33 @@ const nodes: SceneNode[] = [
     env: "park",
     children: [
       "portal_pokemon_park",
-      "pokemon_island_toy_ekans",
-      "pokemon_island_toy_espeon",
-      "pokemon_island_toy_glaceon",
-      "pokemon_island_toy_goldeen",
-      "pokemon_island_toy_haunter",
-      "pokemon_island_toy_ho_oh",
-      "pokemon_island_toy_horsea",
-      "pokemon_island_toy_krabby",
-      "pokemon_island_toy_lapras",
-      "pokemon_island_toy_map",
-      "pokemon_island_toy_metapod",
-      "pokemon_island_toy_mew",
-      "pokemon_island_toy_nidoking",
-      "pokemon_island_toy_nidoqueen",
-      "pokemon_island_toy_ninetails",
-      "pokemon_island_toy_oddish_01",
-      "pokemon_island_toy_oddish_02",
-      "pokemon_island_toy_omanyte",
-      "pokemon_island_toy_psyduck",
-      "pokemon_island_toy_rapidash",
-      "pokemon_island_toy_squirtle_01",
-      "pokemon_island_toy_squirtle_02",
-      "pokemon_island_toy_staryu_01",
-      "pokemon_island_toy_staryu_02",
-      "pokemon_island_toy_staryu_03",
-      "pokemon_island_toy_staryu_04",
-      "pokemon_island_toy_umbreon",
+      "pi_toy_ekans",
+      "pi_toy_espeon",
+      "pi_toy_glaceon",
+      "pi_toy_goldeen",
+      "pi_toy_haunter",
+      "pi_toy_ho_oh",
+      "pi_toy_horsea",
+      "pi_toy_krabby",
+      "pi_toy_lapras",
+      "pi_map",
+      "pi_toy_metapod",
+      "pi_toy_mew",
+      "pi_toy_nidoking",
+      "pi_toy_nidoqueen",
+      "pi_toy_ninetails",
+      "pi_toy_oddish_01",
+      "pi_toy_oddish_02",
+      "pi_toy_omanyte",
+      "pi_toy_psyduck",
+      "pi_toy_rapidash",
+      "pi_toy_squirtle_01",
+      "pi_toy_squirtle_02",
+      "pi_toy_staryu_01",
+      "pi_toy_staryu_02",
+      "pi_toy_staryu_03",
+      "pi_toy_staryu_04",
+      "pi_toy_umbreon",
     ],
   }),
   zone("the_tunnels", "The Tunnels", {
@@ -712,90 +712,115 @@ const nodes: SceneNode[] = [
   toy("reading_room_toy_nes", "NES", "reading_room"),
 
   // ── Toys inside zone_pokemon_island.glb (parent: pokemon_island) ──
-  toy("pokemon_island_toy_ekans", "Ekans", "pokemon_island", {
+  toy("pi_toy_ekans", "Ekans", "pokemon_island", {
     sound: cry(23),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_espeon", "Espeon", "pokemon_island", {
+  toy("pi_toy_espeon", "Espeon", "pokemon_island", {
     sound: cry(196),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_glaceon", "Glaceon", "pokemon_island", {
+  toy("pi_toy_glaceon", "Glaceon", "pokemon_island", {
     sound: cry(471),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_goldeen", "Goldeen", "pokemon_island", {
+  toy("pi_toy_goldeen", "Goldeen", "pokemon_island", {
     sound: cry(118),
     idle: "float",
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_haunter", "Haunter", "pokemon_island", {
+  toy("pi_toy_haunter", "Haunter", "pokemon_island", {
     sound: cry(93),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_ho_oh", "Ho-Oh", "pokemon_island", {
+  toy("pi_toy_ho_oh", "Ho-Oh", "pokemon_island", {
     sound: cry(250),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_horsea", "Horsea", "pokemon_island", {
+  toy("pi_toy_horsea", "Horsea", "pokemon_island", {
     sound: cry(116),
     idle: "float",
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_krabby", "Krabby", "pokemon_island", {
+  toy("pi_toy_krabby", "Krabby", "pokemon_island", {
     sound: cry(98),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_lapras", "Lapras", "pokemon_island", {
+  toy("pi_toy_lapras", "Lapras", "pokemon_island", {
     sound: "/sounds/lapras.ogg",
     idle: "float",
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_map", "Map", "pokemon_island"),
-  toy("pokemon_island_toy_metapod", "Metapod", "pokemon_island", {
+  toy("pi_toy_map", "Map", "pokemon_island"),
+  toy("pi_toy_metapod", "Metapod", "pokemon_island", {
     sound: cry(11),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_mew", "Mew", "pokemon_island", { sound: cry(151) }),
-  toy("pokemon_island_toy_nidoking", "Nidoking", "pokemon_island", {
+  toy("pi_toy_mew", "Mew", "pokemon_island", { sound: cry(151) }),
+  toy("pi_toy_nidoking", "Nidoking", "pokemon_island", {
     sound: cry(34),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_nidoqueen", "Nidoqueen", "pokemon_island", {
+  toy("pi_toy_nidoqueen", "Nidoqueen", "pokemon_island", {
     sound: cry(31),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_ninetails", "Ninetales", "pokemon_island", {
+  toy("pi_toy_ninetails", "Ninetales", "pokemon_island", {
     sound: cry(38),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_oddish_01", "Oddish", "pokemon_island", {
+  toy("pi_toy_oddish_01", "Oddish", "pokemon_island", {
     sound: cry(43),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_oddish_02", "Oddish", "pokemon_island", {
+  toy("pi_toy_oddish_02", "Oddish", "pokemon_island", {
     sound: cry(43),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_omanyte", "Omanyte", "pokemon_island", {
+  toy("pi_toy_omanyte", "Omanyte", "pokemon_island", {
     sound: cry(138),
     idle: "float",
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_psyduck", "Psyduck", "pokemon_island", {
+  toy("pi_toy_psyduck", "Psyduck", "pokemon_island", {
     sound: cry(54),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_rapidash", "Rapidash", "pokemon_island", {
+  toy("pi_toy_rapidash", "Rapidash", "pokemon_island", {
     sound: cry(78),
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_squirtle_01", "Squirtle", "pokemon_island", {
+  toy("pi_toy_squirtle_01", "Squirtle", "pokemon_island", {
     sound: "/sounds/squirtle.ogg",
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_squirtle_02", "Squirtle", "pokemon_island", {
+  toy("pi_toy_squirtle_02", "Squirtle", "pokemon_island", {
     sound: "/sounds/squirtle.ogg",
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_staryu_01", "Staryu", "pokemon_island", {
+  toy("pi_toy_staryu_01", "Staryu", "pokemon_island", {
     sound: "/sounds/staryu.ogg",
     idle: "float",
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_staryu_02", "Staryu", "pokemon_island", {
+  toy("pi_toy_staryu_02", "Staryu", "pokemon_island", {
     sound: "/sounds/staryu.ogg",
     idle: "float",
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_staryu_03", "Staryu", "pokemon_island", {
+  toy("pi_toy_staryu_03", "Staryu", "pokemon_island", {
     sound: "/sounds/staryu.ogg",
     idle: "float",
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_staryu_04", "Staryu", "pokemon_island", {
+  toy("pi_toy_staryu_04", "Staryu", "pokemon_island", {
     sound: "/sounds/staryu.ogg",
     idle: "float",
+    animation: "hop",
   }),
-  toy("pokemon_island_toy_umbreon", "Umbreon", "pokemon_island", {
+  toy("pi_toy_umbreon", "Umbreon", "pokemon_island", {
     sound: cry(197),
+    animation: "hop",
   }),
 
   // ── Sister sites (for QuickNav / site map) ─────────

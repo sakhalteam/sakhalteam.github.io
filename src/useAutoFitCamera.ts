@@ -50,6 +50,8 @@ export function useAutoFitCamera(
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
     const radius = sphere.radius;
+    const minDistance = Math.max(radius * minZoomMultiplier, 0.75);
+    const maxDistance = Math.max(radius * maxZoomMultiplier, minDistance + 10);
 
     // Auto-detect elevation from bounding box aspect ratio
     let elevation: number;
@@ -86,14 +88,22 @@ export function useAutoFitCamera(
       Math.cos(azimuth) * Math.cos(elevation) * distance,
     );
     camera.position.copy(center).add(cameraOffset);
+
+    const perspectiveCamera = camera as THREE.PerspectiveCamera;
+    perspectiveCamera.near = Math.max(0.05, minDistance * 0.08);
+    // Floor needs to clear GradientSky's 800-unit dome, otherwise atmosphere
+    // zones lose the sky + get a transparent canvas that bleeds the page bg.
+    perspectiveCamera.far = Math.max(maxDistance + radius * 3, 2000);
+    perspectiveCamera.updateProjectionMatrix();
+
     camera.lookAt(center);
 
     // Update orbit controls
     const controls = orbitRef.current;
     if (controls) {
       controls.target.copy(center);
-      controls.minDistance = radius * minZoomMultiplier;
-      controls.maxDistance = radius * maxZoomMultiplier;
+      controls.minDistance = minDistance;
+      controls.maxDistance = maxDistance;
       controls.update();
     }
 

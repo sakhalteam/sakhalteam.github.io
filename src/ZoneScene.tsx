@@ -37,6 +37,7 @@ import {
 } from "./sceneMap";
 import ToyInteractor from "./ToyInteractor";
 import Breadcrumbs from "./Breadcrumbs";
+import SunRays from "./SunRays";
 import { Atmosphere, AtmosphereProvider, AtmospherePanel } from "./environment";
 
 interface Hotspot {
@@ -159,6 +160,7 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
 
   for (const child of scene.children) {
     const lower = child.name.toLowerCase();
+    if (lower.endsWith("_hitbox")) continue;
     if (lower.startsWith("zone_") || lower.startsWith("portal_")) {
       if (seen.has(lower)) continue;
       seen.add(lower);
@@ -206,7 +208,7 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
     const objMeshes = collectMeshes(obj);
     const memberMeshes = toysByParent.get(canonicalKey) ?? [];
 
-    const hitboxObj = hitboxMap.get(lower);
+    const hitboxObj = hitboxMap.get(lower) ?? hitboxMap.get(key);
     let box: THREE.Box3;
     if (hitboxObj) {
       box = new THREE.Box3().setFromObject(hitboxObj);
@@ -239,6 +241,7 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
 
 function ZoneMesh({
   glbPath,
+  zoneKey,
   onNavigate,
   onComingSoon,
   onSceneReady,
@@ -247,6 +250,7 @@ function ZoneMesh({
   allMeshesRef,
 }: {
   glbPath: string;
+  zoneKey: string;
   onNavigate: (url: string, internal: boolean) => void;
   onComingSoon: (label: string) => void;
   onSceneReady: (scene: THREE.Object3D) => void;
@@ -262,15 +266,74 @@ function ZoneMesh({
   }, [actions]);
 
   useEffect(() => {
+    const portalMats = new Set<THREE.Material>();
+    const hiddenBirdSanctuaryHelpers = new Set([
+      "forest_maze_016_btld06a_glass01",
+      "forest_maze_017_btld06a_glass02",
+      "forest_maze_018_btld06a_glass03",
+    ]);
+
+    const collectMats = (obj: THREE.Object3D, bucket: Set<THREE.Material>) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh && mesh.material) {
+        const mats = Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material];
+        for (const m of mats) bucket.add(m);
+      }
+    };
+
     scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) {
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        const hide =
+          zoneKey === "bird_sanctuary" &&
+          hiddenBirdSanctuaryHelpers.has(obj.name.toLowerCase());
+        // Reset visibility explicitly — drei caches the scene graph across
+        // navigations, so a prior run's hide flag can persist otherwise.
+        mesh.visible = !hide;
+        mesh.castShadow = !hide;
+        mesh.receiveShadow = !hide;
+        if (hide) return;
+        // Blender exports sometimes ship stale bounding info, making large or
+        // oddly-pivoted meshes vanish mid-orbit. Disable culling scene-wide.
+        mesh.frustumCulled = false;
       }
     });
+
+    // Nudge ALL descendants of portal_ roots forward in depth. The portal is
+    // usually a Group (portal_bird_bingo) with unnamed child meshes — without
+    // traversing in, polygonOffset wouldn't reach the actual tree mesh.
+    for (const child of scene.children) {
+      if (!child.name.toLowerCase().startsWith("portal_")) continue;
+      child.traverse((o) => collectMats(o, portalMats));
+    }
+    for (const m of portalMats) {
+      (m as any).polygonOffset = true;
+      (m as any).polygonOffsetFactor = -2;
+      (m as any).polygonOffsetUnits = -2;
+    }
+
     onSceneReady(scene);
-  }, [scene, onSceneReady]);
+  }, [scene, onSceneReady, zoneKey]);
+
+  // Parent small warm point lights to clickable toys so they read well in
+  // legacy (no-HDRI) zones like bird_sanctuary.
+  useEffect(() => {
+    const lights: THREE.PointLight[] = [];
+    scene.traverse((obj) => {
+      const node = sceneMap.get(obj.name.toLowerCase());
+      if (!node || node.type !== "toy") return;
+      if (node.interactive === false || node.quiet) return;
+      const light = new THREE.PointLight("#ffd9a8", 8, 3, 1.5);
+      light.position.set(0, 0.7, 0);
+      obj.add(light);
+      lights.push(light);
+    });
+    return () => {
+      for (const l of lights) l.parent?.remove(l);
+    };
+  }, [scene]);
 
   const hotspots = useMemo(() => {
     const result = buildHotspots(scene);
@@ -293,6 +356,40 @@ function ZoneMesh({
           onHoverChange={onHoverChange}
         />
       ))}
+    </>
+  );
+}
+
+function BirdSanctuaryLighting() {
+  return (
+    <>
+      <hemisphereLight
+        color="#cfeeff"
+        groundColor="#28401b"
+        intensity={0.9}
+      />
+      <directionalLight
+        position={[14, 18, 10]}
+        intensity={1.35}
+        color="#ffe0b5"
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-bias={-0.0005}
+        shadow-normalBias={0.02}
+      />
+      <directionalLight
+        position={[-10, 8, -12]}
+        intensity={0.7}
+        color="#83cfff"
+      />
+      <pointLight
+        position={[0, 4.5, 1]}
+        intensity={22}
+        distance={28}
+        decay={2}
+        color="#ffd6a1"
+      />
     </>
   );
 }
@@ -384,7 +481,8 @@ interface ZoneSceneProps {
     | "park"
     | "lobby"
     | "studio"
-    | "warehouse";
+    | "warehouse"
+    | undefined;
 }
 
 export default function ZoneScene({
@@ -393,7 +491,7 @@ export default function ZoneScene({
   title,
   subtitle = "click on things to explore",
   camera: cameraOptions,
-  environmentPreset = "night",
+  environmentPreset,
 }: ZoneSceneProps) {
   const atmosphereConfig = getNode(zoneKey)?.atmosphere;
   const orbitRef = useRef<any>(null);
@@ -525,13 +623,16 @@ export default function ZoneScene({
               />
             </>
           )}
-          <Environment
-            preset={environmentPreset}
-            background={!useAtmosphere}
-          />
+          {environmentPreset && (
+            <Environment
+              preset={environmentPreset}
+              background={!useAtmosphere}
+            />
+          )}
           <Suspense fallback={<LoadingFallback />}>
             <ZoneMesh
               glbPath={glbPath}
+              zoneKey={zoneKey}
               onNavigate={navigateWithTransition}
               onComingSoon={setComingSoon}
               onSceneReady={setLoadedScene}
@@ -540,6 +641,8 @@ export default function ZoneScene({
               allMeshesRef={allMeshesRef}
             />
           </Suspense>
+          {zoneKey === "bird_sanctuary" && <BirdSanctuaryLighting />}
+          {zoneKey === "bird_sanctuary" && <SunRays />}
           <OrbitControls
             ref={orbitRef}
             enablePan={true}

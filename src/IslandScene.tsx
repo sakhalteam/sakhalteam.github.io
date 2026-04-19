@@ -58,6 +58,7 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
 
   for (const child of scene.children) {
     const lower = child.name.toLowerCase();
+    if (lower.endsWith("_hitbox")) continue;
     if (lower.startsWith("zone_") || lower.startsWith("portal_")) {
       zoneObjects.push(child);
     }
@@ -93,7 +94,7 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
     const zoneMeshes = collectMeshes(obj);
     const memberMeshes = toysByParent.get(canonicalKey) ?? [];
 
-    const hitboxObj = hitboxMap.get(lower);
+    const hitboxObj = hitboxMap.get(lower) ?? hitboxMap.get(key);
     let box: THREE.Box3;
     if (hitboxObj) {
       box = new THREE.Box3().setFromObject(hitboxObj);
