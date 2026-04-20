@@ -88,8 +88,9 @@ export default function DriftClouds({
   if (activeClouds <= 0.01) return null;
 
   const tintHex = `#${params.cloudColor.getHexString()}`;
-  const cloudOpacities = states.map((_, i) =>
-    params.cloudOpacity * THREE.MathUtils.clamp(activeClouds - i, 0, 1),
+  const cloudOpacities = states.map(
+    (_, i) =>
+      params.cloudOpacity * THREE.MathUtils.clamp(activeClouds - i, 0, 1),
   );
 
   return (

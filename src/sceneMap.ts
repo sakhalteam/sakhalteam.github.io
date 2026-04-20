@@ -9,9 +9,14 @@ import type { AtmosphereSubsystem, Weather } from "./environment/presets";
  *   zone_<key>                    zone doorway (loads a scene)
  *   portal_<key>                  external portal (loads a URL)
  *   i_toy_<name>                  standalone island toy
- *   i_<zoneKey>_toy_<name>        island toy grouped with a zone/portal
- *   <zoneKey>_toy_<name>          toy inside a zone's own GLB
+ *   i_<zoneAbbr>_toy_<name>       island toy grouped with a zone/portal
+ *   <zoneAbbr>_toy_<name>         toy inside a zone's own GLB
  *   <zone_name>_hitbox            optional click collider (overrides bbox)
+ *
+ * Zone abbreviations (used only in toy prefixes — sceneMap keys for zones
+ * themselves stay spelled out). See CLAUDE.md for the full table.
+ *   i, bs, ssb, ct, sz, tok, rr, dojo, pi, tun, bp, mz, ns, flwr, ware,
+ *   crys, epi, meso, bathy, abyss, hadal, drmz, pool, famima
  *
  * Keys stored here:
  *   zones/portals are keyed by their STRIPPED name (no "zone_"/"portal_" prefix).
@@ -72,6 +77,18 @@ export interface SceneNode {
   interactive?: boolean;
   /** If true, toy does not render its own label and does not emit a toy hover outline. Still belongs to parent's outline group. */
   quiet?: boolean;
+  /** Whether to show a proximity label on hover. Default true. When false, the toy gets a subtle emissive tint on hover instead. */
+  showLabel?: boolean;
+  /** Zones: auto-turntable rotation. Default true. Set false to keep the camera still. */
+  turntable?: boolean;
+  /** Zones: optional camera override for useAutoFitCamera. */
+  camera?: {
+    padding?: number;
+    elevation?: number;
+    azimuth?: number;
+    minZoomMultiplier?: number;
+    maxZoomMultiplier?: number;
+  };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -87,6 +104,8 @@ function zone(
     parent?: string;
     children?: string[];
     sounds?: string[];
+    turntable?: boolean;
+    camera?: SceneNode["camera"];
   } = {},
 ): SceneNode {
   return {
@@ -105,6 +124,8 @@ function zone(
     ...(opts.env !== undefined && { environmentPreset: opts.env }),
     ...(opts.atmosphere && { atmosphere: opts.atmosphere }),
     ...(opts.sounds && { sounds: opts.sounds }),
+    ...(opts.turntable === false && { turntable: false }),
+    ...(opts.camera && { camera: opts.camera }),
   };
 }
 
@@ -136,6 +157,7 @@ function toy(
     idle?: ToyIdle;
     interactive?: boolean;
     quiet?: boolean;
+    showLabel?: boolean;
   } = {},
 ): SceneNode {
   return {
@@ -152,6 +174,7 @@ function toy(
     ...(opts.idle && { idle: opts.idle }),
     ...(opts.interactive === false && { interactive: false }),
     ...(opts.quiet === true && { quiet: true }),
+    ...(opts.showLabel === false && { showLabel: false }),
   };
 }
 
@@ -225,15 +248,15 @@ const nodes: SceneNode[] = [
     env: "forest",
     children: [
       "portal_bird_bingo",
-      "bird_sanctuary_toy_chocobo",
-      "bird_sanctuary_toy_flamingo",
-      "bird_sanctuary_toy_kiwi_01",
-      "bird_sanctuary_toy_kiwi_02",
-      "bird_sanctuary_toy_ostrich",
-      "bird_sanctuary_toy_penguin",
-      "bird_sanctuary_toy_puffin",
-      "bird_sanctuary_toy_baby_deku",
-      "bird_sanctuary_toy_tree_stump",
+      "bs_toy_chocobo",
+      "bs_toy_flamingo",
+      "bs_toy_kiwi_01",
+      "bs_toy_kiwi_02",
+      "bs_toy_ostrich",
+      "bs_toy_penguin",
+      "bs_toy_puffin",
+      "bs_toy_baby_deku",
+      "bs_toy_tree_stump",
     ],
   }),
   zone("ss_brainfog", "S.S. Brainfog", {
@@ -241,12 +264,14 @@ const nodes: SceneNode[] = [
     children: [
       "portal_adhdo",
       "portal_karasu_drop",
-      "ss_brainfog_toy_shark",
-      "ss_brainfog_toy_ss_aqua",
+      "ssb_toy_shark",
+      "ssb_toy_ss_aqua",
     ],
   }),
   zone("cloud_town", "Cloud Town", {
     env: "city",
+    turntable: false,
+    camera: { padding: 1, elevation: 0.45, azimuth: 0.3 },
     atmosphere: {
       enabled: [
         "sky",
@@ -263,12 +288,18 @@ const nodes: SceneNode[] = [
     },
     children: [
       "portal_weather_report",
-      "cloud_town_toy_ladder",
-      "cloud_town_toy_metal_gear_rex",
-      "cloud_town_toy_keyboard",
+      "ct_toy_ladder",
+      "ct_toy_metal_gear_rex",
+      "ct_toy_keyboard",
       "dream_zone",
       "pool_time",
+      "starlight_zone",
     ],
+  }),
+  zone("starlight_zone", "Starlight Zone", {
+    glbPath: null,
+    path: null,
+    parent: "cloud_town",
   }),
   zone("tower_of_knowledge", "Tower Of Knowledge", {
     env: "apartment",
@@ -280,9 +311,9 @@ const nodes: SceneNode[] = [
     children: [
       "portal_japanese_articles",
       "portal_proto_typing",
-      "reading_room_toy_TV",
-      "reading_room_toy_bed",
-      "reading_room_toy_nes",
+      "rr_toy_TV",
+      "rr_toy_bed",
+      "rr_toy_nes",
     ],
   }),
   zone("dojo", "Dojo", {
@@ -330,17 +361,17 @@ const nodes: SceneNode[] = [
     env: "sunset",
     children: [
       "portal_nikbeat",
-      "beach_party_toy_beach",
-      "beach_party_toy_mudkip",
-      "beach_party_toy_squirtle",
-      "beach_party_toy_flamingo_01",
-      "beach_party_toy_flamingo_02",
-      "beach_party_toy_beach_ball",
-      "beach_party_toy_beach_chair",
-      "beach_party_toy_beach_towel_01",
-      "beach_party_toy_beach_towel_02",
-      "beach_party_toy_beach_umbrella",
-      "beach_party_toy_cooler",
+      "bp_toy_beach",
+      "bp_toy_mudkip",
+      "bp_toy_squirtle",
+      "bp_toy_flamingo_01",
+      "bp_toy_flamingo_02",
+      "bp_toy_beach_ball",
+      "bp_toy_beach_chair",
+      "bp_toy_beach_towel_01",
+      "bp_toy_beach_towel_02",
+      "bp_toy_beach_umbrella",
+      "bp_toy_cooler",
     ],
   }),
 
@@ -354,16 +385,12 @@ const nodes: SceneNode[] = [
   zone("nessie", "Nessie", {
     glbPath: null,
     path: null,
-    children: [
-      "i_nessie_toy_hat",
-      "i_nessie_toy_umbrella",
-      "i_nessie_toy_crane",
-    ],
+    children: ["i_ns_toy_hat", "i_ns_toy_umbrella", "i_ns_toy_crane"],
   }),
   zone("flower_shop", "Flower Shop", {
     glbPath: null,
     path: null,
-    children: ["i_flower_shop_toy_crane"],
+    children: ["i_flwr_toy_crane"],
   }),
   zone("warehouse", "Warehouse", {
     glbPath: null,
@@ -394,7 +421,7 @@ const nodes: SceneNode[] = [
     glbPath: null,
     path: null,
     sounds: ["/sounds/zone_crystals.mp3"],
-    children: ["i_crystals_toy_crane"],
+    children: ["i_crys_toy_crane"],
   }),
   // Inside Cloud Town scene (no GLB yet):
   zone("dream_zone", "Dream Zone", {
@@ -451,7 +478,7 @@ const nodes: SceneNode[] = [
     animation: "hop",
   }),
   toy("i_toy_dinosaur_statue", "Dinosaur", "island", {
-    sound: "/sounds/toy_dinosaur_statue.mp3",
+    sound: "/sounds/i_toy_dinosaur_statue.mp3",
     animation: "none",
   }),
   toy("i_toy_harpy", "Harpy", "island", { animation: "action" }),
@@ -467,81 +494,72 @@ const nodes: SceneNode[] = [
   toy("i_toy_lion_statue_right", "Lion Statue", "island"),
 
   // ── Beach Party group (parent: beach_party) ────────
-  toy("i_beach_party_toy_mudkip", "Mudkip", "beach_party", {
+  toy("i_bp_toy_mudkip", "Mudkip", "beach_party", {
     sound: "/sounds/mudkip.ogg",
     animation: "hop",
   }),
-  toy("i_beach_party_toy_squirtle", "Squirtle", "beach_party", {
+  toy("i_bp_toy_squirtle", "Squirtle", "beach_party", {
     sound: "/sounds/squirtle.ogg",
     animation: "hop",
   }),
-  toy("i_beach_party_toy_beach_ball", "Beach Ball", "beach_party"),
-  toy("i_beach_party_toy_beach_chair", "Beach Chair", "beach_party"),
-  toy("i_beach_party_toy_cooler", "Cooler", "beach_party", {
-    sound: "/sounds/zc_toy_beach_party_object_cooler.mp3",
+  toy("i_bp_toy_beach_ball", "Beach Ball", "beach_party"),
+  toy("i_bp_toy_beach_chair", "Beach Chair", "beach_party"),
+  toy("i_bp_toy_cooler", "Cooler", "beach_party", {
+    sound: "/sounds/i_bp_toy_cooler.mp3",
   }),
-  toy("i_beach_party_toy_umbrella", "Umbrella", "beach_party"),
-  toy("i_beach_party_toy_beach_towel_01", "Beach Towel", "beach_party"),
-  toy("i_beach_party_toy_beach_towel_02", "Beach Towel", "beach_party"),
-  toy("i_beach_party_toy_flamingo_01", "Flamingo", "beach_party", {
+  toy("i_bp_toy_umbrella", "Umbrella", "beach_party"),
+  toy("i_bp_toy_beach_towel_01", "Beach Towel", "beach_party"),
+  toy("i_bp_toy_beach_towel_02", "Beach Towel", "beach_party"),
+  toy("i_bp_toy_flamingo_01", "Flamingo", "beach_party", {
     sound: "/sounds/american-flamingo-call.mp3",
+    animation: "wobble",
   }),
-  toy("i_beach_party_toy_flamingo_02", "Flamingo", "beach_party", {
+  toy("i_bp_toy_flamingo_02", "Flamingo", "beach_party", {
     sound: "/sounds/american-flamingo-call.mp3",
+    animation: "wobble",
   }),
 
   // ── Bird Sanctuary group on island (parent: bird_sanctuary) ──
-  toy("i_bird_sanctuary_toy_cassowary", "Cassowary", "bird_sanctuary", {
+  toy("i_bs_toy_cassowary", "Cassowary", "bird_sanctuary", {
     sound: "/sounds/southern-cassowary-call.mp3",
     animation: "wobble",
+    showLabel: false,
   }),
-  toy("i_bird_sanctuary_toy_eagle", "Eagle", "bird_sanctuary", {
+  toy("i_bs_toy_eagle", "Eagle", "bird_sanctuary", {
     sound: "/sounds/red-tailed-hawk-call.mp3",
     animation: "bob",
   }),
-  toy(
-    "i_bird_sanctuary_toy_american_robin",
-    "American Robin",
-    "bird_sanctuary",
-    {
-      sound: "/sounds/american-robin-call.mp3",
-      animation: "hop",
-    },
-  ),
-  toy(
-    "i_bird_sanctuary_toy_baltimore_oriole",
-    "Baltimore Oriole",
-    "bird_sanctuary",
-    {
-      sound: "/sounds/baltimore-oriole-call.mp3",
-      animation: "hop",
-    },
-  ),
-  toy("i_bird_sanctuary_toy_blue_jay", "Blue Jay", "bird_sanctuary", {
+  toy("i_bs_toy_american_robin", "American Robin", "bird_sanctuary", {
+    sound: "/sounds/american-robin-call.mp3",
+    animation: "hop",
+  }),
+  toy("i_bs_toy_baltimore_oriole", "Baltimore Oriole", "bird_sanctuary", {
+    sound: "/sounds/baltimore-oriole-call.mp3",
+    animation: "hop",
+  }),
+  toy("i_bs_toy_blue_jay", "Blue Jay", "bird_sanctuary", {
     sound: "/sounds/blue-jay-call.mp3",
     animation: "hop",
   }),
-  toy(
-    "i_bird_sanctuary_toy_northern_cardinal",
-    "Northern Cardinal",
-    "bird_sanctuary",
-    {
-      sound: "/sounds/northern-cardinal-call.mp3",
-      animation: "hop",
-    },
-  ),
-  toy("i_bird_sanctuary_toy_king_egg", "King Egg", "bird_sanctuary", {
+  toy("i_bs_toy_northern_cardinal", "Northern Cardinal", "bird_sanctuary", {
+    sound: "/sounds/northern-cardinal-call.mp3",
+    animation: "hop",
+  }),
+  toy("i_bs_toy_king_egg", "King Egg", "bird_sanctuary", {
     animation: "hop",
   }),
 
   // ── Nessie group on island (parent: nessie) ────────
-  toy("i_nessie_toy_hat", "Hat", "nessie"),
-  toy("i_nessie_toy_umbrella", "Umbrella", "nessie"),
-  structural("i_nessie_toy_crane", "Crane", "nessie"),
+  toy("i_ns_toy_hat", "Hat", "nessie"),
+  toy("i_ns_toy_umbrella", "Umbrella", "nessie"),
+  structural("i_ns_toy_crane", "Crane", "nessie"),
 
   // ── Famima group on island (parent: famima) ────────
   toy("i_famima_toy_pizza", "Pizza", "famima"),
-  toy("i_famima_toy_ramen", "Ramen", "famima"),
+  toy("i_famima_toy_ramen", "Ramen", "famima", {
+    sound: "/sounds/ramen.mp3",
+    animation: "hop",
+  }),
   toy("i_famima_toy_flamingo", "Flamingo", "famima", {
     sound: "/sounds/american-flamingo-call.mp3",
   }),
@@ -550,166 +568,137 @@ const nodes: SceneNode[] = [
   }),
 
   // ── Pokemon Island group on island (parent: pokemon_island) ──
-  toy("i_pokemon_island_toy_diglett", "Diglett", "pokemon_island", {
+  toy("i_pi_toy_diglett", "Diglett", "pokemon_island", {
     sound: "/sounds/diglett.ogg",
     idle: "float",
   }),
-  toy("i_pokemon_island_toy_staryu", "Staryu", "pokemon_island", {
+  toy("i_pi_toy_staryu", "Staryu", "pokemon_island", {
     sound: "/sounds/staryu.ogg",
     idle: "float",
   }),
-  toy("i_pokemon_island_toy_lapras", "Lapras", "pokemon_island", {
+  toy("i_pi_toy_lapras", "Lapras", "pokemon_island", {
     sound: "/sounds/lapras.ogg",
     idle: "float",
   }),
-  toy("i_pokemon_island_toy_pollywag", "Poliwag", "pokemon_island", {
+  toy("i_pi_toy_pollywag", "Poliwag", "pokemon_island", {
     sound: "/sounds/poliwag.ogg",
     idle: "float",
   }),
-  structural("i_pokemon_island_toy_bridge", "Bridge", "pokemon_island"),
+  structural("i_pi_toy_bridge", "Bridge", "pokemon_island"),
 
   // ── Tower of Knowledge group on island (parent: tower_of_knowledge) ──
-  toy("i_tower_of_knowledge_toy_crystal", "Crystal", "tower_of_knowledge", {
-    sound: "/sounds/zc_tower_of_knowledge_CRYSTAL_PARENT.mp3",
+  toy("i_tok_toy_save_point", "Save Point", "tower_of_knowledge", {
+    sound: "/sounds/i_tok_toy_save_crystal.mp3",
   }),
-  toy("i_tower_of_knowledge_toy_cat_dingus", "Dingus", "tower_of_knowledge", {
-    sound: "/sounds/zc_tower_of_knowledge_character_cat_dingus.mp3",
+  toy("i_tok_toy_cat_dingus", "Dingus", "tower_of_knowledge", {
+    sound: "/sounds/i_tok_toy_character_cat_dingus.mp3",
     animation: "hop",
   }),
-  toy("i_tower_of_knowledge_toy_cat_midge", "Midge", "tower_of_knowledge", {
-    sound: "/sounds/zc_tower_of_knowledge_character_cat_midge.mp3",
+  toy("i_tok_toy_cat_midge", "Midge", "tower_of_knowledge", {
+    sound: "/sounds/i_tok_toy_character_cat_midge.mp3",
     animation: "hop",
   }),
+  toy("i_tok_toy_cat_croissant", "Croissant", "tower_of_knowledge", {
+    sound: "/sounds/i_tok_toy_character_cat_croissant.mp3",
+    animation: "hop",
+  }),
+  toy("i_tok_toy_cat_benchcats", "Bench Cats", "tower_of_knowledge", {
+    sound: "/sounds/i_tok_toy_character_cat_benchcats.mp3",
+    animation: "hop",
+  }),
+  toy("i_tok_toy_blue_mushroom", "Blue Mushroom", "tower_of_knowledge", {
+    animation: "grow",
+  }),
+  toy("i_tok_toy_white_mushroom", "White Mushroom", "tower_of_knowledge", {
+    animation: "grow",
+  }),
   toy(
-    "i_tower_of_knowledge_toy_cat_croissant",
-    "Croissant",
-    "tower_of_knowledge",
-    {
-      sound: "/sounds/zc_tower_of_knowledge_character_cat_croissant.mp3",
-      animation: "hop",
-    },
-  ),
-  toy(
-    "i_tower_of_knowledge_toy_cat_benchcats",
-    "Bench Cats",
-    "tower_of_knowledge",
-    {
-      sound: "/sounds/zc_tower_of_knowledge_character_cat_benchcats.mp3",
-      animation: "hop",
-    },
-  ),
-  toy(
-    "i_tower_of_knowledge_toy_blue_mushroom",
-    "Blue Mushroom",
-    "tower_of_knowledge",
-    {
-      animation: "grow",
-    },
-  ),
-  toy(
-    "i_tower_of_knowledge_toy_white_mushroom",
-    "White Mushroom",
-    "tower_of_knowledge",
-    {
-      animation: "grow",
-    },
-  ),
-  toy(
-    "i_tower_of_knowledge_toy_fish_on_cutting_board",
+    "i_tok_toy_fish_on_cutting_board",
     "Fish on Cutting Board",
     "tower_of_knowledge",
   ),
-  toy(
-    "i_tower_of_knowledge_toy_save_point",
-    "Save Point",
-    "tower_of_knowledge",
-  ),
+  structural("i_tok_toy_castle_wall", "Castle Wall", "tower_of_knowledge"),
   structural(
-    "i_tower_of_knowledge_toy_castle_wall",
-    "Castle Wall",
-    "tower_of_knowledge",
-  ),
-  structural(
-    "i_tower_of_knowledge_toy_stonewallpatch",
+    "i_tok_toy_stonewallpatch",
     "Stone Wall Patch",
     "tower_of_knowledge",
   ),
 
   // Coming-soon crane zones (all deferred until Bug #9 crane fix)
-  structural("i_crystals_toy_crane", "Crane", "crystals"),
-  structural("i_flower_shop_toy_crane", "Crane", "flower_shop"),
-  structural("i_mystery_zone_toy_crane", "Crane", "mystery_zone"),
+  structural("i_crys_toy_crane", "Crane", "crystals"),
+  structural("i_flwr_toy_crane", "Crane", "flower_shop"),
+  structural("i_mz_toy_crane", "Crane", "mystery_zone"),
 
   // ── Toys inside zone_beach_party.glb (parent: beach_party) ──
-  structural("beach_party_toy_beach", "Beach", "beach_party"),
-  toy("beach_party_toy_mudkip", "Mudkip", "beach_party", {
+  structural("bp_toy_beach", "Beach", "beach_party"),
+  toy("bp_toy_mudkip", "Mudkip", "beach_party", {
     sound: "/sounds/mudkip.ogg",
     animation: "hop",
   }),
-  toy("beach_party_toy_squirtle", "Squirtle", "beach_party", {
+  toy("bp_toy_squirtle", "Squirtle", "beach_party", {
     sound: "/sounds/squirtle.ogg",
     animation: "hop",
   }),
-  toy("beach_party_toy_flamingo_01", "Flamingo", "beach_party", {
+  toy("bp_toy_flamingo_01", "Flamingo", "beach_party", {
     sound: "/sounds/american-flamingo-call.mp3",
   }),
-  toy("beach_party_toy_flamingo_02", "Flamingo", "beach_party", {
+  toy("bp_toy_flamingo_02", "Flamingo", "beach_party", {
     sound: "/sounds/american-flamingo-call.mp3",
   }),
-  toy("beach_party_toy_beach_ball", "Beach Ball", "beach_party"),
-  toy("beach_party_toy_beach_chair", "Beach Chair", "beach_party"),
-  toy("beach_party_toy_beach_towel_01", "Beach Towel", "beach_party"),
-  toy("beach_party_toy_beach_towel_02", "Beach Towel", "beach_party"),
-  toy("beach_party_toy_beach_umbrella", "Umbrella", "beach_party"),
-  toy("beach_party_toy_cooler", "Cooler", "beach_party", {
-    sound: "/sounds/zc_toy_beach_party_object_cooler.mp3",
+  toy("bp_toy_beach_ball", "Beach Ball", "beach_party"),
+  toy("bp_toy_beach_chair", "Beach Chair", "beach_party"),
+  toy("bp_toy_beach_towel_01", "Beach Towel", "beach_party"),
+  toy("bp_toy_beach_towel_02", "Beach Towel", "beach_party"),
+  toy("bp_toy_beach_umbrella", "Umbrella", "beach_party"),
+  toy("bp_toy_cooler", "Cooler", "beach_party", {
+    sound: "/sounds/i_bp_toy_cooler.mp3",
   }),
 
   // ── Toys inside zone_bird_sanctuary.glb (parent: bird_sanctuary) ──
-  toy("bird_sanctuary_toy_penguin", "Penguin", "bird_sanctuary", {
+  toy("bs_toy_penguin", "Penguin", "bird_sanctuary", {
     sound: "/sounds/tobimasen.mp3",
     animation: "hop",
   }),
-  toy("bird_sanctuary_toy_ostrich", "Ostrich", "bird_sanctuary", {
+  toy("bs_toy_ostrich", "Ostrich", "bird_sanctuary", {
     sound: "/sounds/common-ostrich-call.mp3",
     animation: "hop",
   }),
-  toy("bird_sanctuary_toy_chocobo", "Chocobo", "bird_sanctuary", {
+  toy("bs_toy_chocobo", "Chocobo", "bird_sanctuary", {
     sound: "/sounds/bs_toy_chocobo.mp3",
     animation: "hop",
   }),
-  toy("bird_sanctuary_toy_kiwi_01", "Kiwi", "bird_sanctuary", {
+  toy("bs_toy_kiwi_01", "Kiwi", "bird_sanctuary", {
     sound: "/sounds/okarito-brown-kiwi-call.mp3",
     animation: "hop",
   }),
-  toy("bird_sanctuary_toy_kiwi_02", "Kiwi", "bird_sanctuary", {
+  toy("bs_toy_kiwi_02", "Kiwi", "bird_sanctuary", {
     sound: "/sounds/okarito-brown-kiwi-call.mp3",
     animation: "hop",
   }),
-  toy("bird_sanctuary_toy_flamingo", "Flamingo", "bird_sanctuary", {
+  toy("bs_toy_flamingo", "Flamingo", "bird_sanctuary", {
     sound: "/sounds/american-flamingo-call.mp3",
     animation: "bob",
   }),
-  toy("bird_sanctuary_toy_puffin", "Puffin", "bird_sanctuary", {
+  toy("bs_toy_puffin", "Puffin", "bird_sanctuary", {
     sound: "/sounds/atlantic-puffin-call.mp3",
     animation: "hop",
   }),
-  toy("bird_sanctuary_toy_baby_deku", "Baby Deku", "bird_sanctuary"),
-  toy("bird_sanctuary_toy_tree_stump", "Tree Stump", "bird_sanctuary"),
+  toy("bs_toy_baby_deku", "Baby Deku", "bird_sanctuary"),
+  toy("bs_toy_tree_stump", "Tree Stump", "bird_sanctuary"),
 
   // ── Toys inside zone_cloud_town.glb (parent: cloud_town) ──
-  toy("cloud_town_toy_ladder", "Ladder", "cloud_town"),
-  toy("cloud_town_toy_metal_gear_rex", "Metal Gear Rex", "cloud_town"),
-  toy("cloud_town_toy_keyboard", "Keyboard", "cloud_town"),
+  toy("ct_toy_ladder", "Ladder", "cloud_town"),
+  toy("ct_toy_metal_gear_rex", "Metal Gear Rex", "cloud_town"),
+  toy("ct_toy_keyboard", "Keyboard", "cloud_town"),
 
   // ── Toys inside zone_ss_brainfog.glb (parent: ss_brainfog) ──
-  toy("ss_brainfog_toy_shark", "Shark", "ss_brainfog"),
-  toy("ss_brainfog_toy_ss_aqua", "S.S. Aqua", "ss_brainfog"),
+  toy("ssb_toy_shark", "Shark", "ss_brainfog"),
+  toy("ssb_toy_ss_aqua", "S.S. Aqua", "ss_brainfog"),
 
   // ── Toys inside zone_reading_room.glb (parent: reading_room) ──
-  toy("reading_room_toy_TV", "TV", "reading_room"),
-  toy("reading_room_toy_bed", "Bed", "reading_room"),
-  toy("reading_room_toy_nes", "NES", "reading_room"),
+  toy("rr_toy_TV", "TV", "reading_room"),
+  toy("rr_toy_bed", "Bed", "reading_room"),
+  toy("rr_toy_nes", "NES", "reading_room"),
 
   // ── Toys inside zone_pokemon_island.glb (parent: pokemon_island) ──
   toy("pi_toy_ekans", "Ekans", "pokemon_island", {
@@ -751,7 +740,6 @@ const nodes: SceneNode[] = [
     idle: "float",
     animation: "hop",
   }),
-  toy("pi_toy_map", "Map", "pokemon_island"),
   toy("pi_toy_metapod", "Metapod", "pokemon_island", {
     sound: cry(11),
     animation: "hop",
@@ -967,6 +955,7 @@ export function getToyConfig(objName: string):
       parent: string | null;
       interactive: boolean;
       quiet: boolean;
+      showLabel: boolean;
     }
   | undefined {
   const node = sceneMap.get(objName.toLowerCase());
@@ -979,6 +968,7 @@ export function getToyConfig(objName: string):
     parent: node.parent,
     interactive: node.interactive !== false,
     quiet: node.quiet === true,
+    showLabel: node.showLabel !== false,
   };
 }
 

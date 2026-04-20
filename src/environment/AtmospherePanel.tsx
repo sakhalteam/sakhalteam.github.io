@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { WEATHERS, WEATHER_LABELS } from "./presets";
 import { useAtmosphere } from "./AtmosphereContext";
+import { useSceneOptions } from "../SceneOptionsContext";
 
 function formatClock(hour: number, minute: number): string {
   const ampm = hour >= 12 ? "PM" : "AM";
@@ -45,6 +46,7 @@ export default function AtmospherePanel() {
     setWeather,
     params,
   } = useAtmosphere();
+  const { allRangeMode, setAllRangeMode, hasFlightVariants } = useSceneOptions();
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -164,6 +166,21 @@ export default function AtmospherePanel() {
               ))}
             </div>
           </section>
+
+          {/* Scene Options — only renders toggles registered by the current zone */}
+          {hasFlightVariants && (
+            <section className="atm-section">
+              <h4 className="atm-header">Scene Options</h4>
+              <label className="atm-field">
+                <span className="atm-field-label">All Range Mode</span>
+                <input
+                  type="checkbox"
+                  checked={allRangeMode}
+                  onChange={(e) => setAllRangeMode(e.target.checked)}
+                />
+              </label>
+            </section>
+          )}
         </div>
       )}
     </div>

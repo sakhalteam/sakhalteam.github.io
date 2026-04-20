@@ -38,7 +38,46 @@ export function useAutoFitCamera(
   useEffect(() => {
     if (!scene) return;
 
-    const box = new THREE.Box3().setFromObject(scene);
+    // Exclude flight-animated zones + their marker empties from the fit bbox.
+    // Those sit far outside the actual playable scene and would blow out zoom.
+    const flightedRoots = new Set<THREE.Object3D>();
+    scene.traverse((obj) => {
+      const lower = obj.name.toLowerCase();
+      if (!lower.endsWith("_flight_start")) return;
+      const targetName = lower.slice(0, -"_flight_start".length);
+      scene.traverse((o) => {
+        if (o.name.toLowerCase() === targetName) flightedRoots.add(o);
+      });
+    });
+    const isFlightMarker = (name: string) => {
+      const l = name.toLowerCase();
+      return (
+        l.endsWith("_flight_start") ||
+        l.endsWith("_flight_end") ||
+        l.endsWith("_flight_finish")
+      );
+    };
+    const isUnderFlightedRoot = (obj: THREE.Object3D) => {
+      let p: THREE.Object3D | null = obj;
+      while (p) {
+        if (flightedRoots.has(p)) return true;
+        p = p.parent;
+      }
+      return false;
+    };
+
+    const box = new THREE.Box3();
+    scene.updateWorldMatrix(true, true);
+    scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      if (isFlightMarker(obj.name)) return;
+      if (isUnderFlightedRoot(obj)) return;
+      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+      const meshBox = mesh.geometry.boundingBox!.clone();
+      meshBox.applyMatrix4(mesh.matrixWorld);
+      box.union(meshBox);
+    });
     if (box.isEmpty()) return;
 
     const center = new THREE.Vector3();

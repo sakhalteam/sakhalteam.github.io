@@ -59,6 +59,12 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
   for (const child of scene.children) {
     const lower = child.name.toLowerCase();
     if (lower.endsWith("_hitbox")) continue;
+    if (
+      lower.endsWith("_flight_start") ||
+      lower.endsWith("_flight_end") ||
+      lower.endsWith("_flight_finish")
+    )
+      continue;
     if (lower.startsWith("zone_") || lower.startsWith("portal_")) {
       zoneObjects.push(child);
     }
@@ -517,7 +523,6 @@ export default function IslandScene({
         }}
         minDistance={6}
         maxDistance={50}
-        maxPolarAngle={Math.PI / 2.1}
       />
       <IslandCameraRig
         orbitRef={orbitRef}

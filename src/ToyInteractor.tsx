@@ -17,6 +17,7 @@ interface ToyData {
   obj: THREE.Object3D;
   baseY: number;
   label: string;
+  showLabel: boolean;
   soundUrl: string | null;
   meshes: THREE.Mesh[];
   animation: ToyAnimation;
@@ -141,6 +142,7 @@ export default function ToyInteractor({
         obj: primary,
         baseY: primary.position.y,
         label: config.label,
+        showLabel: config.showLabel,
         soundUrl: config.sound,
         meshes,
         animation: config.animation,
@@ -474,8 +476,8 @@ export default function ToyInteractor({
         state.opacity = Math.max(state.opacity - FADE_SPEED * delta, 0);
       }
 
-      // Hover glow for labelless toys (hop/bob) — subtle emissive tint
-      if (toy.animation === "hop" || toy.animation === "bob") {
+      // Hover glow for labelless toys — subtle emissive tint
+      if (!toy.showLabel) {
         for (const mesh of toy.meshes) {
           const mat = mesh.material as THREE.MeshStandardMaterial;
           if (mat.emissive) {
@@ -521,9 +523,7 @@ export default function ToyInteractor({
   return (
     <>
       {toys
-        .filter(
-          (t) => !t.quiet && t.animation !== "hop" && t.animation !== "bob",
-        )
+        .filter((t) => !t.quiet && t.showLabel)
         .map((toy) => {
           const box = new THREE.Box3().setFromObject(toy.obj);
           const labelPos = new THREE.Vector3();

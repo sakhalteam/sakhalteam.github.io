@@ -25,10 +25,12 @@ export function useTurntable(
     direction = -1,
     /** Ms of idle before auto-resuming rotation. Default: 15000 (15s). Set 0 to disable. */
     idleTimeout = 15000,
+    /** If false, turntable is permanently off and toggle is a no-op. */
+    enabled = true,
   } = {},
 ) {
-  const active = useRef(true);
-  const [playing, setPlaying] = useState(true);
+  const active = useRef(enabled);
+  const [playing, setPlaying] = useState(enabled);
   const lastInteraction = useRef(0);
   const manualPause = useRef(false);
   const { gl } = useThree();
@@ -40,6 +42,7 @@ export function useTurntable(
   }, []);
 
   const toggle = useCallback(() => {
+    if (!enabled) return;
     if (active.current) {
       // Currently playing → pause manually
       active.current = false;
@@ -76,6 +79,7 @@ export function useTurntable(
   }, [gl]);
 
   useFrame(({ camera }, delta) => {
+    if (!enabled) return;
     // Auto-resume after idle timeout (unless manually paused via toggle)
     if (!active.current && !manualPause.current && idleTimeout > 0) {
       const idle = performance.now() - lastInteraction.current;

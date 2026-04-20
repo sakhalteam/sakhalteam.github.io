@@ -37,15 +37,46 @@ The main portfolio/hub site for sakhalteam. Features an interactive 3D island ma
 
 Object name conventions in GLB files:
 
-| Name pattern              | Behavior                                                                            | File location                 |
-| ------------------------- | ----------------------------------------------------------------------------------- | ----------------------------- |
-| `zone_<key>`              | Loads a new 3D scene (or shows coming-soon modal if no GLB)                         | `public/zones/zone_<key>.glb` |
-| `portal_<key>`            | Navigates to an external sakhalteam minisite                                        | No GLB — it's a URL           |
-| `i_toy_<name>`            | Standalone island toy (parent: island)                                              | Part of island.glb            |
-| `i_<zoneKey>_toy_<name>`  | Island toy grouped with a zone/portal — glows with that zone on hover               | Part of island.glb            |
-| `<zoneKey>_toy_<name>`    | Toy inside a zone's own GLB (parent: that zoneKey)                                  | Part of zone_<zoneKey>.glb    |
-| `<zone_name>_hitbox`      | Optional click collider — overrides bbox. Mesh is auto-hidden at runtime            | Part of parent GLB            |
-| _(no entry in sceneMap)_  | Scenery, decoration — not interactive                                               | Part of parent GLB            |
+| Name pattern               | Behavior                                                                            | File location                 |
+| -------------------------- | ----------------------------------------------------------------------------------- | ----------------------------- |
+| `zone_<key>`               | Loads a new 3D scene (or shows coming-soon modal if no GLB)                         | `public/zones/zone_<key>.glb` |
+| `portal_<key>`             | Navigates to an external sakhalteam minisite                                        | No GLB — it's a URL           |
+| `i_toy_<name>`             | Standalone island toy (parent: island)                                              | Part of island.glb            |
+| `i_<zoneAbbr>_toy_<name>`  | Island toy grouped with a zone/portal — glows with that zone on hover               | Part of island.glb            |
+| `<zoneAbbr>_toy_<name>`    | Toy inside a zone's own GLB (parent: that zoneKey)                                  | Part of zone_<zoneKey>.glb    |
+| `<zone_name>_hitbox`       | Optional click collider — overrides bbox. Mesh is auto-hidden at runtime            | Part of parent GLB            |
+| _(no entry in sceneMap)_   | Scenery, decoration — not interactive                                               | Part of parent GLB            |
+
+**Zone abbreviations (used in toy prefixes only; sceneMap zone keys stay spelled out):**
+
+| Zone key (sceneMap)  | Abbr    | Used in Blender mesh names as          |
+| -------------------- | ------- | -------------------------------------- |
+| island               | i       | `i_toy_*`, `i_<zoneAbbr>_toy_*`        |
+| bird_sanctuary       | bs      | `bs_toy_*`, `i_bs_toy_*`               |
+| ss_brainfog          | ssb     | `ssb_toy_*`, `i_ssb_toy_*`             |
+| cloud_town           | ct      | `ct_toy_*`                             |
+| starlight_zone       | sz      | `sz_toy_*` (not yet used)              |
+| tower_of_knowledge   | tok     | `tok_toy_*`, `i_tok_toy_*`             |
+| reading_room         | rr      | `rr_toy_*`                             |
+| dojo                 | dojo    | `dojo_toy_*` (already short)           |
+| pokemon_island       | pi      | `pi_toy_*`, `i_pi_toy_*`               |
+| the_tunnels          | tun     | `tun_toy_*`                            |
+| beach_party          | bp      | `bp_toy_*`, `i_bp_toy_*`               |
+| mystery_zone         | mz      | `mz_toy_*`, `i_mz_toy_*`               |
+| nessie               | ns      | `ns_toy_*`, `i_ns_toy_*`               |
+| flower_shop          | flwr    | `flwr_toy_*`, `i_flwr_toy_*`           |
+| warehouse            | ware    | `ware_toy_*`                           |
+| crystals             | crys    | `crys_toy_*`, `i_crys_toy_*`           |
+| the_epipelagic       | epi     | `epi_toy_*`                            |
+| the_mesopelagic      | meso    | `meso_toy_*`                           |
+| the_bathypelagic     | bathy   | `bathy_toy_*`                          |
+| the_abyssalpelagic   | abyss   | `abyss_toy_*`                          |
+| the_hadalpelagic     | hadal   | `hadal_toy_*`                          |
+| dream_zone           | drmz    | `drmz_toy_*`                           |
+| pool_time            | pool    | `pool_toy_*`                           |
+| famima (portal)      | famima  | `i_famima_toy_*` (island), `famima_toy_*` (internal, n/a yet) |
+
+Rule of thumb: the abbreviation is whatever Nic finds fastest to type in Blender's outliner. It's just a cosmetic short key — `sceneMap.parent` is what actually connects a toy to its zone.
 
 **Toy behavior flags (in sceneMap `toy()` calls):**
 - `interactive: false` — toy is not clickable and has no animation/sound. Still glows with parent zone. Used for structural/decorative members (bridges, walls, sand ground, cranes). Shortcut: `structural(key, label, parent)`.
@@ -204,7 +235,7 @@ Optimized via gltf-transform: Draco geometry compression + WebP texture compress
 - Shark circle animation: toy_shark in zone_ss_brainfog currently loops idle swim. Nic will add a second Blender action (`shark_circle`) for a big circle swim under the boat. On click: crossfade to circle action, then back to idle. Needs new ToyInteractor animation type (`animation: 'action'`) that swaps named AnimationActions instead of rotating the object.
 - **NES player component (for zone_reading_room)**: `reading_room_toy_nes` should open a small popup player UI with a scrollable list of classic NES themes. Nic will source the audio files later. Cycles through tracks on user selection. Needs a new component (like the breadcrumbs — lightweight overlay) that mounts on click of the NES toy.
 - **Proto-Typing site (portal_proto_typing in zone_reading_room)**: Unreleased minigame site. URL is `/proto-typing/`. Needs a new repo scaffolded (sakhalteam convention: Vite 8 + React 19 + TS 6, `base: '/proto-typing/'`). Content TBD — some kind of typing minigame.
-- **Cloud town toy sounds**: `cloud_town_toy_ladder` will sway back and forth (needs animation). `cloud_town_toy_metal_gear_rex` needs a Metal Gear sound effect. `cloud_town_toy_keyboard` needs a typing click-clack sound effect. Nic to source.
+- **Cloud town toy sounds**: `ct_toy_ladder` will sway back and forth (needs animation). `ct_toy_metal_gear_rex` needs a Metal Gear sound effect. `ct_toy_keyboard` needs a typing click-clack sound effect. Nic to source.
 - **Reading room toys**: `reading_room_toy_TV` should eventually play a looping GIF of a gameboy pokemon battle scene. `reading_room_toy_bed` needs a snoring sound effect (or cute "lights off" interaction).
 - **Bird sanctuary**: `bird_sanctuary_toy_baby_deku` and `bird_sanctuary_toy_tree_stump` are placeholders — Nic hasn't decided their behavior yet. Entries exist in sceneMap to remind him.
 

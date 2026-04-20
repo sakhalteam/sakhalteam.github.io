@@ -94,6 +94,7 @@ export default function App() {
                 zoneKey={z.key}
                 title={z.label.toUpperCase()}
                 environmentPreset={z.environmentPreset as any}
+                {...(z.camera && { camera: z.camera })}
               />
             }
           />

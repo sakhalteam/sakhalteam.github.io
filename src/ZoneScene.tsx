@@ -36,6 +36,9 @@ import {
   getNode,
 } from "./sceneMap";
 import ToyInteractor from "./ToyInteractor";
+import FlightPath, { type FlightPathConfig } from "./FlightPath";
+import Waterfall from "./Waterfall";
+import { SceneOptionsProvider } from "./SceneOptionsContext";
 import Breadcrumbs from "./Breadcrumbs";
 import SunRays from "./SunRays";
 import { Atmosphere, AtmosphereProvider, AtmospherePanel } from "./environment";
@@ -149,6 +152,21 @@ const HotspotHitbox = memo(function HotspotHitbox({
 });
 
 /**
+ * Scan the scene for objects paired with `<name>_flight_start` empties.
+ * These zones are animated by FlightPath and should not receive a static hotspot.
+ */
+function findFlightedZoneNames(scene: THREE.Object3D): Set<string> {
+  const names = new Set<string>();
+  scene.traverse((obj) => {
+    const lower = obj.name.toLowerCase();
+    if (lower.endsWith("_flight_start")) {
+      names.add(lower.slice(0, -"_flight_start".length));
+    }
+  });
+  return names;
+}
+
+/**
  * Build hotspots by scanning the zone GLB for zone_/portal_ objects and
  * grouping toys by sceneMap `parent`. `<zone_name>_hitbox` overrides bbox.
  */
@@ -156,11 +174,21 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
   // Pass 1: find zone_/portal_ objects at scene root + _hitbox colliders.
   const hotspotObjects: THREE.Object3D[] = [];
   const hitboxMap = new Map<string, THREE.Object3D>();
+  const flighted = findFlightedZoneNames(scene);
   const seen = new Set<string>();
 
   for (const child of scene.children) {
     const lower = child.name.toLowerCase();
     if (lower.endsWith("_hitbox")) continue;
+    if (
+      lower.endsWith("_flight_start") ||
+      lower.endsWith("_flight_end") ||
+      lower.endsWith("_flight_finish")
+    )
+      continue;
+    // FlightPath owns its own click hitbox (follows the moving mesh) — skip
+    // the static hotspot the normal scanner would add at the initial bbox.
+    if (flighted.has(lower)) continue;
     if (lower.startsWith("zone_") || lower.startsWith("portal_")) {
       if (seen.has(lower)) continue;
       seen.add(lower);
@@ -343,6 +371,15 @@ function ZoneMesh({
     return result;
   }, [scene, allMeshesRef]);
 
+  const flightConfigs = useMemo<FlightPathConfig[]>(() => {
+    return [...findFlightedZoneNames(scene)].map((objectName) => ({
+      objectName,
+      duration: 18,
+      fadeIn: 0.15,
+      fadeOut: 0.15,
+    }));
+  }, [scene]);
+
   return (
     <>
       <primitive object={scene} />
@@ -356,6 +393,16 @@ function ZoneMesh({
           onHoverChange={onHoverChange}
         />
       ))}
+      {flightConfigs.map((config) => (
+        <FlightPath
+          key={config.objectName}
+          scene={scene}
+          config={config}
+          onNavigate={onNavigate}
+          onComingSoon={onComingSoon}
+        />
+      ))}
+      <Waterfall scene={scene} />
     </>
   );
 }
@@ -411,6 +458,7 @@ function CameraRig({
   orbitRef,
   scene,
   cameraOptions,
+  turntableEnabled,
   turntableToggleRef,
   onPlayingChange,
   onCameraReady,
@@ -424,11 +472,14 @@ function CameraRig({
     minZoomMultiplier?: number;
     maxZoomMultiplier?: number;
   };
+  turntableEnabled: boolean;
   turntableToggleRef: React.RefObject<(() => void) | null>;
   onPlayingChange: (playing: boolean) => void;
   onCameraReady: (ready: boolean) => void;
 }) {
-  const { stop, toggle, playing } = useTurntable(orbitRef);
+  const { stop, toggle, playing } = useTurntable(orbitRef, {
+    enabled: turntableEnabled,
+  });
   useKeyboardControls(orbitRef, { onInteract: stop });
 
   const ready = useAutoFitCamera(scene, orbitRef, {
@@ -651,12 +702,12 @@ export default function ZoneScene({
               MIDDLE: THREE.MOUSE.DOLLY,
               RIGHT: THREE.MOUSE.PAN,
             }}
-            maxPolarAngle={Math.PI / 2.1}
           />
           <CameraRig
             orbitRef={orbitRef}
             scene={loadedScene}
             cameraOptions={cameraOptions}
+            turntableEnabled={getNode(zoneKey)?.turntable !== false}
             turntableToggleRef={turntableToggleRef}
             onPlayingChange={onPlayingChange}
             onCameraReady={setCameraReady}
@@ -710,16 +761,18 @@ export default function ZoneScene({
     </div>
   );
 
-  if (!useAtmosphere) return sceneInner;
+  if (!useAtmosphere) return <SceneOptionsProvider>{sceneInner}</SceneOptionsProvider>;
 
   return (
-    <AtmosphereProvider
-      initialHour={atmosphereConfig!.defaults?.hour}
-      initialMinute={atmosphereConfig!.defaults?.minute}
-      initialWeather={atmosphereConfig!.defaults?.weather}
-      initialTimescale={atmosphereConfig!.defaults?.timescale}
-    >
-      {sceneInner}
-    </AtmosphereProvider>
+    <SceneOptionsProvider>
+      <AtmosphereProvider
+        initialHour={atmosphereConfig!.defaults?.hour}
+        initialMinute={atmosphereConfig!.defaults?.minute}
+        initialWeather={atmosphereConfig!.defaults?.weather}
+        initialTimescale={atmosphereConfig!.defaults?.timescale}
+      >
+        {sceneInner}
+      </AtmosphereProvider>
+    </SceneOptionsProvider>
   );
 }
