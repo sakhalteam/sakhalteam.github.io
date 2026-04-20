@@ -5,14 +5,20 @@
 // hitbox that handles clicks so the flying object is navigable.
 //
 // Blender-side contract (all siblings at the GLB scene root):
-//   zone_<key>                               the flying mesh (animated + clicked)
-//   <zone_<key>>_flight_start                 empty marking cycle-start position
-//   <zone_<key>>_flight_end | _flight_finish  empty marking cycle-end position
+//   zone_<key>                                        the flying mesh (animated + clicked)
+//   <zone_<key>>_flight_start[_NN]                    empty marking cycle-start position
+//   <zone_<key>>_flight_end[_NN] | _flight_finish[_NN] empty marking cycle-end position
+//
+// Numbered suffixes (_01, _02, …) define multiple start/end pairs; each full
+// cycle advances to the next pair (wrapping), so the mesh alternates paths.
+// Start and end are paired by matching suffix. Unsuffixed is also valid.
 //
 // Example for Starlight Zone (object name = "zone_starlight_zone"):
 //   zone_starlight_zone
-//   zone_starlight_zone_flight_start
-//   zone_starlight_zone_flight_finish   (or _flight_end)
+//   zone_starlight_zone_flight_start_01
+//   zone_starlight_zone_flight_finish_01
+//   zone_starlight_zone_flight_start_02
+//   zone_starlight_zone_flight_finish_02
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
@@ -20,6 +26,8 @@ import * as THREE from "three";
 import { getZoneConfig } from "./sceneMap";
 import { useSceneOptions } from "./SceneOptionsContext";
 import { AdaptiveLabel } from "./AdaptiveLabel";
+
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 /**
  * Classify a descendant of the flying zone object into a variant group.
@@ -43,6 +51,8 @@ export interface FlightPathConfig {
   fadeIn: number;
   /** Fraction of cycle spent fading out at end. 0..0.5. */
   fadeOut: number;
+  /** Extra yaw in radians applied after matching the path direction. */
+  headingOffset?: number;
 }
 
 export default function FlightPath({
@@ -58,20 +68,55 @@ export default function FlightPath({
 }) {
   const data = useMemo(() => {
     const objLower = config.objectName.toLowerCase();
-    const startLower = `${objLower}_flight_start`;
-    const endLowers = [`${objLower}_flight_end`, `${objLower}_flight_finish`];
+    const escaped = objLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const startRe = new RegExp(`^${escaped}_flight_start(?:_(\\d+))?$`);
+    const endRe = new RegExp(`^${escaped}_flight_(?:end|finish)(?:_(\\d+))?$`);
 
     let obj: THREE.Object3D | undefined;
-    let start: THREE.Object3D | undefined;
-    let end: THREE.Object3D | undefined;
+    const startMap = new Map<string, THREE.Vector3>();
+    const endMap = new Map<string, THREE.Vector3>();
+    const markerObjects: THREE.Object3D[] = [];
     scene.traverse((o) => {
       const n = o.name.toLowerCase();
-      if (n === objLower) obj = o;
-      else if (n === startLower) start = o;
-      else if (endLowers.includes(n)) end = o;
+      if (n === objLower) {
+        obj = o;
+        return;
+      }
+      const sm = n.match(startRe);
+      if (sm) {
+        startMap.set(sm[1] ?? "", o.position.clone());
+        markerObjects.push(o);
+        return;
+      }
+      const em = n.match(endRe);
+      if (em) {
+        endMap.set(em[1] ?? "", o.position.clone());
+        markerObjects.push(o);
+      }
     });
 
-    if (!obj || !start || !end) return null;
+    if (!obj) return null;
+
+    // Pair start/end empties by matching numeric suffix. Unsuffixed pairs use "".
+    const keys = [...new Set([...startMap.keys(), ...endMap.keys()])].sort();
+    const rawPairs: { startPos: THREE.Vector3; endPos: THREE.Vector3 }[] = [];
+    for (const k of keys) {
+      const s = startMap.get(k);
+      const e = endMap.get(k);
+      if (s && e) rawPairs.push({ startPos: s, endPos: e });
+    }
+    if (rawPairs.length === 0) return null;
+
+    // Use pair 0 as the reference heading, then solve an absolute yaw for the
+    // active pair each frame while preserving the authored pitch/roll.
+    const yawOf = (a: THREE.Vector3, b: THREE.Vector3) =>
+      Math.atan2(b.x - a.x, b.z - a.z);
+    const baseYaw = yawOf(rawPairs[0].startPos, rawPairs[0].endPos);
+    const pairs = rawPairs.map(({ startPos, endPos }) => ({
+      startPos,
+      endPos,
+      yawOffset: yawOf(startPos, endPos) - baseYaw,
+    }));
 
     // Collect all meshes + flip their materials into transparent mode.
     const meshes: THREE.Mesh[] = [];
@@ -106,9 +151,11 @@ export default function FlightPath({
 
     return {
       obj,
-      startPos: start.position.clone(),
-      endPos: end.position.clone(),
+      pairs,
+      markerObjects,
       meshes,
+      basePosition: obj.position.clone(),
+      baseQuaternion: obj.quaternion.clone(),
       hitSize: size,
       rangedRoots,
       groundedRoots,
@@ -121,16 +168,8 @@ export default function FlightPath({
   // Hide empty markers so they don't produce any visual artifacts.
   useEffect(() => {
     if (!data) return;
-    const base = config.objectName.toLowerCase();
-    const markers = new Set([
-      `${base}_flight_start`,
-      `${base}_flight_end`,
-      `${base}_flight_finish`,
-    ]);
-    scene.traverse((o) => {
-      if (markers.has(o.name.toLowerCase())) o.visible = false;
-    });
-  }, [scene, data, config.objectName]);
+    for (const m of data.markerObjects) m.visible = false;
+  }, [data]);
 
   // Register that this zone has flight variants so the cog panel shows the toggle.
   useEffect(() => {
@@ -153,17 +192,59 @@ export default function FlightPath({
   }, [data, allRangeMode]);
 
   const tRef = useRef(0);
+  const pairIndexRef = useRef(0);
   const followerRef = useRef<THREE.Group>(null);
   const hitboxRef = useRef<THREE.Mesh>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
+  const yawQuatRef = useRef(new THREE.Quaternion());
+
+  const applyPose = (pairIndex: number, t: number) => {
+    if (!data) return;
+    const pair = data.pairs[pairIndex];
+    data.obj.position.lerpVectors(pair.startPos, pair.endPos, t);
+
+    yawQuatRef.current.setFromAxisAngle(
+      WORLD_UP,
+      pair.yawOffset + (config.headingOffset ?? 0),
+    );
+    data.obj.quaternion
+      .copy(data.baseQuaternion)
+      .premultiply(yawQuatRef.current);
+  };
+
+  useEffect(() => {
+    if (!data) return;
+
+    tRef.current = 0;
+    pairIndexRef.current = 0;
+    applyPose(0, 0);
+
+    if (followerRef.current) {
+      followerRef.current.position.copy(data.obj.position);
+    }
+    if (hitboxRef.current) {
+      hitboxRef.current.visible = false;
+    }
+    if (labelRef.current) {
+      labelRef.current.style.opacity = "0";
+    }
+
+    return () => {
+      data.obj.position.copy(data.basePosition);
+      data.obj.quaternion.copy(data.baseQuaternion);
+    };
+  }, [data, config.headingOffset]);
 
   useFrame((_, delta) => {
     if (!data) return;
-    tRef.current = (tRef.current + delta / config.duration) % 1;
+    const next = tRef.current + delta / config.duration;
+    if (next >= 1) {
+      pairIndexRef.current = (pairIndexRef.current + 1) % data.pairs.length;
+    }
+    tRef.current = next % 1;
     const t = tRef.current;
-
-    data.obj.position.lerpVectors(data.startPos, data.endPos, t);
+    applyPose(pairIndexRef.current, t);
 
     let opacity: number;
     if (t < config.fadeIn) opacity = t / config.fadeIn;
@@ -171,7 +252,9 @@ export default function FlightPath({
     else opacity = 1;
 
     for (const mesh of data.meshes) {
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const mats = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
       for (const mat of mats) {
         (mat as THREE.Material).opacity = opacity;
       }

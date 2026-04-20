@@ -283,7 +283,7 @@ const nodes: SceneNode[] = [
         "stars",
         "fog",
       ],
-      defaults: { hour: 12, minute: 0, weather: "partly_cloudy", timescale: 0 },
+      defaults: { hour: 12, minute: 0, weather: "clear", timescale: 0 },
       controls: true,
     },
     children: [

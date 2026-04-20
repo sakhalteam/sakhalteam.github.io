@@ -59,10 +59,6 @@ export interface AtmosphereParams {
   sunPosition: THREE.Vector3;
   sunColor: THREE.Color;
   sunIntensity: number;
-  turbidity: number;
-  rayleigh: number;
-  mieCoefficient: number;
-  mieDirectionalG: number;
   ambientColor: THREE.Color;
   ambientIntensity: number;
   cloudCover: number;
@@ -84,8 +80,6 @@ interface TimeAnchor {
   sunIntensity: number;
   ambientColor: string;
   ambientIntensity: number;
-  rayleigh: number;
-  turbidity: number;
   starOpacity: number;
   cloudTint: string;
   skyZenith: string;
@@ -99,8 +93,6 @@ const TIME_ANCHORS: TimeAnchor[] = [
     sunIntensity: 0.25,
     ambientColor: "#14223a",
     ambientIntensity: 0.3,
-    rayleigh: 0.5,
-    turbidity: 0.5,
     starOpacity: 1,
     cloudTint: "#1a2740",
     skyZenith: "#05080f",
@@ -112,8 +104,6 @@ const TIME_ANCHORS: TimeAnchor[] = [
     sunIntensity: 0.35,
     ambientColor: "#2a2f52",
     ambientIntensity: 0.38,
-    rayleigh: 1.2,
-    turbidity: 4,
     starOpacity: 0.7,
     cloudTint: "#6b5c84",
     skyZenith: "#1a1a3a",
@@ -125,8 +115,6 @@ const TIME_ANCHORS: TimeAnchor[] = [
     sunIntensity: 0.75,
     ambientColor: "#ffb088",
     ambientIntensity: 0.48,
-    rayleigh: 3,
-    turbidity: 8,
     starOpacity: 0.15,
     cloudTint: "#e0896a",
     skyZenith: "#3a5a8a",
@@ -138,8 +126,6 @@ const TIME_ANCHORS: TimeAnchor[] = [
     sunIntensity: 1.05,
     ambientColor: "#d8e2ef",
     ambientIntensity: 0.55,
-    rayleigh: 2.5,
-    turbidity: 7,
     starOpacity: 0,
     cloudTint: "#ffffff",
     skyZenith: "#3380c8",
@@ -151,8 +137,6 @@ const TIME_ANCHORS: TimeAnchor[] = [
     sunIntensity: 1.15,
     ambientColor: "#cfd8e3",
     ambientIntensity: 0.6,
-    rayleigh: 2,
-    turbidity: 6,
     starOpacity: 0,
     cloudTint: "#ffffff",
     skyZenith: "#1f6fd0",
@@ -164,8 +148,6 @@ const TIME_ANCHORS: TimeAnchor[] = [
     sunIntensity: 1.05,
     ambientColor: "#d7dde5",
     ambientIntensity: 0.55,
-    rayleigh: 2.5,
-    turbidity: 7,
     starOpacity: 0,
     cloudTint: "#fbeede",
     skyZenith: "#2a78c4",
@@ -177,8 +159,6 @@ const TIME_ANCHORS: TimeAnchor[] = [
     sunIntensity: 0.8,
     ambientColor: "#ff9a6a",
     ambientIntensity: 0.42,
-    rayleigh: 3,
-    turbidity: 10,
     starOpacity: 0.2,
     cloudTint: "#d85a42",
     skyZenith: "#3a4f8a",
@@ -190,8 +170,6 @@ const TIME_ANCHORS: TimeAnchor[] = [
     sunIntensity: 0.4,
     ambientColor: "#3a3560",
     ambientIntensity: 0.38,
-    rayleigh: 1.5,
-    turbidity: 5,
     starOpacity: 0.7,
     cloudTint: "#4a3c64",
     skyZenith: "#161838",
@@ -203,8 +181,6 @@ const TIME_ANCHORS: TimeAnchor[] = [
     sunIntensity: 0.25,
     ambientColor: "#14223a",
     ambientIntensity: 0.3,
-    rayleigh: 0.5,
-    turbidity: 0.5,
     starOpacity: 1,
     cloudTint: "#1a2740",
     skyZenith: "#05080f",
@@ -213,8 +189,6 @@ const TIME_ANCHORS: TimeAnchor[] = [
 ];
 
 interface WeatherMod {
-  turbidityAdd: number;
-  rayleighMul: number;
   sunIntensityMul: number;
   ambientIntensityMul: number;
   cloudCover: number;
@@ -230,8 +204,6 @@ interface WeatherMod {
 
 const WEATHER_MODS: Record<Weather, WeatherMod> = {
   clear: {
-    turbidityAdd: 0,
-    rayleighMul: 1,
     sunIntensityMul: 1,
     ambientIntensityMul: 1,
     cloudCover: 0,
@@ -243,8 +215,6 @@ const WEATHER_MODS: Record<Weather, WeatherMod> = {
     fogFar: 200,
   },
   partly_cloudy: {
-    turbidityAdd: 1,
-    rayleighMul: 1,
     sunIntensityMul: 0.95,
     ambientIntensityMul: 1,
     cloudCover: 0.4,
@@ -256,8 +226,6 @@ const WEATHER_MODS: Record<Weather, WeatherMod> = {
     fogFar: 200,
   },
   overcast: {
-    turbidityAdd: 5,
-    rayleighMul: 0.45,
     sunIntensityMul: 0.5,
     ambientIntensityMul: 1.1,
     cloudCover: 0.92,
@@ -269,8 +237,6 @@ const WEATHER_MODS: Record<Weather, WeatherMod> = {
     fogFar: 160,
   },
   rainy: {
-    turbidityAdd: 7,
-    rayleighMul: 0.35,
     sunIntensityMul: 0.38,
     ambientIntensityMul: 1.0,
     cloudCover: 0.95,
@@ -282,8 +248,6 @@ const WEATHER_MODS: Record<Weather, WeatherMod> = {
     fogFar: 120,
   },
   stormy: {
-    turbidityAdd: 9,
-    rayleighMul: 0.3,
     sunIntensityMul: 0.28,
     ambientIntensityMul: 0.9,
     cloudCover: 0.97,
@@ -387,8 +351,6 @@ export function resolveAtmosphere(
   const { a, b, t } = findAnchorPair(hour);
   const w = WEATHER_MODS[weather];
 
-  const rayleigh = lerp(a.rayleigh, b.rayleigh, t) * w.rayleighMul;
-  const turbidity = lerp(a.turbidity, b.turbidity, t) + w.turbidityAdd;
   const sunIntensity =
     lerp(a.sunIntensity, b.sunIntensity, t) * w.sunIntensityMul;
   const ambientIntensity =
@@ -406,10 +368,6 @@ export function resolveAtmosphere(
     sunPosition: sunDirection(hour),
     sunColor,
     sunIntensity,
-    turbidity,
-    rayleigh,
-    mieCoefficient: 0.005,
-    mieDirectionalG: 0.75,
     ambientColor,
     ambientIntensity,
     cloudCover: w.cloudCover,

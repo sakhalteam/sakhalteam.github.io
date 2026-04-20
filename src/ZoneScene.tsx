@@ -157,11 +157,10 @@ const HotspotHitbox = memo(function HotspotHitbox({
  */
 function findFlightedZoneNames(scene: THREE.Object3D): Set<string> {
   const names = new Set<string>();
+  const re = /^(.*)_flight_start(?:_\d+)?$/;
   scene.traverse((obj) => {
-    const lower = obj.name.toLowerCase();
-    if (lower.endsWith("_flight_start")) {
-      names.add(lower.slice(0, -"_flight_start".length));
-    }
+    const m = obj.name.toLowerCase().match(re);
+    if (m) names.add(m[1]);
   });
   return names;
 }
@@ -180,12 +179,7 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
   for (const child of scene.children) {
     const lower = child.name.toLowerCase();
     if (lower.endsWith("_hitbox")) continue;
-    if (
-      lower.endsWith("_flight_start") ||
-      lower.endsWith("_flight_end") ||
-      lower.endsWith("_flight_finish")
-    )
-      continue;
+    if (/_flight_(?:start|end|finish)(?:_\d+)?$/.test(lower)) continue;
     // FlightPath owns its own click hitbox (follows the moving mesh) — skip
     // the static hotspot the normal scanner would add at the initial bbox.
     if (flighted.has(lower)) continue;
@@ -352,7 +346,7 @@ function ZoneMesh({
     scene.traverse((obj) => {
       const node = sceneMap.get(obj.name.toLowerCase());
       if (!node || node.type !== "toy") return;
-      if (node.interactive === false || node.quiet) return;
+      // if (node.interactive === false || node.quiet) return;
       const light = new THREE.PointLight("#ffd9a8", 8, 3, 1.5);
       light.position.set(0, 0.7, 0);
       obj.add(light);
@@ -372,11 +366,19 @@ function ZoneMesh({
   }, [scene, allMeshesRef]);
 
   const flightConfigs = useMemo<FlightPathConfig[]>(() => {
+    const flightTweaks: Partial<Record<string, Partial<FlightPathConfig>>> = {
+      zone_starlight_zone: {
+        duration: 15,
+        headingOffset: Math.PI,
+      },
+    };
+
     return [...findFlightedZoneNames(scene)].map((objectName) => ({
       objectName,
-      duration: 18,
+      duration: flightTweaks[objectName]?.duration ?? 18,
       fadeIn: 0.15,
       fadeOut: 0.15,
+      headingOffset: flightTweaks[objectName]?.headingOffset,
     }));
   }, [scene]);
 
@@ -410,11 +412,7 @@ function ZoneMesh({
 function BirdSanctuaryLighting() {
   return (
     <>
-      <hemisphereLight
-        color="#cfeeff"
-        groundColor="#28401b"
-        intensity={0.9}
-      />
+      <hemisphereLight color="#cfeeff" groundColor="#28401b" intensity={0.9} />
       <directionalLight
         position={[14, 18, 10]}
         intensity={1.35}
@@ -653,7 +651,7 @@ export default function ZoneScene({
           gl={{ antialias: true, alpha: true }}
           onCreated={({ gl }) => {
             if (useAtmosphere) {
-              gl.toneMappingExposure = 1.0;
+              gl.toneMappingExposure = 1.3;
             }
           }}
         >
@@ -761,7 +759,8 @@ export default function ZoneScene({
     </div>
   );
 
-  if (!useAtmosphere) return <SceneOptionsProvider>{sceneInner}</SceneOptionsProvider>;
+  if (!useAtmosphere)
+    return <SceneOptionsProvider>{sceneInner}</SceneOptionsProvider>;
 
   return (
     <SceneOptionsProvider>

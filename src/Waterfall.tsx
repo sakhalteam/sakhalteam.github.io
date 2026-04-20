@@ -180,19 +180,13 @@ export default function Waterfall({
     scene.traverse((o) => {
       if (!root && o.name.toLowerCase() === target) root = o;
     });
-    if (!root) {
-      console.warn(`[WTR] No node named "${meshName}" in scene.`);
-      return null;
-    }
+    if (!root) return null;
     const meshes: THREE.Mesh[] = [];
     (root as THREE.Object3D).traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) meshes.push(m);
     });
-    if (meshes.length === 0) {
-      console.warn(`[WTR] Node "${meshName}" has no mesh descendants.`);
-      return null;
-    }
+    if (meshes.length === 0) return null;
     (root as THREE.Object3D).updateWorldMatrix(true, true);
     const groupBox = new THREE.Box3().setFromObject(root as THREE.Object3D);
 
@@ -247,10 +241,6 @@ export default function Waterfall({
     data.classified.forEach((e, i) => {
       e.mesh.material = materials[i];
     });
-    const summary = data.classified
-      .map((e) => `${e.role}(y:${e.minY.toFixed(1)}→${e.maxY.toFixed(1)})`)
-      .join(", ");
-    console.log(`[WTR] ${data.classified.length} mesh(es): ${summary}`);
     return () => {
       data.classified.forEach((e, i) => {
         e.mesh.material = prevs[i];
