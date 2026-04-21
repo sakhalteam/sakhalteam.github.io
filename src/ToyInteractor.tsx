@@ -3,7 +3,7 @@
 import { useRef, useMemo, useEffect, useCallback } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
-import { getToyConfig, type ToyAnimation, type ToyIdle } from "./sceneMap";
+import { getToyConfig, type ToyAnimation } from "./sceneMap";
 import { playCyclingSound } from "./audio";
 import * as THREE from "three";
 
@@ -22,7 +22,6 @@ interface ToyData {
   sounds: string[] | null;
   meshes: THREE.Mesh[];
   animation: ToyAnimation;
-  idle: ToyIdle;
   quiet: boolean;
 }
 
@@ -137,7 +136,6 @@ export default function ToyInteractor({
         sounds: config.sounds,
         meshes,
         animation: config.animation,
-        idle: config.idle,
         quiet: config.quiet,
       } satisfies ToyData;
     });
@@ -358,10 +356,9 @@ export default function ToyInteractor({
     if (mixer) mixer.update(delta);
 
     for (const toy of toys) {
-      // Gentle float bob — only for toys with idle: 'float' (water pokemon etc.)
-      if (toy.idle === "float" && !hopState.current.has(toy.obj.name)) {
-        toy.obj.position.y = toy.baseY + Math.sin(t * 0.8) * 0.06;
-      }
+      // Idle animations (float/bob/spin) live in IdleAnimator — click
+      // animations below write absolute transforms that override the idle
+      // for the duration of the click.
 
       // Spin animation
       const spin = spinState.current.get(toy.obj.name);

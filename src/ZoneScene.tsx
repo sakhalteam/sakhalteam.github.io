@@ -39,7 +39,7 @@ import {
 import ToyInteractor from "./ToyInteractor";
 import FlightPath, { type FlightPathConfig } from "./FlightPath";
 import Waterfall from "./Waterfall";
-import ZoneBobber from "./ZoneBobber";
+import IdleAnimator from "./IdleAnimator";
 import { SceneOptionsProvider } from "./SceneOptionsContext";
 import Breadcrumbs from "./Breadcrumbs";
 import SunRays from "./SunRays";
@@ -404,6 +404,7 @@ function ZoneMesh({
   return (
     <>
       <primitive object={scene} />
+      <IdleAnimator scene={scene} />
       <ToyInteractor
         scene={scene}
         onHoverChange={onToyHoverChange}
@@ -430,7 +431,6 @@ function ZoneMesh({
         />
       ))}
       <Waterfall scene={scene} />
-      <ZoneBobber scene={scene} />
     </>
   );
 }

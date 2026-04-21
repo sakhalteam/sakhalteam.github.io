@@ -20,6 +20,7 @@ import { KernelSize, BlendFunction } from "postprocessing";
 import { AdaptiveLabel } from "./AdaptiveLabel";
 import { collectMeshes } from "./BloomDriver";
 import ToyInteractor from "./ToyInteractor";
+import IdleAnimator from "./IdleAnimator";
 import { isToyUnderPointer } from "./toyClickFlag";
 import Water from "./Water";
 import Whirlpool from "./Whirlpool";
@@ -264,6 +265,7 @@ function IslandMesh({
   return (
     <>
       <primitive object={scene} />
+      <IdleAnimator scene={scene} />
       <ToyInteractor
         scene={scene}
         animations={animations}

@@ -56,7 +56,29 @@ export type ToyAnimation =
   | "bob"
   | "none"
   | "action";
-export type ToyIdle = "float" | "none";
+
+/**
+ * Idle animations — always-on, driven by IdleAnimator. Applied to the object's
+ * root transform, so Blender-parented children (e.g. ct_toy_metal_gear_rex
+ * under portal_weather_report) ride along without extra wiring.
+ *
+ *   "bob"   — gentle y-sine (zones/portals default)
+ *   "float" — subtle y-sine (water pokemon default)
+ *   "spin"  — slow continuous rotation around chosen axis
+ *   "none"  — disabled
+ *
+ * Pass a bare string for defaults, or an object to override amplitude /
+ * period / axis per-node.
+ */
+export type IdleKind = "bob" | "float" | "spin" | "none";
+export type IdleConfig =
+  | IdleKind
+  | {
+      kind: IdleKind;
+      amplitude?: number;
+      period?: number;
+      axis?: "x" | "y" | "z";
+    };
 
 export interface SceneNode {
   key: string;
@@ -71,7 +93,7 @@ export interface SceneNode {
   children: string[];
   sounds?: string[];
   animation?: ToyAnimation;
-  idle?: ToyIdle;
+  idle?: IdleConfig;
   /** If false, toy is not clickable and has no animation/sound — pure outline-group member. */
   interactive?: boolean;
   /** If true, toy does not render its own label and does not emit a toy hover outline. Still belongs to parent's outline group. */
@@ -88,9 +110,6 @@ export interface SceneNode {
     minZoomMultiplier?: number;
     maxZoomMultiplier?: number;
   };
-  /** Gentle idle y-bob driven by ZoneBobber. Applies to the object's root transform,
-   * so any children (e.g. toys parented in Blender) ride along. */
-  bob?: boolean | { amplitude?: number; period?: number };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -108,7 +127,7 @@ function zone(
     sounds?: string[];
     turntable?: boolean;
     camera?: SceneNode["camera"];
-    bob?: SceneNode["bob"];
+    idle?: IdleConfig;
   } = {},
 ): SceneNode {
   return {
@@ -129,7 +148,7 @@ function zone(
     ...(opts.sounds && { sounds: opts.sounds }),
     ...(opts.turntable === false && { turntable: false }),
     ...(opts.camera && { camera: opts.camera }),
-    ...(opts.bob !== undefined && { bob: opts.bob }),
+    ...(opts.idle !== undefined && { idle: opts.idle }),
   };
 }
 
@@ -138,7 +157,7 @@ function portal(
   label: string,
   url: string,
   parent: string,
-  opts: { bob?: SceneNode["bob"] } = {},
+  opts: { idle?: IdleConfig } = {},
 ): SceneNode {
   return {
     key,
@@ -149,7 +168,7 @@ function portal(
     glbPath: null,
     parent,
     children: [],
-    ...(opts.bob !== undefined && { bob: opts.bob }),
+    ...(opts.idle !== undefined && { idle: opts.idle }),
   };
 }
 
@@ -160,7 +179,7 @@ function toy(
   opts: {
     sounds?: string[];
     animation?: ToyAnimation;
-    idle?: ToyIdle;
+    idle?: IdleConfig;
     interactive?: boolean;
     quiet?: boolean;
     showLabel?: boolean;
@@ -434,13 +453,13 @@ const nodes: SceneNode[] = [
     glbPath: null,
     path: null,
     parent: "cloud_town",
-    bob: { amplitude: 0.15, period: 5 }, // ← override here
+    idle: { kind: "bob", amplitude: 0.15, period: 5 }, // ← override here
   }),
   zone("pool_time", "Pool Time", {
     glbPath: null,
     path: null,
     parent: "cloud_town",
-    bob: true,
+    idle: "bob",
   }),
 
   // Grouping on the island via sceneMap.parent:
@@ -464,7 +483,7 @@ const nodes: SceneNode[] = [
   portal("nikbeat", "NikBeat", "/nikbeat/", "beach_party"),
   portal("pokemon_park", "Pokemon Park", "/pokemon-park/", "pokemon_island"),
   portal("weather_report", "Weather Report", "/weather-report/", "cloud_town", {
-    bob: true,
+    idle: "bob",
   }),
   portal("famima", "Family Mart", "/famima/", "island"),
   portal(
@@ -969,7 +988,6 @@ export function getToyConfig(objName: string):
       label: string;
       sounds: string[] | null;
       animation: ToyAnimation;
-      idle: ToyIdle;
       parent: string | null;
       interactive: boolean;
       quiet: boolean;
@@ -982,7 +1000,6 @@ export function getToyConfig(objName: string):
     label: node.label,
     sounds: node.sounds ?? null,
     animation: node.animation ?? "spin",
-    idle: node.idle ?? "none",
     parent: node.parent,
     interactive: node.interactive !== false,
     quiet: node.quiet === true,
