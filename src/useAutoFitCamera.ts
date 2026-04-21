@@ -15,6 +15,12 @@ import * as THREE from "three";
  *
  * Also adds a slight azimuth offset so you never get a dead-on frontal view —
  * the camera is always slightly rotated for that 3/4 perspective feel.
+ *
+ * Optional Blender-authored empties (by suffix, any prefix is fine):
+ *   *_camera_target (or *_scene_center) — overrides the bbox center as the
+ *     lookAt point + orbit pivot.
+ *   *_camera_start — overrides the computed camera position. Orientation is
+ *     derived by looking at the target, so the empty's rotation is irrelevant.
  */
 export function useAutoFitCamera(
   scene: THREE.Object3D | null,
@@ -40,22 +46,20 @@ export function useAutoFitCamera(
 
     // Exclude flight-animated zones + their marker empties from the fit bbox.
     // Those sit far outside the actual playable scene and would blow out zoom.
+    const flightStartRe = /_flight_start(?:_\d+)?$/;
+    const flightMarkerRe = /_flight_(?:start|end|finish)(?:_\d+)?$/;
     const flightedRoots = new Set<THREE.Object3D>();
     scene.traverse((obj) => {
       const lower = obj.name.toLowerCase();
-      if (!lower.endsWith("_flight_start")) return;
-      const targetName = lower.slice(0, -"_flight_start".length);
+      const match = lower.match(flightStartRe);
+      if (!match) return;
+      const targetName = lower.slice(0, match.index ?? 0);
       scene.traverse((o) => {
         if (o.name.toLowerCase() === targetName) flightedRoots.add(o);
       });
     });
     const isFlightMarker = (name: string) => {
-      const l = name.toLowerCase();
-      return (
-        l.endsWith("_flight_start") ||
-        l.endsWith("_flight_end") ||
-        l.endsWith("_flight_finish")
-      );
+      return flightMarkerRe.test(name.toLowerCase());
     };
     const isUnderFlightedRoot = (obj: THREE.Object3D) => {
       let p: THREE.Object3D | null = obj;
@@ -65,6 +69,24 @@ export function useAutoFitCamera(
       }
       return false;
     };
+
+    // Optional Blender-authored camera overrides. Suffix match so the prefix
+    // can be a zone key, zone abbreviation, or anything else.
+    const targetRe = /_(?:camera_target|scene_center)$/;
+    const startRe = /_camera_start$/;
+    let targetEmpty: THREE.Object3D | null = null;
+    let startEmpty: THREE.Object3D | null = null;
+    scene.traverse((o) => {
+      const lower = o.name.toLowerCase();
+      if (!targetEmpty && targetRe.test(lower)) {
+        targetEmpty = o;
+        o.visible = false;
+      }
+      if (!startEmpty && startRe.test(lower)) {
+        startEmpty = o;
+        o.visible = false;
+      }
+    });
 
     const box = new THREE.Box3();
     scene.updateWorldMatrix(true, true);
@@ -82,6 +104,9 @@ export function useAutoFitCamera(
 
     const center = new THREE.Vector3();
     box.getCenter(center);
+    if (targetEmpty) {
+      (targetEmpty as THREE.Object3D).getWorldPosition(center);
+    }
 
     const size = new THREE.Vector3();
     box.getSize(size);
@@ -120,13 +145,18 @@ export function useAutoFitCamera(
     const fovRad = THREE.MathUtils.degToRad(fov);
     const distance = (radius * padding) / Math.sin(fovRad / 2);
 
-    // Position camera with elevation + azimuth for a 3/4 perspective
-    const cameraOffset = new THREE.Vector3(
-      Math.sin(azimuth) * Math.cos(elevation) * distance,
-      Math.sin(elevation) * distance,
-      Math.cos(azimuth) * Math.cos(elevation) * distance,
-    );
-    camera.position.copy(center).add(cameraOffset);
+    if (startEmpty) {
+      // Author-driven camera position. Orientation falls out of lookAt(center).
+      (startEmpty as THREE.Object3D).getWorldPosition(camera.position);
+    } else {
+      // Position camera with elevation + azimuth for a 3/4 perspective.
+      const cameraOffset = new THREE.Vector3(
+        Math.sin(azimuth) * Math.cos(elevation) * distance,
+        Math.sin(elevation) * distance,
+        Math.cos(azimuth) * Math.cos(elevation) * distance,
+      );
+      camera.position.copy(center).add(cameraOffset);
+    }
 
     const perspectiveCamera = camera as THREE.PerspectiveCamera;
     perspectiveCamera.near = Math.max(0.05, minDistance * 0.08);

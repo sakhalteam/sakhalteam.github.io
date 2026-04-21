@@ -4,6 +4,7 @@ import { useRef, useMemo, useEffect, useCallback } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { getToyConfig, type ToyAnimation, type ToyIdle } from "./sceneMap";
+import { playCyclingSound } from "./audio";
 import * as THREE from "three";
 
 /** Screen-space radius (px) within which the cursor reveals a toy label */
@@ -18,7 +19,7 @@ interface ToyData {
   baseY: number;
   label: string;
   showLabel: boolean;
-  soundUrl: string | null;
+  sounds: string[] | null;
   meshes: THREE.Mesh[];
   animation: ToyAnimation;
   idle: ToyIdle;
@@ -30,19 +31,6 @@ interface ToyState {
   lastNear: number; // timestamp when cursor was last within radius
   hovered: boolean; // direct mesh hover
   labelDiv: HTMLDivElement | null;
-}
-
-/** Audio cache so we only create one Audio element per sound */
-const audioCache = new Map<string, HTMLAudioElement>();
-function playSound(url: string) {
-  let audio = audioCache.get(url);
-  if (!audio) {
-    audio = new Audio(url);
-    audio.volume = 0.4;
-    audioCache.set(url, audio);
-  }
-  audio.currentTime = 0;
-  audio.play().catch(() => {});
 }
 
 function collectMeshes(obj: THREE.Object3D): THREE.Mesh[] {
@@ -69,10 +57,12 @@ export default function ToyInteractor({
   scene,
   animations = [],
   onHoverChange,
+  onFocus,
 }: {
   scene: THREE.Object3D;
   animations?: THREE.AnimationClip[];
   onHoverChange?: (objects: THREE.Object3D[], hovered: boolean) => void;
+  onFocus?: (point: THREE.Vector3) => void;
 }) {
   const lastHoveredToy = useRef<ToyData | null>(null);
   const spinState = useRef<
@@ -103,6 +93,7 @@ export default function ToyInteractor({
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const pointer = useMemo(() => new THREE.Vector2(), []);
   const tmpVec3 = useMemo(() => new THREE.Vector3(), []);
+  const tmpBox = useMemo(() => new THREE.Box3(), []);
 
   const toys = useMemo(() => {
     // Traverse the scene, consult sceneMap per object. No prefix heuristics.
@@ -143,7 +134,7 @@ export default function ToyInteractor({
         baseY: primary.position.y,
         label: config.label,
         showLabel: config.showLabel,
-        soundUrl: config.sound,
+        sounds: config.sounds,
         meshes,
         animation: config.animation,
         idle: config.idle,
@@ -277,8 +268,11 @@ export default function ToyInteractor({
         startRotZ: toy.obj.rotation.y,
       });
     }
-    // Sound plays regardless of animation type (e.g. dinosaur: none + sound)
-    if (toy.soundUrl) playSound(toy.soundUrl);
+    // Sound plays regardless of animation type (e.g. dinosaur: none + sound).
+    // One entry = plays that sound every click; multiple = cycles through them.
+    if (toy.sounds?.length) {
+      playCyclingSound(toy.obj.name, toy.sounds);
+    }
   }, []);
 
   // Canvas event listeners for hover + click + mouse tracking
@@ -315,8 +309,13 @@ export default function ToyInteractor({
 
     const onPointerDown = (e: PointerEvent) => {
       pointerDown.current = { x: e.clientX, y: e.clientY };
+      const toy = hitTest(e);
+      if (toy) {
+        tmpBox.setFromObject(toy.obj).getCenter(tmpVec3);
+        onFocus?.(tmpVec3.clone());
+      }
       // Flag for ZoneHitbox: a toy is under the cursor, don't navigate
-      setToyUnderPointer(!!hitTest(e));
+      setToyUnderPointer(!!toy);
     };
 
     // Capture phase: fires before R3F's bubble-phase zone/portal click handlers.
@@ -347,7 +346,7 @@ export default function ToyInteractor({
         lastHoveredToy.current = null;
       }
     };
-  }, [gl, hitTest, triggerAnimation, onHoverChange]);
+  }, [gl, hitTest, triggerAnimation, onHoverChange, onFocus, tmpBox, tmpVec3]);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();

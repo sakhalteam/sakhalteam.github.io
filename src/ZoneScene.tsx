@@ -28,6 +28,7 @@ import { useKeyboardControls } from "./useKeyboardControls";
 import { useOptimizedGLTF } from "./useOptimizedGLTF";
 import { useTurntable } from "./useTurntable";
 import { useSceneTransition } from "./useSceneTransition";
+import { showComingSoon } from "./comingSoonStore";
 import {
   getPortalConfig,
   getZoneConfig,
@@ -38,6 +39,7 @@ import {
 import ToyInteractor from "./ToyInteractor";
 import FlightPath, { type FlightPathConfig } from "./FlightPath";
 import Waterfall from "./Waterfall";
+import ZoneBobber from "./ZoneBobber";
 import { SceneOptionsProvider } from "./SceneOptionsContext";
 import Breadcrumbs from "./Breadcrumbs";
 import SunRays from "./SunRays";
@@ -63,11 +65,13 @@ const HotspotHitbox = memo(function HotspotHitbox({
   onNavigate,
   onComingSoon,
   onHoverChange,
+  onFocus,
 }: {
   hotspot: Hotspot;
   onNavigate: (url: string, internal: boolean) => void;
   onComingSoon: (label: string) => void;
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void;
+  onFocus: (point: THREE.Vector3) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
@@ -93,6 +97,7 @@ const HotspotHitbox = memo(function HotspotHitbox({
         }}
         onPointerDown={(e) => {
           pointerDown.current = { x: e.clientX, y: e.clientY };
+          onFocus(hotspot.center);
         }}
         onClick={(e) => {
           e.stopPropagation();
@@ -180,6 +185,7 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
     const lower = child.name.toLowerCase();
     if (lower.endsWith("_hitbox")) continue;
     if (/_flight_(?:start|end|finish)(?:_\d+)?$/.test(lower)) continue;
+    if (/_barrel_roll_trigger(?:_\d+)?$/.test(lower)) continue;
     // FlightPath owns its own click hitbox (follows the moving mesh) — skip
     // the static hotspot the normal scanner would add at the initial bbox.
     if (flighted.has(lower)) continue;
@@ -269,6 +275,7 @@ function ZoneMesh({
   onSceneReady,
   onHoverChange,
   onToyHoverChange,
+  onFocus,
   allMeshesRef,
 }: {
   glbPath: string;
@@ -278,6 +285,7 @@ function ZoneMesh({
   onSceneReady: (scene: THREE.Object3D) => void;
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void;
   onToyHoverChange: (objects: THREE.Object3D[], hovered: boolean) => void;
+  onFocus: (point: THREE.Vector3) => void;
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>;
 }) {
   const { scene, animations } = useOptimizedGLTF(glbPath);
@@ -368,24 +376,39 @@ function ZoneMesh({
   const flightConfigs = useMemo<FlightPathConfig[]>(() => {
     const flightTweaks: Partial<Record<string, Partial<FlightPathConfig>>> = {
       zone_starlight_zone: {
-        duration: 15,
-        headingOffset: Math.PI,
+        duration: 10,
+        rollTriggerRadius: 10,
+        // headingOffset: Math.PI,
+        // // Dial these in to fix the sideways pose. Radians.
+        // pitchOffset: -Math.PI / 1, // or -Math.PI / 2
+        // rollOffset: 180,
       },
     };
 
-    return [...findFlightedZoneNames(scene)].map((objectName) => ({
-      objectName,
-      duration: flightTweaks[objectName]?.duration ?? 18,
-      fadeIn: 0.15,
-      fadeOut: 0.15,
-      headingOffset: flightTweaks[objectName]?.headingOffset,
-    }));
+    return [...findFlightedZoneNames(scene)].map((objectName) => {
+      const tweak = flightTweaks[objectName] ?? {};
+      return {
+        objectName,
+        duration: tweak.duration ?? 18,
+        fadeIn: 0.15,
+        fadeOut: 0.15,
+        headingOffset: tweak.headingOffset,
+        pitchOffset: tweak.pitchOffset,
+        rollOffset: tweak.rollOffset,
+        rollDuration: tweak.rollDuration,
+        rollTriggerRadius: tweak.rollTriggerRadius,
+      };
+    });
   }, [scene]);
 
   return (
     <>
       <primitive object={scene} />
-      <ToyInteractor scene={scene} onHoverChange={onToyHoverChange} />
+      <ToyInteractor
+        scene={scene}
+        onHoverChange={onToyHoverChange}
+        onFocus={onFocus}
+      />
       {hotspots.map((hotspot) => (
         <HotspotHitbox
           key={hotspot.name}
@@ -393,6 +416,7 @@ function ZoneMesh({
           onNavigate={onNavigate}
           onComingSoon={onComingSoon}
           onHoverChange={onHoverChange}
+          onFocus={onFocus}
         />
       ))}
       {flightConfigs.map((config) => (
@@ -402,9 +426,11 @@ function ZoneMesh({
           config={config}
           onNavigate={onNavigate}
           onComingSoon={onComingSoon}
+          onFocus={onFocus}
         />
       ))}
       <Waterfall scene={scene} />
+      <ZoneBobber scene={scene} />
     </>
   );
 }
@@ -551,7 +577,6 @@ export default function ZoneScene({
   const [turntablePlaying, setTurntablePlaying] = useState(true);
   const [outlinedObjects, setOutlinedObjects] = useState<THREE.Object3D[]>([]);
   const [outlineKind, setOutlineKind] = useState<OutlineKind>("active");
-  const [comingSoon, setComingSoon] = useState<string | null>(null);
 
   const { navigateWithTransition, wrapStyle } = useSceneTransition(cameraReady);
 
@@ -569,6 +594,18 @@ export default function ZoneScene({
     },
     [],
   );
+
+  const focusOrbitTarget = useCallback((point: THREE.Vector3) => {
+    const controls = orbitRef.current;
+    if (!controls) return;
+    const camera = controls.object as THREE.Camera | undefined;
+    if (camera) {
+      const delta = point.clone().sub(controls.target);
+      camera.position.add(delta);
+    }
+    controls.target.copy(point);
+    controls.update();
+  }, []);
 
   const onPlayingChange = useCallback((playing: boolean) => {
     setTurntablePlaying(playing);
@@ -683,10 +720,11 @@ export default function ZoneScene({
               glbPath={glbPath}
               zoneKey={zoneKey}
               onNavigate={navigateWithTransition}
-              onComingSoon={setComingSoon}
+              onComingSoon={showComingSoon}
               onSceneReady={setLoadedScene}
               onHoverChange={onHoverChange}
               onToyHoverChange={onToyHoverChange}
+              onFocus={focusOrbitTarget}
               allMeshesRef={allMeshesRef}
             />
           </Suspense>
@@ -695,6 +733,7 @@ export default function ZoneScene({
           <OrbitControls
             ref={orbitRef}
             enablePan={true}
+            zoomToCursor={true}
             mouseButtons={{
               LEFT: THREE.MOUSE.ROTATE,
               MIDDLE: THREE.MOUSE.DOLLY,
@@ -741,20 +780,6 @@ export default function ZoneScene({
         </button>
       </footer>
 
-      {comingSoon && (
-        <div className="modal-overlay" onClick={() => setComingSoon(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-tag">⚑ COMING SOON</div>
-            <h2 className="modal-name">{comingSoon}</h2>
-            <p className="modal-text">
-              This zone is still under construction. Check back later.
-            </p>
-            <button className="modal-close" onClick={() => setComingSoon(null)}>
-              close
-            </button>
-          </div>
-        </div>
-      )}
       {useAtmosphere && atmosphereConfig!.controls && <AtmospherePanel />}
     </div>
   );

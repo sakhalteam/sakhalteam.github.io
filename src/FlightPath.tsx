@@ -8,6 +8,10 @@
 //   zone_<key>                                        the flying mesh (animated + clicked)
 //   <zone_<key>>_flight_start[_NN]                    empty marking cycle-start position
 //   <zone_<key>>_flight_end[_NN] | _flight_finish[_NN] empty marking cycle-end position
+//   <any_prefix>_barrel_roll_trigger[_NN]             optional empty; arwing barrel-rolls when it enters its radius
+//     (name the prefix anything you like — e.g. "starlight_" — as long as
+//     it does NOT start with "zone_" or "portal_" or it'll get picked up
+//     as a hotspot by the scanner.)
 //
 // Numbered suffixes (_01, _02, …) define multiple start/end pairs; each full
 // cycle advances to the next pair (wrapping), so the mesh alternates paths.
@@ -28,6 +32,19 @@ import { useSceneOptions } from "./SceneOptionsContext";
 import { AdaptiveLabel } from "./AdaptiveLabel";
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const LOCAL_X = new THREE.Vector3(1, 0, 0);
+
+function distanceToSegment(
+  point: THREE.Vector3,
+  a: THREE.Vector3,
+  b: THREE.Vector3,
+) {
+  const ab = b.clone().sub(a);
+  const lengthSq = ab.lengthSq();
+  if (lengthSq === 0) return point.distanceTo(a);
+  const t = THREE.MathUtils.clamp(point.clone().sub(a).dot(ab) / lengthSq, 0, 1);
+  return point.distanceTo(a.clone().addScaledVector(ab, t));
+}
 
 /**
  * Classify a descendant of the flying zone object into a variant group.
@@ -51,8 +68,17 @@ export interface FlightPathConfig {
   fadeIn: number;
   /** Fraction of cycle spent fading out at end. 0..0.5. */
   fadeOut: number;
-  /** Extra yaw in radians applied after matching the path direction. */
+  /** Extra yaw in radians applied in world-Y space (fixes heading). */
   headingOffset?: number;
+  /** Local-space pitch correction in radians (rotates around model +X). */
+  pitchOffset?: number;
+  /** Local-space roll correction in radians (rotates around model +Z). */
+  rollOffset?: number;
+  /** Seconds for one full barrel roll (2π). Defaults to 0.6. */
+  rollDuration?: number;
+  /** World distance to any `*_barrel_roll_trigger` empty that fires a
+   *  barrel roll. Defaults to 4. */
+  rollTriggerRadius?: number;
 }
 
 export default function FlightPath({
@@ -60,22 +86,30 @@ export default function FlightPath({
   config,
   onNavigate,
   onComingSoon,
+  onFocus,
 }: {
   scene: THREE.Object3D;
   config: FlightPathConfig;
   onNavigate: (url: string, internal: boolean) => void;
   onComingSoon: (label: string) => void;
+  onFocus: (point: THREE.Vector3) => void;
 }) {
   const data = useMemo(() => {
     const objLower = config.objectName.toLowerCase();
     const escaped = objLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const startRe = new RegExp(`^${escaped}_flight_start(?:_(\\d+))?$`);
     const endRe = new RegExp(`^${escaped}_flight_(?:end|finish)(?:_(\\d+))?$`);
+    // Any prefix ending in `_barrel_roll_trigger` (optionally numbered).
+    // We don't tie this to the flying obj's name so users can pick a prefix
+    // that won't collide with hotspot scanning (e.g. `starlight_`).
+    const rollTriggerRe = /_barrel_roll_trigger(?:_\d+)?$/;
 
     let obj: THREE.Object3D | undefined;
     const startMap = new Map<string, THREE.Vector3>();
     const endMap = new Map<string, THREE.Vector3>();
     const markerObjects: THREE.Object3D[] = [];
+    const rollTriggers: THREE.Vector3[] = [];
+    scene.updateWorldMatrix(true, true);
     scene.traverse((o) => {
       const n = o.name.toLowerCase();
       if (n === objLower) {
@@ -84,13 +118,18 @@ export default function FlightPath({
       }
       const sm = n.match(startRe);
       if (sm) {
-        startMap.set(sm[1] ?? "", o.position.clone());
+        startMap.set(sm[1] ?? "", o.getWorldPosition(new THREE.Vector3()));
         markerObjects.push(o);
         return;
       }
       const em = n.match(endRe);
       if (em) {
-        endMap.set(em[1] ?? "", o.position.clone());
+        endMap.set(em[1] ?? "", o.getWorldPosition(new THREE.Vector3()));
+        markerObjects.push(o);
+        return;
+      }
+      if (rollTriggerRe.test(n)) {
+        rollTriggers.push(o.getWorldPosition(new THREE.Vector3()));
         markerObjects.push(o);
       }
     });
@@ -153,6 +192,7 @@ export default function FlightPath({
       obj,
       pairs,
       markerObjects,
+      rollTriggers,
       meshes,
       basePosition: obj.position.clone(),
       baseQuaternion: obj.quaternion.clone(),
@@ -197,19 +237,45 @@ export default function FlightPath({
   const hitboxRef = useRef<THREE.Mesh>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
+  const [debugNearTrigger, setDebugNearTrigger] = useState(false);
   const yawQuatRef = useRef(new THREE.Quaternion());
+  const rollQuatRef = useRef(new THREE.Quaternion());
+  const rollAngleRef = useRef(0);
+  const rollingRef = useRef(false);
+  const wasNearTriggerRef = useRef(false);
+  const prevWorldPosRef = useRef(new THREE.Vector3());
+  const nextWorldPosRef = useRef(new THREE.Vector3());
+  const currentWorldPosRef = useRef(new THREE.Vector3());
 
-  const applyPose = (pairIndex: number, t: number) => {
+  const localCorrection = useMemo(
+    () =>
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(config.pitchOffset ?? 0, 0, config.rollOffset ?? 0),
+      ),
+    [config.pitchOffset, config.rollOffset],
+  );
+
+  const applyPose = (pairIndex: number, t: number, worldPos?: THREE.Vector3) => {
     if (!data) return;
     const pair = data.pairs[pairIndex];
-    data.obj.position.lerpVectors(pair.startPos, pair.endPos, t);
+    const targetWorldPos =
+      worldPos ?? nextWorldPosRef.current.lerpVectors(pair.startPos, pair.endPos, t);
+
+    if (data.obj.parent) {
+      data.obj.position.copy(data.obj.parent.worldToLocal(targetWorldPos.clone()));
+    } else {
+      data.obj.position.copy(targetWorldPos);
+    }
 
     yawQuatRef.current.setFromAxisAngle(
       WORLD_UP,
       pair.yawOffset + (config.headingOffset ?? 0),
     );
+    rollQuatRef.current.setFromAxisAngle(LOCAL_X, rollAngleRef.current);
     data.obj.quaternion
-      .copy(data.baseQuaternion)
+      .copy(localCorrection)
+      .multiply(rollQuatRef.current)
+      .premultiply(data.baseQuaternion)
       .premultiply(yawQuatRef.current);
   };
 
@@ -218,10 +284,11 @@ export default function FlightPath({
 
     tRef.current = 0;
     pairIndexRef.current = 0;
-    applyPose(0, 0);
+    applyPose(0, 0, data.pairs[0].startPos);
+    data.obj.getWorldPosition(prevWorldPosRef.current);
 
     if (followerRef.current) {
-      followerRef.current.position.copy(data.obj.position);
+      followerRef.current.position.copy(prevWorldPosRef.current);
     }
     if (hitboxRef.current) {
       hitboxRef.current.visible = false;
@@ -244,7 +311,39 @@ export default function FlightPath({
     }
     tRef.current = next % 1;
     const t = tRef.current;
-    applyPose(pairIndexRef.current, t);
+    const pair = data.pairs[pairIndexRef.current];
+    const nextWorldPos = nextWorldPosRef.current.lerpVectors(
+      pair.startPos,
+      pair.endPos,
+      t,
+    );
+
+    // Barrel-roll proximity check — edge-triggered so the arwing rolls once
+    // per approach, not continuously while inside the trigger radius.
+    const radius = config.rollTriggerRadius ?? 4;
+    const nearTrigger = data.rollTriggers.some(
+      (p) => distanceToSegment(p, prevWorldPosRef.current, nextWorldPos) < radius,
+    );
+    if (nearTrigger !== debugNearTrigger) {
+      setDebugNearTrigger(nearTrigger);
+    }
+    if (nearTrigger && !wasNearTriggerRef.current && !rollingRef.current) {
+      rollingRef.current = true;
+      rollAngleRef.current = 0;
+    }
+    wasNearTriggerRef.current = nearTrigger;
+
+    if (rollingRef.current) {
+      const rollDuration = config.rollDuration ?? 0.6;
+      rollAngleRef.current += (delta * Math.PI * 2) / rollDuration;
+      if (rollAngleRef.current >= Math.PI * 2) {
+        rollAngleRef.current = 0;
+        rollingRef.current = false;
+      }
+    }
+
+    applyPose(pairIndexRef.current, t, nextWorldPos);
+    prevWorldPosRef.current.copy(nextWorldPos);
 
     let opacity: number;
     if (t < config.fadeIn) opacity = t / config.fadeIn;
@@ -261,7 +360,8 @@ export default function FlightPath({
     }
 
     if (followerRef.current) {
-      followerRef.current.position.copy(data.obj.position);
+      data.obj.getWorldPosition(currentWorldPosRef.current);
+      followerRef.current.position.copy(currentWorldPosRef.current);
     }
     if (hitboxRef.current) {
       // Only clickable when mostly visible — avoids phantom clicks during fade.
@@ -276,7 +376,23 @@ export default function FlightPath({
   const cfg = getZoneConfig(config.objectName);
 
   return (
-    <group ref={followerRef}>
+    <>
+      {/* Debug visualisation for barrel-roll trigger radii. Uncomment to see
+          the red/green wireframe spheres at each `*_barrel_roll_trigger` empty
+          — handy for positioning triggers or diagnosing collision issues. */}
+      {/* {data.rollTriggers.map((triggerPos, index) => (
+        <mesh key={`roll-trigger-${index}`} position={triggerPos}>
+          <sphereGeometry args={[config.rollTriggerRadius ?? 4, 16, 12]} />
+          <meshBasicMaterial
+            color={debugNearTrigger ? "#22c55e" : "#ff4d4f"}
+            wireframe
+            transparent
+            opacity={0.45}
+            depthWrite={false}
+          />
+        </mesh>
+      ))} */}
+      <group ref={followerRef}>
       <mesh
         ref={hitboxRef}
         onPointerOver={(e) => {
@@ -287,6 +403,10 @@ export default function FlightPath({
         onPointerOut={() => {
           setHovered(false);
           document.body.style.cursor = "auto";
+        }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          onFocus(data.obj.position.clone());
         }}
         onClick={(e) => {
           e.stopPropagation();
@@ -335,6 +455,7 @@ export default function FlightPath({
           {cfg.label}
         </div>
       </AdaptiveLabel>
-    </group>
+      </group>
+    </>
   );
 }

@@ -196,6 +196,70 @@
   border-color: #3a5070;
 }
 
+/* ── Coming Soon toast ─────────────────── */
+
+@keyframes coming-soon-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.coming-soon-toast {
+  position: fixed;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 3px;
+  padding: 1.1rem 2.75rem 1.2rem 1.75rem;
+  max-width: 360px;
+  width: calc(100vw - 2rem);
+  text-align: center;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  animation: coming-soon-in 220ms ease-out both;
+}
+
+.coming-soon-toast .modal-tag {
+  margin-bottom: 0.55rem;
+}
+
+.coming-soon-toast .modal-name {
+  margin-bottom: 0.35rem;
+  font-size: 1.1rem;
+}
+
+.coming-soon-toast .modal-text {
+  margin-bottom: 0;
+  font-size: 0.78rem;
+}
+
+.coming-soon-toast__close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.55rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0.25rem 0.45rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 160ms ease;
+}
+
+.coming-soon-toast__close:hover {
+  color: var(--text);
+}
+
 /* ── Quick Nav ─────────────────────────── */
 
 .quick-nav {

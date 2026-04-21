@@ -32,15 +32,13 @@ void main() {
   vec3 dir = normalize(vWorldDir);
   float up = dir.y;
 
-  // Horizon -> zenith blend. Above the horizon eases up toward zenith;
-  // below, we keep the horizon color but slightly darken so we don't see
-  // a bright haze ring under a floating scene.
-  float t = smoothstep(0.0, 0.55, up);
+  // Single continuous gradient: horizon colour below, zenith colour above,
+  // smoothly blended across a wide band biased slightly south of the equator
+  // so a straight-ahead camera already reads as "sky", not "horizon haze".
+  // Anything past the blend range resolves to solid uHorizon (below) or
+  // uZenith (above), with no hard seam at the equator.
+  float t = smoothstep(-0.45, 0.35, up);
   vec3 sky = mix(uHorizon, uZenith, t);
-  if (up < 0.0) {
-    float belowT = smoothstep(0.0, -0.4, up);
-    sky = mix(uHorizon, uHorizon * 0.45, belowT);
-  }
 
   // Sun terms.
   float sunDot = max(0.0, dot(dir, normalize(uSunDir)));

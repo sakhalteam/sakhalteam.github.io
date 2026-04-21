@@ -12,7 +12,6 @@ import * as THREE from "three";
 
 //#region types
 
-export type TimeOfDay = "dawn" | "morning" | "noon" | "sunset" | "night";
 export type Weather =
   | "clear"
   | "partly_cloudy"
@@ -44,15 +43,6 @@ export const WEATHER_LABELS: Record<Weather, string> = {
   overcast: "Overcast",
   rainy: "Rainy",
   stormy: "Stormy",
-};
-
-/** Convenience -> hour-of-day mapping for sceneMap defaults. */
-export const TIME_OF_DAY_HOURS: Record<TimeOfDay, number> = {
-  dawn: 6,
-  morning: 9,
-  noon: 12,
-  sunset: 19,
-  night: 23,
 };
 
 export interface AtmosphereParams {
@@ -384,7 +374,3 @@ export function resolveAtmosphere(
   };
 }
 
-/** Convert a convenience TimeOfDay label into an hour for sceneMap defaults. */
-export function hourFromTimeOfDay(t: TimeOfDay): number {
-  return TIME_OF_DAY_HOURS[t];
-}
