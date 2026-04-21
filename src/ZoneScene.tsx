@@ -595,16 +595,41 @@ export default function ZoneScene({
     [],
   );
 
+  // Eased tween of the orbit target (and camera position alongside it, so
+  // zoom/angle are preserved). Feels like Blender's `.` focus, minus the
+  // instant jump. A new focus cancels the in-flight one.
+  const focusTweenRef = useRef<number | null>(null);
   const focusOrbitTarget = useCallback((point: THREE.Vector3) => {
     const controls = orbitRef.current;
     if (!controls) return;
     const camera = controls.object as THREE.Camera | undefined;
-    if (camera) {
-      const delta = point.clone().sub(controls.target);
-      camera.position.add(delta);
+    if (!camera) return;
+
+    if (focusTweenRef.current !== null) {
+      cancelAnimationFrame(focusTweenRef.current);
     }
-    controls.target.copy(point);
-    controls.update();
+
+    const fromTarget = controls.target.clone();
+    const toTarget = point.clone();
+    const camOffset = camera.position.clone().sub(fromTarget);
+    const duration = 350;
+    const start = performance.now();
+    const tmp = new THREE.Vector3();
+
+    const tick = () => {
+      const progress = Math.min((performance.now() - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      tmp.lerpVectors(fromTarget, toTarget, eased);
+      controls.target.copy(tmp);
+      camera.position.copy(tmp).add(camOffset);
+      controls.update();
+      if (progress < 1) {
+        focusTweenRef.current = requestAnimationFrame(tick);
+      } else {
+        focusTweenRef.current = null;
+      }
+    };
+    focusTweenRef.current = requestAnimationFrame(tick);
   }, []);
 
   const onPlayingChange = useCallback((playing: boolean) => {
