@@ -15,6 +15,7 @@ import { EffectComposer } from "@react-three/postprocessing";
 import { useOptimizedGLTF } from "./useOptimizedGLTF";
 import { useKeyboardControls } from "./useKeyboardControls";
 import { useTurntable } from "./useTurntable";
+import { useFocusOrbit } from "./useFocusOrbit";
 import OutlineController from "./Outline";
 import { KernelSize, BlendFunction } from "postprocessing";
 import { AdaptiveLabel } from "./AdaptiveLabel";
@@ -139,11 +140,15 @@ const ZoneHitbox = memo(function ZoneHitbox({
   onComingSoon,
   onNavigate,
   onHoverChange,
+  onFocus,
+  isFocused,
 }: {
   marker: ZoneMarker;
   onComingSoon: (label: string) => void;
   onNavigate: (url: string, internal: boolean, center: THREE.Vector3) => void;
   onHoverChange: (marker: ZoneMarker, hovered: boolean) => void;
+  onFocus: (point: THREE.Vector3) => void;
+  isFocused: (point: THREE.Vector3) => boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
@@ -179,6 +184,10 @@ const ZoneHitbox = memo(function ZoneHitbox({
             const dx = e.clientX - pointerDown.current.x;
             const dy = e.clientY - pointerDown.current.y;
             if (dx * dx + dy * dy > 25) return;
+          }
+          if (!isFocused(marker.center)) {
+            onFocus(marker.center);
+            return;
           }
           if (marker.url) {
             onNavigate(marker.url, marker.internal, marker.center);
@@ -238,6 +247,8 @@ function IslandMesh({
   onNavigate,
   onHoverChange,
   onToyHoverChange,
+  onFocus,
+  isFocused,
   allMeshesRef,
   onReady,
 }: {
@@ -245,6 +256,8 @@ function IslandMesh({
   onNavigate: (url: string, internal: boolean, center: THREE.Vector3) => void;
   onHoverChange: (marker: ZoneMarker, hovered: boolean) => void;
   onToyHoverChange: (objects: THREE.Object3D[], hovered: boolean) => void;
+  onFocus: (point: THREE.Vector3) => void;
+  isFocused: (point: THREE.Vector3) => boolean;
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>;
   onReady?: () => void;
 }) {
@@ -270,6 +283,7 @@ function IslandMesh({
         scene={scene}
         animations={animations}
         onHoverChange={onToyHoverChange}
+        onFocus={onFocus}
       />
       {markers.map((marker) => (
         <ZoneHitbox
@@ -278,6 +292,8 @@ function IslandMesh({
           onComingSoon={onComingSoon}
           onNavigate={onNavigate}
           onHoverChange={onHoverChange}
+          onFocus={onFocus}
+          isFocused={isFocused}
         />
       ))}
     </>
@@ -387,6 +403,7 @@ export default function IslandScene({
     "active",
   );
   const [dollyTarget, setDollyTarget] = useState<THREE.Vector3 | null>(null);
+  const { focus: focusOrbitTarget, isFocused } = useFocusOrbit(orbitRef);
 
   // Shared world position for the whirlpool so Water can carve a funnel underneath it.
   const whirlpoolCenterRef = useRef<THREE.Vector3>(
@@ -491,7 +508,19 @@ export default function IslandScene({
         color="#4488ff"
       />
       <Environment preset="night" />
-      <Water funnelCenter={whirlpoolCenterRef} />
+      <Water
+        funnelCenter={whirlpoolCenterRef}
+        size={80}
+        color="#00fccd"
+        opacity={0.5}
+        waveSpeed={0.9}
+        foamSpeed={0.1}
+        foamScale={14}
+        waveScale={5}
+        rimWidth={0.6}
+        rimColor="#ffffff"
+        rimStrength={0.95}
+      />
       <Whirlpool centerRef={whirlpoolCenterRef} />
       <Suspense fallback={<LoadingFallback />}>
         <IslandMesh
@@ -499,6 +528,8 @@ export default function IslandScene({
           onNavigate={handleNavigate}
           onHoverChange={onHoverChange}
           onToyHoverChange={onToyHoverChange}
+          onFocus={focusOrbitTarget}
+          isFocused={isFocused}
           allMeshesRef={allMeshesRef}
           onReady={onReady}
         />

@@ -87,12 +87,14 @@ export default function FlightPath({
   onNavigate,
   onComingSoon,
   onFocus,
+  isFocused,
 }: {
   scene: THREE.Object3D;
   config: FlightPathConfig;
   onNavigate: (url: string, internal: boolean) => void;
   onComingSoon: (label: string) => void;
   onFocus: (point: THREE.Vector3) => void;
+  isFocused: (point: THREE.Vector3) => boolean;
 }) {
   const data = useMemo(() => {
     const objLower = config.objectName.toLowerCase();
@@ -406,10 +408,14 @@ export default function FlightPath({
         }}
         onPointerDown={(e) => {
           e.stopPropagation();
-          onFocus(data.obj.position.clone());
         }}
         onClick={(e) => {
           e.stopPropagation();
+          const point = data.obj.position.clone();
+          if (!isFocused(point)) {
+            onFocus(point);
+            return;
+          }
           if (cfg.url) onNavigate(cfg.url, cfg.internal);
           else onComingSoon(cfg.label);
         }}

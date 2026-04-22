@@ -285,7 +285,7 @@ const nodes: SceneNode[] = [
     ],
   }),
   zone("ss_brainfog", "S.S. Brainfog", {
-    env: "sunset",
+    turntable: false,
     children: [
       "portal_adhdo",
       "portal_karasu_drop",
@@ -730,7 +730,10 @@ const nodes: SceneNode[] = [
 
   // ── Toys inside zone_ss_brainfog.glb (parent: ss_brainfog) ──
   toy("ssb_toy_shark", "Shark", "ss_brainfog"),
-  toy("ssb_toy_ss_aqua", "S.S. Aqua", "ss_brainfog"),
+  toy("ssb_toy_ss_aqua", "S.S. Aqua", "ss_brainfog", {
+    sounds: ["/sounds/ssb_toy_ss_aqua.mp3"],
+    animation: "hop",
+  }),
 
   // ── Toys inside zone_reading_room.glb (parent: reading_room) ──
   toy("rr_toy_TV", "TV", "reading_room"),

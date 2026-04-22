@@ -58,3 +58,20 @@ the same way we can have multiple start/finish points, why not have multiple bar
 ### add visual indicator to direct users towards dream zone
 
 right now dream zone is dropping a ladder down to pool time, but to get users to notice dream zone more, maybe add a simple animated undulating-up-and-down arrow? or like when you hover the ladder it has a little "look up" toast?
+
+### new zone idea: Bug Sanctuary
+
+ideas: find animated bugs on sketchfab, give them an environment to crawl around in, add option to give them food, like a preset list of food, like for ants, they love the strawberries. for etc, they love the etc.
+
+### ADHDO bugs/features list
+
+when you hover the help ? icon in the lower left, it pops up the help menu, but when you leave the ? icon, it disappears. however, if you CLICK the ? icon, the help menu persists until user clicks away from it. this is confusing because you might hover the ? icon, then say "oh I want to 'gather free globs' from the recovery section. let me just move my mouse and select that....oh.....the menu disappeared....how the hell do I get that thing to stay open? ohhhhh I have to CLICK the ? icon, otherwise it just disappears when I mouse away. hmmm" so maybe we should make it NOT open up on hovering the ? icon, but instead ONLY activate when ? icon is clicked.
+
+instead of the 'x' on clusters being 'release to globs? yes/no', perhaps it should be a two-option decider thing that says "release to globs | delete cluster"...maybe
+
+dragging one cluster on top of another should trigger a "combine clusters?" popup just like the same style as our other confirmation actions, like clicking the merge icon when two clusters are linked.
+
+### Dream Zone ideas
+
+explore the "Shaders" options in the drei docs. especially this one sounds intersting for DreamZone:
+https://drei.docs.pmnd.rs/shaders/mesh-wobble-material

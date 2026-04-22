@@ -27,6 +27,7 @@ import { useAutoFitCamera } from "./useAutoFitCamera";
 import { useKeyboardControls } from "./useKeyboardControls";
 import { useOptimizedGLTF } from "./useOptimizedGLTF";
 import { useTurntable } from "./useTurntable";
+import { useFocusOrbit } from "./useFocusOrbit";
 import { useSceneTransition } from "./useSceneTransition";
 import { showComingSoon } from "./comingSoonStore";
 import {
@@ -38,6 +39,7 @@ import {
 } from "./sceneMap";
 import ToyInteractor from "./ToyInteractor";
 import FlightPath, { type FlightPathConfig } from "./FlightPath";
+import Water from "./Water";
 import Waterfall from "./Waterfall";
 import IdleAnimator from "./IdleAnimator";
 import { SceneOptionsProvider } from "./SceneOptionsContext";
@@ -66,12 +68,14 @@ const HotspotHitbox = memo(function HotspotHitbox({
   onComingSoon,
   onHoverChange,
   onFocus,
+  isFocused,
 }: {
   hotspot: Hotspot;
   onNavigate: (url: string, internal: boolean) => void;
   onComingSoon: (label: string) => void;
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void;
   onFocus: (point: THREE.Vector3) => void;
+  isFocused: (point: THREE.Vector3) => boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
@@ -97,7 +101,6 @@ const HotspotHitbox = memo(function HotspotHitbox({
         }}
         onPointerDown={(e) => {
           pointerDown.current = { x: e.clientX, y: e.clientY };
-          onFocus(hotspot.center);
         }}
         onClick={(e) => {
           e.stopPropagation();
@@ -105,6 +108,10 @@ const HotspotHitbox = memo(function HotspotHitbox({
             const dx = e.clientX - pointerDown.current.x;
             const dy = e.clientY - pointerDown.current.y;
             if (dx * dx + dy * dy > 25) return;
+          }
+          if (!isFocused(hotspot.center)) {
+            onFocus(hotspot.center);
+            return;
           }
           if (hotspot.url) {
             onNavigate(hotspot.url, hotspot.internal);
@@ -276,6 +283,7 @@ function ZoneMesh({
   onHoverChange,
   onToyHoverChange,
   onFocus,
+  isFocused,
   allMeshesRef,
 }: {
   glbPath: string;
@@ -286,6 +294,7 @@ function ZoneMesh({
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void;
   onToyHoverChange: (objects: THREE.Object3D[], hovered: boolean) => void;
   onFocus: (point: THREE.Vector3) => void;
+  isFocused: (point: THREE.Vector3) => boolean;
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>;
 }) {
   const { scene, animations } = useOptimizedGLTF(glbPath);
@@ -418,6 +427,7 @@ function ZoneMesh({
           onComingSoon={onComingSoon}
           onHoverChange={onHoverChange}
           onFocus={onFocus}
+          isFocused={isFocused}
         />
       ))}
       {flightConfigs.map((config) => (
@@ -428,6 +438,7 @@ function ZoneMesh({
           onNavigate={onNavigate}
           onComingSoon={onComingSoon}
           onFocus={onFocus}
+          isFocused={isFocused}
         />
       ))}
       <Waterfall scene={scene} />
@@ -595,42 +606,7 @@ export default function ZoneScene({
     [],
   );
 
-  // Eased tween of the orbit target (and camera position alongside it, so
-  // zoom/angle are preserved). Feels like Blender's `.` focus, minus the
-  // instant jump. A new focus cancels the in-flight one.
-  const focusTweenRef = useRef<number | null>(null);
-  const focusOrbitTarget = useCallback((point: THREE.Vector3) => {
-    const controls = orbitRef.current;
-    if (!controls) return;
-    const camera = controls.object as THREE.Camera | undefined;
-    if (!camera) return;
-
-    if (focusTweenRef.current !== null) {
-      cancelAnimationFrame(focusTweenRef.current);
-    }
-
-    const fromTarget = controls.target.clone();
-    const toTarget = point.clone();
-    const camOffset = camera.position.clone().sub(fromTarget);
-    const duration = 350;
-    const start = performance.now();
-    const tmp = new THREE.Vector3();
-
-    const tick = () => {
-      const progress = Math.min((performance.now() - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-      tmp.lerpVectors(fromTarget, toTarget, eased);
-      controls.target.copy(tmp);
-      camera.position.copy(tmp).add(camOffset);
-      controls.update();
-      if (progress < 1) {
-        focusTweenRef.current = requestAnimationFrame(tick);
-      } else {
-        focusTweenRef.current = null;
-      }
-    };
-    focusTweenRef.current = requestAnimationFrame(tick);
-  }, []);
+  const { focus: focusOrbitTarget, isFocused } = useFocusOrbit(orbitRef);
 
   const onPlayingChange = useCallback((playing: boolean) => {
     setTurntablePlaying(playing);
@@ -750,11 +726,15 @@ export default function ZoneScene({
               onHoverChange={onHoverChange}
               onToyHoverChange={onToyHoverChange}
               onFocus={focusOrbitTarget}
+              isFocused={isFocused}
               allMeshesRef={allMeshesRef}
             />
           </Suspense>
           {zoneKey === "bird_sanctuary" && <BirdSanctuaryLighting />}
           {zoneKey === "bird_sanctuary" && <SunRays />}
+          {zoneKey === "ss_brainfog" && (
+            <Water size={320} color="#00fccd" opacity={0.7} />
+          )}
           <OrbitControls
             ref={orbitRef}
             enablePan={true}

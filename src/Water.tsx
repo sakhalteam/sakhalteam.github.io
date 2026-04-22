@@ -1,7 +1,13 @@
 // Water.tsx
+//
+// Stylized water with surface foam, wave lines, and depth-based intersection
+// foam (rim where water meets geometry). Adapted from the Codrops tutorial
+// + the linked Three.js sandbox (notes/claude_heres_the_sandbox_js_file.js).
+//
+// For prop reference and tuning recipes, see notes/water_settings.md.
 
-import { useRef, useMemo } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useRef, useMemo, useEffect } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 import CustomShaderMaterial from "three-custom-shader-material/vanilla";
 import * as THREE from "three";
 
@@ -52,45 +58,82 @@ const fragmentShader = /* glsl */ `
   varying vec2 csm_vUv;
 
   uniform float uTime;
+  uniform float uFoamSpeed;
+  uniform float uFoamDepth;
   uniform vec3 uColorFar;
-  uniform float uTextureSize;
+  uniform float uFoamScale;
+  uniform float uWaveScale;
   uniform vec2 uFunnelCenter;
   uniform float uFunnelRadius;
   uniform float uHoleRadius;
   uniform float uHoleFeather;
   uniform float uPlaneSize;
 
-  float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+  // Depth-based intersection foam
+  uniform sampler2D uDepthTexture;
+  uniform vec2 uResolution;
+  uniform float uCameraNear;
+  uniform float uCameraFar;
+  uniform float uRimWidth;
+  uniform vec3 uRimColor;
+  uniform float uRimStrength;
+
+  // 2D simplex noise (Ashima / Ian McEwan). Returns approx [-1, 1].
+  // Remap to [0, 1] at call sites with: snoise(p) * 0.5 + 0.5
+  vec3 permute(vec3 x) {
+    return mod(((x * 34.0) + 1.0) * x, 289.0);
   }
 
-  float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    float a = hash(i);
-    float b = hash(i + vec2(1.0, 0.0));
-    float c = hash(i + vec2(0.0, 1.0));
-    float d = hash(i + vec2(1.0, 1.0));
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+  float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                       -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy));
+    vec2 x0 = v - i + dot(i, C.xx);
+    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod(i, 289.0);
+    vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
+                   + i.x + vec3(0.0, i1.x, 1.0));
+    vec3 m = max(0.5 - vec3(dot(x0, x0),
+                            dot(x12.xy, x12.xy),
+                            dot(x12.zw, x12.zw)), 0.0);
+    m = m * m;
+    m = m * m;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+    vec3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
+
+  // Non-linear window depth [0,1] → view-space Z (negative for perspective)
+  float depthToViewZ(float depth, float near, float far) {
+    return (near * far) / ((far - near) * depth - far);
   }
 
   void main() {
     vec3 finalColor = csm_FragColor.rgb;
     float alpha = csm_FragColor.a;
 
-    float textureSize = 100.0 - uTextureSize;
+    float tFoam = uTime * uFoamSpeed;
 
-    // Foam islands
-    float noiseBase = noise(csm_vUv * (textureSize * 2.8) + sin(uTime * 0.3));
+    // Foam islands (simplex noise remapped to [0, 1]).
+    // uFoamScale: higher = smaller/denser foam; lower = bigger/sparser.
+    // uFoamDepth: upper threshold of the foam cutoff — higher = thicker/more foam coverage.
+    float noiseBase = snoise(csm_vUv * uFoamScale + sin(tFoam * 0.3)) * 0.5 + 0.5;
     vec3 colorBase = vec3(noiseBase);
-    vec3 foam = smoothstep(0.08, 0.001, colorBase);
+    vec3 foam = smoothstep(uFoamDepth, 0.001, colorBase);
     foam = step(0.5, foam);
 
-    // Wave lines
-    float noiseWaves = noise(csm_vUv * textureSize + sin(uTime * -0.1));
+    // Wave lines. Same direction as uFoamScale.
+    float noiseWaves = snoise(csm_vUv * uWaveScale + sin(tFoam * -0.1)) * 0.5 + 0.5;
     vec3 colorWaves = vec3(noiseWaves);
-    float threshold = 0.6 + 0.01 * sin(uTime * 2.0);
+    float threshold = 0.6 + 0.01 * sin(tFoam * 2.0);
     vec3 waveEffect = 1.0 - (
       smoothstep(threshold + 0.03, threshold + 0.032, colorWaves) +
       smoothstep(threshold, threshold - 0.01, colorWaves)
@@ -113,6 +156,30 @@ const fragmentShader = /* glsl */ `
 
     // Fade alpha at edges for soft boundary
     alpha *= (1.0 - edgeFade);
+
+    // ---- Intersection foam (rim) ----
+    // Sample scene depth at this fragment's screen position, compare with our
+    // own fragment depth. Small difference = water surface is close to scene
+    // geometry = rim foam.
+    if (uRimWidth > 0.0001) {
+      vec2 screenUV = gl_FragCoord.xy / uResolution;
+      float sceneDepth = texture2D(uDepthTexture, screenUV).x;
+      float sceneViewZ = depthToViewZ(sceneDepth, uCameraNear, uCameraFar);
+      float fragViewZ = depthToViewZ(gl_FragCoord.z, uCameraNear, uCameraFar);
+      // Both view Z are negative; fragViewZ (water) is less negative (closer to
+      // camera), sceneViewZ (geometry behind water) more negative. Their
+      // absolute difference = water column thickness in world units.
+      float waterColumn = max(fragViewZ - sceneViewZ, 0.0);
+
+      float rim = 1.0 - smoothstep(0.0, uRimWidth, waterColumn);
+      // Animate the edge with a fast noise pattern so it looks organic
+      float rimDetail = snoise(csm_vUv * 55.0 + vec2(tFoam * 0.4, tFoam * -0.3)) * 0.5 + 0.5;
+      float rimMask = clamp(rim * (0.55 + 0.9 * rimDetail), 0.0, 1.0);
+      rimMask = smoothstep(0.35, 0.85, rimMask) * uRimStrength;
+
+      finalColor = mix(finalColor, uRimColor, rimMask);
+      alpha = max(alpha, rimMask);
+    }
 
     // Cut a soft hole in the water where the whirlpool mouth is
     vec2 worldXZ = vec2(
@@ -142,6 +209,28 @@ interface WaterProps {
   funnelRadius?: number;
   /** Max depth of the funnel in world units */
   funnelDepth?: number;
+  /** Base water color */
+  color?: string;
+  /** Opacity of the water surface (0–1) */
+  opacity?: number;
+  /** Speed of the 3D surface bobbing (vertex ripples). Low visual impact top-down. */
+  waveSpeed?: number;
+  /** Vertex wave height in world units. Higher = choppier surface. */
+  waveAmplitude?: number;
+  /** Speed of foam/wave-line drift across the surface. Set low (e.g. 0.1) for calm. */
+  foamSpeed?: number;
+  /** Foam island density. Lower = bigger/sparser foam blobs; higher = smaller/denser. */
+  foamScale?: number;
+  /** Foam threshold/coverage. Higher = thicker, more foam; lower = thinner, sparser. */
+  foamDepth?: number;
+  /** Wave line density. Lower = bigger/sparser squiggles; higher = smaller/denser. */
+  waveScale?: number;
+  /** Width of intersection-foam rim, in world units. 0 disables rim + depth pass. */
+  rimWidth?: number;
+  /** Color of intersection foam where water meets geometry */
+  rimColor?: string;
+  /** Opacity/blend strength of rim foam (0–1) */
+  rimStrength?: number;
 }
 
 export default function Water({
@@ -150,46 +239,166 @@ export default function Water({
   funnelCenter,
   funnelRadius = 3.8,
   funnelDepth = 0.85,
+  color = "#00fccd",
+  opacity = 0.7,
+  waveSpeed = 0.55,
+  waveAmplitude = 0.04,
+  foamSpeed = 0.25,
+  foamScale = 22,
+  foamDepth = 0.08,
+  waveScale = 8,
+  rimWidth = 0.6,
+  rimColor = "#ffffff",
+  rimStrength = 0.95,
 }: WaterProps) {
   const materialRef = useRef<CustomShaderMaterial>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const { gl, scene, camera, size: viewportSize } = useThree();
+
+  // Render target with a depth texture: we render the scene (minus water) into
+  // this each frame to capture per-pixel scene depth, which the water shader
+  // samples for intersection foam.
+  const depthRT = useMemo(() => {
+    const pr = gl.getPixelRatio();
+    const w = Math.max(1, Math.floor(viewportSize.width * pr));
+    const h = Math.max(1, Math.floor(viewportSize.height * pr));
+    const rt = new THREE.WebGLRenderTarget(w, h);
+    rt.texture.minFilter = THREE.NearestFilter;
+    rt.texture.magFilter = THREE.NearestFilter;
+    rt.texture.generateMipmaps = false;
+    rt.stencilBuffer = false;
+    rt.depthBuffer = true;
+    const depthTex = new THREE.DepthTexture(w, h);
+    depthTex.type = THREE.UnsignedIntType;
+    depthTex.minFilter = THREE.NearestFilter;
+    depthTex.magFilter = THREE.NearestFilter;
+    rt.depthTexture = depthTex;
+    return rt;
+    // gl is stable; depthRT is created once and resized below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gl]);
+
+  useEffect(() => {
+    const pr = gl.getPixelRatio();
+    depthRT.setSize(
+      Math.max(1, Math.floor(viewportSize.width * pr)),
+      Math.max(1, Math.floor(viewportSize.height * pr)),
+    );
+  }, [viewportSize.width, viewportSize.height, gl, depthRT]);
+
+  useEffect(() => {
+    return () => depthRT.dispose();
+  }, [depthRT]);
+
+  // Override material used during the depth pre-pass. Forces every mesh (even
+  // transparent ones like glass / alpha-blended windows) to write to the depth
+  // buffer, so the rim-foam effect detects them. MeshBasicMaterial is cheap
+  // and still handles skinning / instancing via standard shader chunks.
+  const depthOverrideMat = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial();
+    m.transparent = false;
+    m.depthWrite = true;
+    m.depthTest = true;
+    return m;
+  }, []);
+
+  useEffect(() => () => depthOverrideMat.dispose(), [depthOverrideMat]);
 
   const material = useMemo(() => {
     return new CustomShaderMaterial({
       baseMaterial: THREE.MeshStandardMaterial,
       vertexShader,
       fragmentShader,
-      color: "#00fccd",
+      color,
       transparent: true,
-      opacity: 0.7,
+      opacity,
       side: THREE.DoubleSide,
       uniforms: {
         uTime: { value: 0 },
-        uWaveSpeed: { value: 0.8 },
-        uWaveAmplitude: { value: 0.04 },
+        uWaveSpeed: { value: waveSpeed },
+        uWaveAmplitude: { value: waveAmplitude },
+        uFoamSpeed: { value: foamSpeed },
+        uFoamDepth: { value: foamDepth },
         uColorFar: { value: new THREE.Color("#0b6fb8") },
-        uTextureSize: { value: 92.0 },
+        uFoamScale: { value: foamScale },
+        uWaveScale: { value: waveScale },
         uFunnelCenter: { value: new THREE.Vector2(9999, 9999) },
         uFunnelRadius: { value: funnelRadius },
         uFunnelDepth: { value: funnelDepth },
         uHoleRadius: { value: funnelRadius * 0.35 },
         uHoleFeather: { value: 0.9 },
         uPlaneSize: { value: size },
+        uDepthTexture: { value: depthRT.depthTexture },
+        uResolution: { value: new THREE.Vector2(depthRT.width, depthRT.height) },
+        uCameraNear: { value: (camera as THREE.PerspectiveCamera).near ?? 0.1 },
+        uCameraFar: { value: (camera as THREE.PerspectiveCamera).far ?? 1000 },
+        uRimWidth: { value: rimWidth },
+        uRimColor: { value: new THREE.Color(rimColor) },
+        uRimStrength: { value: rimStrength },
       },
     });
-  }, [size, funnelRadius, funnelDepth]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    size,
+    funnelRadius,
+    funnelDepth,
+    color,
+    opacity,
+    waveSpeed,
+    waveAmplitude,
+    foamSpeed,
+    foamScale,
+    foamDepth,
+    waveScale,
+    rimWidth,
+    rimColor,
+    rimStrength,
+    depthRT,
+  ]);
 
+  // Runs at default priority 0 — before the EffectComposer's render (priority
+  // 1), so the depth texture is fresh by the time the water shader samples it.
   useFrame(({ clock }) => {
-    if (materialRef.current) {
-      materialRef.current.uniforms.uTime.value = clock.getElapsedTime();
-      if (funnelCenter?.current) {
-        const c = funnelCenter.current;
-        materialRef.current.uniforms.uFunnelCenter.value.set(c.x, c.z);
-      }
+    if (!materialRef.current || !meshRef.current) return;
+
+    const mesh = meshRef.current;
+    const u = materialRef.current.uniforms;
+
+    // ---- Depth pre-pass ----
+    // Only do the pass if rim foam is actually enabled; otherwise skip to save
+    // ~50% GPU cost for scenes that don't need intersection foam.
+    if (u.uRimWidth.value > 0.0001) {
+      const wasVisible = mesh.visible;
+      const prevOverride = scene.overrideMaterial;
+      mesh.visible = false;
+      scene.overrideMaterial = depthOverrideMat;
+      const prev = gl.getRenderTarget();
+      gl.setRenderTarget(depthRT);
+      gl.clear();
+      gl.render(scene, camera);
+      gl.setRenderTarget(prev);
+      scene.overrideMaterial = prevOverride;
+      mesh.visible = wasVisible;
+
+      u.uResolution.value.set(depthRT.width, depthRT.height);
+      u.uCameraNear.value = (camera as THREE.PerspectiveCamera).near;
+      u.uCameraFar.value = (camera as THREE.PerspectiveCamera).far;
+    }
+
+    u.uTime.value = clock.getElapsedTime();
+    if (funnelCenter?.current) {
+      const c = funnelCenter.current;
+      u.uFunnelCenter.value.set(c.x, c.z);
     }
   });
 
   return (
-    <mesh rotation-x={-Math.PI / 2} position-y={waterLevel} renderOrder={-1}>
+    <mesh
+      ref={meshRef}
+      rotation-x={-Math.PI / 2}
+      position-y={waterLevel}
+      renderOrder={-1}
+    >
       <planeGeometry args={[size, size, 128, 128]} />
       <primitive object={material} ref={materialRef} attach="material" />
     </mesh>
