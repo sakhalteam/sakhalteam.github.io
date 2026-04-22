@@ -290,20 +290,6 @@ export default function Water({
     return () => depthRT.dispose();
   }, [depthRT]);
 
-  // Override material used during the depth pre-pass. Forces every mesh (even
-  // transparent ones like glass / alpha-blended windows) to write to the depth
-  // buffer, so the rim-foam effect detects them. MeshBasicMaterial is cheap
-  // and still handles skinning / instancing via standard shader chunks.
-  const depthOverrideMat = useMemo(() => {
-    const m = new THREE.MeshBasicMaterial();
-    m.transparent = false;
-    m.depthWrite = true;
-    m.depthTest = true;
-    return m;
-  }, []);
-
-  useEffect(() => () => depthOverrideMat.dispose(), [depthOverrideMat]);
-
   const material = useMemo(() => {
     return new CustomShaderMaterial({
       baseMaterial: THREE.MeshStandardMaterial,
@@ -369,15 +355,12 @@ export default function Water({
     // ~50% GPU cost for scenes that don't need intersection foam.
     if (u.uRimWidth.value > 0.0001) {
       const wasVisible = mesh.visible;
-      const prevOverride = scene.overrideMaterial;
       mesh.visible = false;
-      scene.overrideMaterial = depthOverrideMat;
       const prev = gl.getRenderTarget();
       gl.setRenderTarget(depthRT);
       gl.clear();
       gl.render(scene, camera);
       gl.setRenderTarget(prev);
-      scene.overrideMaterial = prevOverride;
       mesh.visible = wasVisible;
 
       u.uResolution.value.set(depthRT.width, depthRT.height);
