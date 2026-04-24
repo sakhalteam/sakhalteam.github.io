@@ -42,6 +42,7 @@ interface ZoneMarker {
   sounds?: string[];
   sceneObj: THREE.Object3D;
   meshes: THREE.Mesh[]; // bloom glow — includes zone_ + zc_ meshes
+  labelOffsetY: number;
 }
 
 /**
@@ -116,6 +117,7 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
 
     const center = new THREE.Vector3();
     box.getCenter(center);
+    const node = findNodeByObjectName(obj.name);
     result.push({
       name: obj.name,
       key,
@@ -123,6 +125,7 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
       center,
       sceneObj: obj,
       meshes: [...zoneMeshes, ...memberMeshes],
+      labelOffsetY: node?.labelOffsetY ?? 0,
       ...config,
     });
   }
@@ -201,7 +204,7 @@ const ZoneHitbox = memo(function ZoneHitbox({
         <meshStandardMaterial visible={false} />
       </mesh>
       <AdaptiveLabel
-        position={[0, size.y / 2 + 0.3, 0]}
+        position={[0, size.y / 2 + 0.3 + marker.labelOffsetY, 0]}
         nearDistance={8}
         farDistance={25}
       >

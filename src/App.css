@@ -12,6 +12,56 @@
   user-select: none;
 }
 
+/* Full-bleed zones: canvas covers the viewport, header/footer float over it.
+   Opt in per-zone via `fullBleed: true` in sceneMap. */
+.ocean--full-bleed {
+  gap: 0;
+  padding: 0;
+}
+
+.ocean--full-bleed .map-wrap {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+}
+
+.ocean--full-bleed .site-header,
+.ocean--full-bleed .site-footer {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  pointer-events: none;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Header: pure text, no halo/backdrop. If a scene makes it unreadable,
+   rotate the camera. */
+.ocean--full-bleed .site-header {
+  top: 0.75rem;
+}
+
+/* Footer: defined pill — suits the dense keyboard-hint text. Tint is
+   nudged slightly away from the original near-black blue toward a cooler
+   neutral grey. */
+.ocean--full-bleed .site-footer {
+  bottom: 0.75rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 99px;
+  background: rgba(18, 22, 28, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Interactive bits inside overlays still need to receive clicks. */
+.ocean--full-bleed .site-header a,
+.ocean--full-bleed .site-header button,
+.ocean--full-bleed .site-footer button {
+  pointer-events: auto;
+}
+
 /* ── Header ─────────────────────────────── */
 
 .site-header {

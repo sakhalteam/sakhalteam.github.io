@@ -58,6 +58,7 @@ interface Hotspot {
   type: "active" | "coming-soon";
   sceneObj: THREE.Object3D;
   meshes: THREE.Mesh[];
+  labelOffsetY: number;
 }
 
 type OutlineKind = "active" | "inactive" | "toy";
@@ -124,7 +125,7 @@ const HotspotHitbox = memo(function HotspotHitbox({
         <meshStandardMaterial visible={false} />
       </mesh>
       <AdaptiveLabel
-        position={[0, size.y / 2 + 0.2, 0]}
+        position={[0, size.y / 2 + 0.2 + hotspot.labelOffsetY, 0]}
         nearDistance={5}
         farDistance={20}
       >
@@ -257,6 +258,7 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
     const center = new THREE.Vector3();
     box.getCenter(center);
 
+    const node = findNodeByObjectName(obj.name);
     result.push({
       name: obj.name,
       key,
@@ -268,6 +270,7 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
       type: config.type,
       sceneObj: obj,
       meshes: [...objMeshes, ...memberMeshes],
+      labelOffsetY: node?.labelOffsetY ?? 0,
     });
   }
 
@@ -580,6 +583,7 @@ export default function ZoneScene({
   environmentPreset,
 }: ZoneSceneProps) {
   const atmosphereConfig = getNode(zoneKey)?.atmosphere;
+  const fullBleed = getNode(zoneKey)?.fullBleed === true;
   const orbitRef = useRef<any>(null);
   const turntableToggleRef = useRef<(() => void) | null>(null);
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map());
@@ -670,7 +674,7 @@ export default function ZoneScene({
   const useAtmosphere = !!atmosphereConfig;
 
   const sceneInner = (
-    <div className="ocean">
+    <div className={fullBleed ? "ocean ocean--full-bleed" : "ocean"}>
       <header className="site-header">
         <Breadcrumbs zoneKey={zoneKey} />
         <h1 className="site-title">{title}</h1>

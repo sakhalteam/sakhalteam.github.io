@@ -100,6 +100,10 @@ export interface SceneNode {
   quiet?: boolean;
   /** Whether to show a proximity label on hover. Default true. When false, the toy gets a subtle emissive tint on hover instead. */
   showLabel?: boolean;
+  /** Zones/portals: extra world-units to lift the hover label above the default (bbox-top + small pad). Use when a toy parented to the portal makes the default label clip. */
+  labelOffsetY?: number;
+  /** Zones: render the 3D canvas edge-to-edge under floating overlays (header/footer/panels become absolutely-positioned over the scene). Default false. */
+  fullBleed?: boolean;
   /** Zones: auto-turntable rotation. Default true. Set false to keep the camera still. */
   turntable?: boolean;
   /** Zones: optional camera override for useAutoFitCamera. */
@@ -128,6 +132,8 @@ function zone(
     turntable?: boolean;
     camera?: SceneNode["camera"];
     idle?: IdleConfig;
+    labelOffsetY?: number;
+    fullBleed?: boolean;
   } = {},
 ): SceneNode {
   return {
@@ -149,6 +155,8 @@ function zone(
     ...(opts.turntable === false && { turntable: false }),
     ...(opts.camera && { camera: opts.camera }),
     ...(opts.idle !== undefined && { idle: opts.idle }),
+    ...(opts.labelOffsetY !== undefined && { labelOffsetY: opts.labelOffsetY }),
+    ...(opts.fullBleed !== undefined && { fullBleed: opts.fullBleed }),
   };
 }
 
@@ -157,7 +165,7 @@ function portal(
   label: string,
   url: string,
   parent: string,
-  opts: { idle?: IdleConfig } = {},
+  opts: { idle?: IdleConfig; labelOffsetY?: number } = {},
 ): SceneNode {
   return {
     key,
@@ -169,6 +177,7 @@ function portal(
     parent,
     children: [],
     ...(opts.idle !== undefined && { idle: opts.idle }),
+    ...(opts.labelOffsetY !== undefined && { labelOffsetY: opts.labelOffsetY }),
   };
 }
 
@@ -296,6 +305,7 @@ const nodes: SceneNode[] = [
   zone("cloud_town", "Cloud Town", {
     env: "city",
     turntable: false,
+    fullBleed: true,
     camera: { padding: 1, elevation: 0.45, azimuth: 0.3 },
     atmosphere: {
       enabled: [
@@ -316,6 +326,8 @@ const nodes: SceneNode[] = [
       "ct_toy_ladder",
       "ct_toy_metal_gear_rex",
       "ct_toy_keyboard",
+      "ct_toy_cloud_01",
+      "ct_toy_weather_dance",
       "dream_zone",
       "pool_time",
       "starlight_zone",
@@ -460,6 +472,7 @@ const nodes: SceneNode[] = [
     path: null,
     parent: "cloud_town",
     idle: "bob",
+    labelOffsetY: 2,
   }),
 
   // Grouping on the island via sceneMap.parent:
@@ -484,6 +497,7 @@ const nodes: SceneNode[] = [
   portal("pokemon_park", "Pokemon Park", "/pokemon-park/", "pokemon_island"),
   portal("weather_report", "Weather Report", "/weather-report/", "cloud_town", {
     idle: "bob",
+    labelOffsetY: 2,
   }),
   portal("famima", "Family Mart", "/famima/", "island"),
   portal(
@@ -724,6 +738,16 @@ const nodes: SceneNode[] = [
       "/sounds/ct_toy_metal_gear_rex_02.wav",
     ],
     animation: "hop",
+  }),
+  toy("ct_toy_weather_dance", "Weather Dance", "cloud_town", {
+    quiet: true,
+    sounds: [
+      "/sounds/ct_toy_weather_dance_01.wav",
+      "/sounds/ct_toy_weather_dance_02.wav",
+      "/sounds/ct_toy_weather_dance_03.wav",
+      "/sounds/ct_toy_weather_dance_04.wav",
+    ],
+    animation: "action",
   }),
   toy("ct_toy_keyboard", "Keyboard", "cloud_town", { quiet: true }),
   toy("ct_toy_cloud_01", "Cloud", "cloud_town", { quiet: true }),
