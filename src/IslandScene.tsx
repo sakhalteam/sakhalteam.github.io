@@ -27,6 +27,8 @@ import Water from "./Water";
 import Whirlpool from "./Whirlpool";
 import { playCyclingSound } from "./audio";
 import { getZoneConfig, findNodeByObjectName, sceneMap } from "./sceneMap";
+import { DEBUG_HITBOXES } from "./debugFlags";
+import { computeOwnBounds } from "./ownBounds";
 import { startTransition } from "./transitionStore";
 import * as THREE from "three";
 
@@ -43,6 +45,8 @@ interface ZoneMarker {
   sceneObj: THREE.Object3D;
   meshes: THREE.Mesh[]; // bloom glow — includes zone_ + zc_ meshes
   labelOffsetY: number;
+  focusDistance?: number;
+  focusBehavior?: "fit" | "instant";
 }
 
 /**
@@ -112,7 +116,10 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
         if ((m as THREE.Mesh).isMesh) (m as THREE.Mesh).visible = false;
       });
     } else {
-      box = new THREE.Box3().setFromObject(obj);
+      // Excludes Blender-parented descendants that have their own sceneMap
+      // entry (e.g. blue jay parented to the eagle) so they don't bloat
+      // the parent's click hitbox.
+      box = computeOwnBounds(obj);
     }
 
     const center = new THREE.Vector3();
@@ -126,6 +133,8 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
       sceneObj: obj,
       meshes: [...zoneMeshes, ...memberMeshes],
       labelOffsetY: node?.labelOffsetY ?? 0,
+      focusDistance: node?.focusDistance,
+      focusBehavior: node?.focusBehavior,
       ...config,
     });
   }
@@ -150,16 +159,32 @@ const ZoneHitbox = memo(function ZoneHitbox({
   onComingSoon: (label: string) => void;
   onNavigate: (url: string, internal: boolean, center: THREE.Vector3) => void;
   onHoverChange: (marker: ZoneMarker, hovered: boolean) => void;
-  onFocus: (point: THREE.Vector3) => void;
-  isFocused: (point: THREE.Vector3) => boolean;
+  onFocus: (
+    point: THREE.Vector3,
+    id?: string,
+    radius?: number,
+    opts?: { distance?: number; behavior?: "fit" | "instant" },
+  ) => void;
+  isFocused: (point: THREE.Vector3, id?: string) => boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
-  const { size, center } = useMemo(() => {
+  const { size, center, focusRadius } = useMemo(() => {
     const s = new THREE.Vector3();
     marker.box.getSize(s);
-    return { size: s, center: marker.center.clone() };
+    return {
+      size: s,
+      center: marker.center.clone(),
+      focusRadius: s.length() / 2,
+    };
   }, [marker]);
+  const focusOpts = useMemo(
+    () => ({
+      distance: marker.focusDistance,
+      behavior: marker.focusBehavior,
+    }),
+    [marker.focusDistance, marker.focusBehavior],
+  );
 
   return (
     <group position={center}>
@@ -188,9 +213,11 @@ const ZoneHitbox = memo(function ZoneHitbox({
             const dy = e.clientY - pointerDown.current.y;
             if (dx * dx + dy * dy > 25) return;
           }
-          if (!isFocused(marker.center)) {
-            onFocus(marker.center);
-            return;
+          if (!isFocused(marker.center, marker.key)) {
+            onFocus(marker.center, marker.key, focusRadius, focusOpts);
+            // For "instant" behavior, fall through to fire the action this
+            // same click instead of waiting for a second one.
+            if (focusOpts.behavior !== "instant") return;
           }
           if (marker.url) {
             onNavigate(marker.url, marker.internal, marker.center);
@@ -201,7 +228,16 @@ const ZoneHitbox = memo(function ZoneHitbox({
         }}
       >
         <boxGeometry args={[size.x, size.y, size.z]} />
-        <meshStandardMaterial visible={false} />
+        {DEBUG_HITBOXES ? (
+          <meshBasicMaterial
+            color={marker.type === "active" ? "#ff7055" : "#8a6ac0"}
+            wireframe
+            transparent
+            opacity={0.6}
+          />
+        ) : (
+          <meshStandardMaterial visible={false} />
+        )}
       </mesh>
       <AdaptiveLabel
         position={[0, size.y / 2 + 0.3 + marker.labelOffsetY, 0]}
@@ -259,8 +295,13 @@ function IslandMesh({
   onNavigate: (url: string, internal: boolean, center: THREE.Vector3) => void;
   onHoverChange: (marker: ZoneMarker, hovered: boolean) => void;
   onToyHoverChange: (objects: THREE.Object3D[], hovered: boolean) => void;
-  onFocus: (point: THREE.Vector3) => void;
-  isFocused: (point: THREE.Vector3) => boolean;
+  onFocus: (
+    point: THREE.Vector3,
+    id?: string,
+    radius?: number,
+    opts?: { distance?: number; behavior?: "fit" | "instant" },
+  ) => void;
+  isFocused: (point: THREE.Vector3, id?: string) => boolean;
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>;
   onReady?: () => void;
 }) {

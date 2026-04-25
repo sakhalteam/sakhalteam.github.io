@@ -104,6 +104,16 @@ export interface SceneNode {
   labelOffsetY?: number;
   /** Zones: render the 3D canvas edge-to-edge under floating overlays (header/footer/panels become absolutely-positioned over the scene). Default false. */
   fullBleed?: boolean;
+  /** Override the camera viewing distance after a click-to-focus, in world
+   *  units. Bypasses the bbox-derived `radius * distanceMultiplier` default. */
+  focusDistance?: number;
+  /** How a click on this node interacts with the focus camera.
+   *   "fit" (default): tween to a fitted framing on first click, fire the
+   *     action on the second click.
+   *   "instant": skip the focus tween entirely — the click fires the action
+   *     immediately. Use for moving targets (e.g. flight zones) where
+   *     chasing the focus point makes the object fly off-screen anyway. */
+  focusBehavior?: "fit" | "instant";
   /** Zones: auto-turntable rotation. Default true. Set false to keep the camera still. */
   turntable?: boolean;
   /** Zones: optional camera override for useAutoFitCamera. */
@@ -134,6 +144,8 @@ function zone(
     idle?: IdleConfig;
     labelOffsetY?: number;
     fullBleed?: boolean;
+    focusDistance?: number;
+    focusBehavior?: "fit" | "instant";
   } = {},
 ): SceneNode {
   return {
@@ -157,6 +169,12 @@ function zone(
     ...(opts.idle !== undefined && { idle: opts.idle }),
     ...(opts.labelOffsetY !== undefined && { labelOffsetY: opts.labelOffsetY }),
     ...(opts.fullBleed !== undefined && { fullBleed: opts.fullBleed }),
+    ...(opts.focusDistance !== undefined && {
+      focusDistance: opts.focusDistance,
+    }),
+    ...(opts.focusBehavior !== undefined && {
+      focusBehavior: opts.focusBehavior,
+    }),
   };
 }
 
@@ -165,7 +183,12 @@ function portal(
   label: string,
   url: string,
   parent: string,
-  opts: { idle?: IdleConfig; labelOffsetY?: number } = {},
+  opts: {
+    idle?: IdleConfig;
+    labelOffsetY?: number;
+    focusDistance?: number;
+    focusBehavior?: "fit" | "instant";
+  } = {},
 ): SceneNode {
   return {
     key,
@@ -178,6 +201,12 @@ function portal(
     children: [],
     ...(opts.idle !== undefined && { idle: opts.idle }),
     ...(opts.labelOffsetY !== undefined && { labelOffsetY: opts.labelOffsetY }),
+    ...(opts.focusDistance !== undefined && {
+      focusDistance: opts.focusDistance,
+    }),
+    ...(opts.focusBehavior !== undefined && {
+      focusBehavior: opts.focusBehavior,
+    }),
   };
 }
 
@@ -192,6 +221,8 @@ function toy(
     interactive?: boolean;
     quiet?: boolean;
     showLabel?: boolean;
+    focusDistance?: number;
+    focusBehavior?: "fit" | "instant";
   } = {},
 ): SceneNode {
   return {
@@ -209,6 +240,12 @@ function toy(
     ...(opts.interactive === false && { interactive: false }),
     ...(opts.quiet === true && { quiet: true }),
     ...(opts.showLabel === false && { showLabel: false }),
+    ...(opts.focusDistance !== undefined && {
+      focusDistance: opts.focusDistance,
+    }),
+    ...(opts.focusBehavior !== undefined && {
+      focusBehavior: opts.focusBehavior,
+    }),
   };
 }
 
@@ -327,7 +364,7 @@ const nodes: SceneNode[] = [
       "ct_toy_metal_gear_rex",
       "ct_toy_keyboard",
       "ct_toy_cloud_01",
-      "ct_toy_weather_dance",
+      "ct_toy_weather_report",
       "dream_zone",
       "pool_time",
       "starlight_zone",
@@ -337,6 +374,9 @@ const nodes: SceneNode[] = [
     glbPath: null,
     path: null,
     parent: "cloud_town",
+    // Arwing flies — chasing it with a focus tween makes it leave frame
+    // anyway. Click fires the action immediately.
+    focusBehavior: "instant",
   }),
   zone("tower_of_knowledge", "Tower Of Knowledge", {
     env: "apartment",
@@ -497,7 +537,7 @@ const nodes: SceneNode[] = [
   portal("pokemon_park", "Pokemon Park", "/pokemon-park/", "pokemon_island"),
   portal("weather_report", "Weather Report", "/weather-report/", "cloud_town", {
     idle: "bob",
-    labelOffsetY: 2,
+    labelOffsetY: 5,
   }),
   portal("famima", "Family Mart", "/famima/", "island"),
   portal(
@@ -739,13 +779,13 @@ const nodes: SceneNode[] = [
     ],
     animation: "hop",
   }),
-  toy("ct_toy_weather_dance", "Weather Dance", "cloud_town", {
+  toy("ct_toy_weather_report", "Weather Report JJBA", "cloud_town", {
     quiet: true,
     sounds: [
-      "/sounds/ct_toy_weather_dance_01.wav",
-      "/sounds/ct_toy_weather_dance_02.wav",
-      "/sounds/ct_toy_weather_dance_03.wav",
-      "/sounds/ct_toy_weather_dance_04.wav",
+      "/sounds/ct_toy_weather_report_01.wav",
+      "/sounds/ct_toy_weather_report_02.wav",
+      "/sounds/ct_toy_weather_report_03.wav",
+      "/sounds/ct_toy_weather_report_04.wav",
     ],
     animation: "action",
   }),
@@ -1019,6 +1059,8 @@ export function getToyConfig(objName: string):
       interactive: boolean;
       quiet: boolean;
       showLabel: boolean;
+      focusDistance?: number;
+      focusBehavior?: "fit" | "instant";
     }
   | undefined {
   const node = sceneMap.get(objName.toLowerCase());
@@ -1031,6 +1073,8 @@ export function getToyConfig(objName: string):
     interactive: node.interactive !== false,
     quiet: node.quiet === true,
     showLabel: node.showLabel !== false,
+    focusDistance: node.focusDistance,
+    focusBehavior: node.focusBehavior,
   };
 }
 

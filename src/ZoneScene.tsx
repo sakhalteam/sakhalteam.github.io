@@ -38,6 +38,9 @@ import {
   getNode,
 } from "./sceneMap";
 import ToyInteractor from "./ToyInteractor";
+import { isToyUnderPointer } from "./toyClickFlag";
+import { DEBUG_HITBOXES } from "./debugFlags";
+import { computeOwnBounds } from "./ownBounds";
 import FlightPath, { type FlightPathConfig } from "./FlightPath";
 import Water from "./Water";
 import Waterfall from "./Waterfall";
@@ -59,6 +62,8 @@ interface Hotspot {
   sceneObj: THREE.Object3D;
   meshes: THREE.Mesh[];
   labelOffsetY: number;
+  focusDistance?: number;
+  focusBehavior?: "fit" | "instant";
 }
 
 type OutlineKind = "active" | "inactive" | "toy";
@@ -75,8 +80,13 @@ const HotspotHitbox = memo(function HotspotHitbox({
   onNavigate: (url: string, internal: boolean) => void;
   onComingSoon: (label: string) => void;
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void;
-  onFocus: (point: THREE.Vector3) => void;
-  isFocused: (point: THREE.Vector3) => boolean;
+  onFocus: (
+    point: THREE.Vector3,
+    id?: string,
+    radius?: number,
+    opts?: { distance?: number; behavior?: "fit" | "instant" },
+  ) => void;
+  isFocused: (point: THREE.Vector3, id?: string) => boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
@@ -85,6 +95,15 @@ const HotspotHitbox = memo(function HotspotHitbox({
     hotspot.box.getSize(s);
     return s;
   }, [hotspot.box]);
+  // Half the bbox diagonal — the smallest bounding sphere radius.
+  const focusRadius = useMemo(() => size.length() / 2, [size]);
+  const focusOpts = useMemo(
+    () => ({
+      distance: hotspot.focusDistance,
+      behavior: hotspot.focusBehavior,
+    }),
+    [hotspot.focusDistance, hotspot.focusBehavior],
+  );
 
   return (
     <group position={hotspot.center}>
@@ -105,14 +124,22 @@ const HotspotHitbox = memo(function HotspotHitbox({
         }}
         onClick={(e) => {
           e.stopPropagation();
+          // If ToyInteractor detected a toy under the cursor on pointerdown,
+          // bail — let the toy's capture-phase handler own this click.
+          // Matches IslandScene's ZoneHitbox guard; without it, clicking a
+          // toy parented atop a portal (e.g. weather_dance on weather_report)
+          // triggers the portal's navigate on the second click.
+          if (isToyUnderPointer()) return;
           if (pointerDown.current) {
             const dx = e.clientX - pointerDown.current.x;
             const dy = e.clientY - pointerDown.current.y;
             if (dx * dx + dy * dy > 25) return;
           }
-          if (!isFocused(hotspot.center)) {
-            onFocus(hotspot.center);
-            return;
+          if (!isFocused(hotspot.center, hotspot.key)) {
+            onFocus(hotspot.center, hotspot.key, focusRadius, focusOpts);
+            // For "instant" behavior, fire the action on this same click —
+            // the focus call just marks the thing as focused without tweening.
+            if (focusOpts.behavior !== "instant") return;
           }
           if (hotspot.url) {
             onNavigate(hotspot.url, hotspot.internal);
@@ -122,7 +149,16 @@ const HotspotHitbox = memo(function HotspotHitbox({
         }}
       >
         <boxGeometry args={[size.x, size.y, size.z]} />
-        <meshStandardMaterial visible={false} />
+        {DEBUG_HITBOXES ? (
+          <meshBasicMaterial
+            color={hotspot.url ? "#ff7055" : "#8a6ac0"}
+            wireframe
+            transparent
+            opacity={0.6}
+          />
+        ) : (
+          <meshStandardMaterial visible={false} />
+        )}
       </mesh>
       <AdaptiveLabel
         position={[0, size.y / 2 + 0.2 + hotspot.labelOffsetY, 0]}
@@ -252,7 +288,10 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
         if ((m as THREE.Mesh).isMesh) (m as THREE.Mesh).visible = false;
       });
     } else {
-      box = new THREE.Box3().setFromObject(obj);
+      // computeOwnBounds skips Blender-parented descendants that have their
+      // own sceneMap entry — so e.g. ct_toy_weather_dance parented to
+      // portal_weather_report no longer expands the portal's hitbox.
+      box = computeOwnBounds(obj);
     }
 
     const center = new THREE.Vector3();
@@ -271,6 +310,8 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
       sceneObj: obj,
       meshes: [...objMeshes, ...memberMeshes],
       labelOffsetY: node?.labelOffsetY ?? 0,
+      focusDistance: node?.focusDistance,
+      focusBehavior: node?.focusBehavior,
     });
   }
 
@@ -296,8 +337,13 @@ function ZoneMesh({
   onSceneReady: (scene: THREE.Object3D) => void;
   onHoverChange: (hotspot: Hotspot, hovered: boolean) => void;
   onToyHoverChange: (objects: THREE.Object3D[], hovered: boolean) => void;
-  onFocus: (point: THREE.Vector3) => void;
-  isFocused: (point: THREE.Vector3) => boolean;
+  onFocus: (
+    point: THREE.Vector3,
+    id?: string,
+    radius?: number,
+    opts?: { distance?: number; behavior?: "fit" | "instant" },
+  ) => void;
+  isFocused: (point: THREE.Vector3, id?: string) => boolean;
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>;
 }) {
   const { scene, animations } = useOptimizedGLTF(glbPath);

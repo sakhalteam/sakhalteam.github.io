@@ -27,9 +27,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { getZoneConfig } from "./sceneMap";
+import { getZoneConfig, findNodeByObjectName } from "./sceneMap";
 import { useSceneOptions } from "./SceneOptionsContext";
 import { AdaptiveLabel } from "./AdaptiveLabel";
+import { DEBUG_HITBOXES } from "./debugFlags";
+import { computeOwnBounds } from "./ownBounds";
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const LOCAL_X = new THREE.Vector3(1, 0, 0);
@@ -93,8 +95,13 @@ export default function FlightPath({
   config: FlightPathConfig;
   onNavigate: (url: string, internal: boolean) => void;
   onComingSoon: (label: string) => void;
-  onFocus: (point: THREE.Vector3) => void;
-  isFocused: (point: THREE.Vector3) => boolean;
+  onFocus: (
+    point: THREE.Vector3,
+    id?: string,
+    radius?: number,
+    opts?: { distance?: number; behavior?: "fit" | "instant" },
+  ) => void;
+  isFocused: (point: THREE.Vector3, id?: string) => boolean;
 }) {
   const data = useMemo(() => {
     const objLower = config.objectName.toLowerCase();
@@ -183,8 +190,18 @@ export default function FlightPath({
     }
     const hasVariants = rangedRoots.length > 0 || groundedRoots.length > 0;
 
-    // Hitbox size from the flying object's initial bbox.
-    const bbox = new THREE.Box3().setFromObject(obj);
+    // Hitbox size from the flying object's initial bbox. Temporarily hide
+    // variant subtrees (ranged + grounded) so only the "base" hull contributes
+    // — otherwise the union of all variants blows the hitbox way up.
+    // computeOwnBounds with visibleOnly:true does the filtering and also
+    // skips flight markers + any nested sceneMap-owned clickables.
+    const restoreVisible: [THREE.Object3D, boolean][] = [];
+    for (const r of [...rangedRoots, ...groundedRoots]) {
+      restoreVisible.push([r, r.visible]);
+      r.visible = false;
+    }
+    const bbox = computeOwnBounds(obj, { visibleOnly: true });
+    for (const [o, v] of restoreVisible) o.visible = v;
     const size = new THREE.Vector3();
     bbox.getSize(size);
     // Pad a bit so it's forgiving to click.
@@ -412,16 +429,36 @@ export default function FlightPath({
         onClick={(e) => {
           e.stopPropagation();
           const point = data.obj.position.clone();
-          if (!isFocused(point)) {
-            onFocus(point);
-            return;
+          // Flight-path targets move every frame, so point-distance focus
+          // matching fails after a few ms. Use the object name as a stable id.
+          const id = `flight:${config.objectName}`;
+          const node = findNodeByObjectName(config.objectName);
+          const focusOpts = {
+            distance: node?.focusDistance,
+            behavior: node?.focusBehavior,
+          };
+          if (!isFocused(point, id)) {
+            // hitSize is already padded 1.3x; use half the diagonal as radius.
+            const radius = data.hitSize.length() / 2;
+            onFocus(point, id, radius, focusOpts);
+            // For "instant" behavior, fire the action this same click.
+            if (focusOpts.behavior !== "instant") return;
           }
           if (cfg.url) onNavigate(cfg.url, cfg.internal);
           else onComingSoon(cfg.label);
         }}
       >
         <boxGeometry args={[data.hitSize.x, data.hitSize.y, data.hitSize.z]} />
-        <meshStandardMaterial visible={false} />
+        {DEBUG_HITBOXES ? (
+          <meshBasicMaterial
+            color={cfg.url ? "#ff7055" : "#8a6ac0"}
+            wireframe
+            transparent
+            opacity={0.6}
+          />
+        ) : (
+          <meshStandardMaterial visible={false} />
+        )}
       </mesh>
       <AdaptiveLabel
         position={[0, data.hitSize.y / 2 + 0.4, 0]}

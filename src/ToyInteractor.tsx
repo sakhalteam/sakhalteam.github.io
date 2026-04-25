@@ -23,6 +23,8 @@ interface ToyData {
   meshes: THREE.Mesh[];
   animation: ToyAnimation;
   quiet: boolean;
+  focusDistance?: number;
+  focusBehavior?: "fit" | "instant";
 }
 
 interface ToyState {
@@ -40,7 +42,20 @@ function collectMeshes(obj: THREE.Object3D): THREE.Mesh[] {
   return meshes;
 }
 
+/** Collect meshes, skipping any subtree rooted at a `_hitbox` object. */
+function collectMeshesExcludingHitboxes(obj: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  const walk = (o: THREE.Object3D) => {
+    if (o !== obj && o.name?.toLowerCase().endsWith("_hitbox")) return;
+    if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
+    for (const c of o.children) walk(c);
+  };
+  walk(obj);
+  return meshes;
+}
+
 import { setToyUnderPointer } from "./toyClickFlag";
+import { DEBUG_HITBOXES } from "./debugFlags";
 
 /**
  * ToyInteractor — gentle bob + click-to-spin + sound + proximity labels.
@@ -61,7 +76,12 @@ export default function ToyInteractor({
   scene: THREE.Object3D;
   animations?: THREE.AnimationClip[];
   onHoverChange?: (objects: THREE.Object3D[], hovered: boolean) => void;
-  onFocus?: (point: THREE.Vector3) => void;
+  onFocus?: (
+    point: THREE.Vector3,
+    id?: string,
+    radius?: number,
+    opts?: { distance?: number; behavior?: "fit" | "instant" },
+  ) => void;
 }) {
   const lastHoveredToy = useRef<ToyData | null>(null);
   const spinState = useRef<
@@ -100,6 +120,39 @@ export default function ToyInteractor({
     // so meshes from duplicates fold into the base toy entry.
     const normalizeName = (lower: string) => lower.replace(/\.\d+$/, "");
 
+    // Pass 1: find every `<name>_hitbox` subtree and make its meshes
+    // invisible-to-render but still raycast-hittable. We swap each mesh's
+    // material for a fully-transparent one (rather than toggling `.visible`,
+    // which would also skip the raycaster). A hitbox can then stand in as
+    // the click target for its paired toy.
+    const hitboxByTarget = new Map<string, THREE.Object3D>();
+    const hitboxMat = DEBUG_HITBOXES
+      ? new THREE.MeshBasicMaterial({
+          color: "#7dd3fc",
+          wireframe: true,
+          transparent: true,
+          opacity: 0.6,
+        })
+      : new THREE.MeshBasicMaterial({
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          colorWrite: false,
+        });
+    scene.traverse((obj) => {
+      const lower = obj.name?.toLowerCase() ?? "";
+      if (!lower.endsWith("_hitbox")) return;
+      const target = normalizeName(lower.slice(0, -"_hitbox".length));
+      hitboxByTarget.set(target, obj);
+      obj.traverse((m) => {
+        const mesh = m as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.material = hitboxMat;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+      });
+    });
+
     const byBase = new Map<
       string,
       {
@@ -111,18 +164,26 @@ export default function ToyInteractor({
 
     scene.traverse((child) => {
       if (!child.name) return;
-      const base = normalizeName(child.name.toLowerCase());
+      const lower = child.name.toLowerCase();
+      if (lower.endsWith("_hitbox")) return; // never treat hitbox itself as a toy
+      const base = normalizeName(lower);
       const config = getToyConfig(base);
       if (!config) return;
       if (config.interactive === false) return; // structural member — skip
 
-      const meshes = collectMeshes(child);
+      // If a paired hitbox exists, use IT as the raycast target; otherwise
+      // fall back to the toy's own meshes (excluding any hitbox subtree that
+      // happens to live under the toy, which we already hid above).
+      const hitboxObj = hitboxByTarget.get(base);
+      const meshes = hitboxObj
+        ? collectMeshes(hitboxObj)
+        : collectMeshesExcludingHitboxes(child);
       const existing = byBase.get(base);
       if (!existing) {
         byBase.set(base, { primary: child, meshes, config });
       } else {
         // Dot-suffix duplicate — merge meshes, prefer base-named primary
-        if (child.name.toLowerCase() === base) existing.primary = child;
+        if (lower === base) existing.primary = child;
         existing.meshes.push(...meshes);
       }
     });
@@ -137,6 +198,8 @@ export default function ToyInteractor({
         meshes,
         animation: config.animation,
         quiet: config.quiet,
+        focusDistance: config.focusDistance,
+        focusBehavior: config.focusBehavior,
       } satisfies ToyData;
     });
   }, [scene]);
@@ -309,8 +372,15 @@ export default function ToyInteractor({
       pointerDown.current = { x: e.clientX, y: e.clientY };
       const toy = hitTest(e);
       if (toy) {
-        tmpBox.setFromObject(toy.obj).getCenter(tmpVec3);
-        onFocus?.(tmpVec3.clone());
+        tmpBox.setFromObject(toy.obj);
+        tmpBox.getCenter(tmpVec3);
+        const size = new THREE.Vector3();
+        tmpBox.getSize(size);
+        const radius = size.length() / 2;
+        onFocus?.(tmpVec3.clone(), `toy:${toy.obj.name}`, radius, {
+          distance: toy.focusDistance,
+          behavior: toy.focusBehavior,
+        });
       }
       // Flag for ZoneHitbox: a toy is under the cursor, don't navigate
       setToyUnderPointer(!!toy);
@@ -518,6 +588,29 @@ export default function ToyInteractor({
 
   return (
     <>
+      {DEBUG_HITBOXES &&
+        toys.map((toy) => {
+          const box = new THREE.Box3().setFromObject(toy.obj);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          box.getSize(size);
+          box.getCenter(center);
+          return (
+            <mesh
+              key={`dbg-${toy.obj.name}`}
+              position={center}
+              raycast={() => null}
+            >
+              <boxGeometry args={[size.x, size.y, size.z]} />
+              <meshBasicMaterial
+                color="#7dd3fc"
+                wireframe
+                transparent
+                opacity={0.5}
+              />
+            </mesh>
+          );
+        })}
       {toys
         .filter((t) => !t.quiet && t.showLabel)
         .map((toy) => {

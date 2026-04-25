@@ -75,3 +75,20 @@ dragging one cluster on top of another should trigger a "combine clusters?" popu
 
 explore the "Shaders" options in the drei docs. especially this one sounds intersting for DreamZone:
 https://drei.docs.pmnd.rs/shaders/mesh-wobble-material
+
+### Remember this stuff for focus camera
+
+// Closer-up framing on a small toy:
+toy("ct_toy_keyboard", "Keyboard", "cloud_town", {
+focusDistance: 6,
+})
+
+// Stay-back hero shot for a big zone:
+zone("ss_brainfog", "S.S. Brainfog", {
+focusDistance: 30,
+})
+
+// Skip the focus tween for a moving target:
+zone("starlight_zone", "Starlight Zone", {
+focusBehavior: "instant",
+})
