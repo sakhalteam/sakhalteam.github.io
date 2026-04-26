@@ -50,9 +50,9 @@ import type { AtmosphereSubsystem, Weather } from "./environment/presets";
  *   toy(key, label, parent, opts):
  *     sounds, animation, idle, focusDistance, focusBehavior
  *     interactive    boolean             clickable? default true
- *     quiet          boolean             shorthand for no own label / no toy-level outline
  *     showLabel      boolean             proximity label on hover; default true
  *     showOutline    boolean             toy-level outline on hover; default true
+ *     labelOffsetY   number              extra world-units to lift hover label
  *
  *   site(key, label, url): no opts — used only for QuickNav listings.
  *
@@ -154,8 +154,6 @@ export interface SceneNode {
   idle?: IdleConfig;
   /** If false, toy is not clickable and has no animation/sound — pure outline-group member. */
   interactive?: boolean;
-  /** If true, shorthand for showLabel: false and showOutline: false. Still belongs to parent's outline group. */
-  quiet?: boolean;
   /** Whether to show a proximity label on hover. Default true. When false, the toy gets a subtle emissive tint on hover instead. */
   showLabel?: boolean;
   /** Whether to emit a toy-level outline on hover. Default true. */
@@ -279,9 +277,9 @@ function toy(
     animation?: ToyAnimation;
     idle?: IdleConfig;
     interactive?: boolean;
-    quiet?: boolean;
     showLabel?: boolean;
     showOutline?: boolean;
+    labelOffsetY?: number;
     focusDistance?: number;
     focusBehavior?: "fit" | "instant";
   } = {},
@@ -299,9 +297,9 @@ function toy(
     ...(opts.animation && { animation: opts.animation }),
     ...(opts.idle && { idle: opts.idle }),
     ...(opts.interactive === false && { interactive: false }),
-    ...(opts.quiet === true && { quiet: true }),
     ...(opts.showLabel === false && { showLabel: false }),
     ...(opts.showOutline === false && { showOutline: false }),
+    ...(opts.labelOffsetY !== undefined && { labelOffsetY: opts.labelOffsetY }),
     ...(opts.focusDistance !== undefined && {
       focusDistance: opts.focusDistance,
     }),
@@ -328,9 +326,13 @@ function site(key: string, label: string, url: string): SceneNode {
 const cry = (id: number) =>
   `https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/${id}.ogg`;
 
-/** Shortcut for structural/decorative members — quiet, non-interactive grouping member. */
+/** Shortcut for structural/decorative members — non-interactive, no label, no own outline. Still in parent's outline group. */
 const structural = (key: string, label: string, parent: string): SceneNode =>
-  toy(key, label, parent, { interactive: false, quiet: true });
+  toy(key, label, parent, {
+    interactive: false,
+    showLabel: false,
+    showOutline: false,
+  });
 
 // ─── The map ────────────────────────────────────────────────────────
 
@@ -422,10 +424,10 @@ const nodes: SceneNode[] = [
     },
     children: [
       "portal_weather_report",
-      "ct_toy_ladder",
       "ct_toy_metal_gear_rex",
       "ct_toy_keyboard",
       "ct_toy_cloud_01",
+      "ct_toy_ladderrr",
       "ct_toy_weather_report",
       "dream_zone",
       "pool_time",
@@ -832,16 +834,10 @@ const nodes: SceneNode[] = [
   toy("bs_toy_tree_stump", "Tree Stump", "bird_sanctuary"),
 
   // ── Toys inside zone_cloud_town.glb (parent: cloud_town) ──
-  // Ladder interactivity (hover outline, toast, click → dream_zone shortcut)
-  // is owned entirely by LadderPortalIndicator.tsx. interactive:false makes
-  // ToyInteractor skip the ladder completely (no toy-level click/focus/anim
-  // race with the indicator's own click handler). quiet: true keeps it out
-  // of the toy label + outline pipeline; LadderPortalIndicator drives those
-  // via its own hover proxy.
-  toy("ct_toy_ladder", "Ladder", "cloud_town", {
-    interactive: false,
-    quiet: false,
+  toy("ct_toy_ladderrr", "Ladderrr", "cloud_town", {
     animation: "none",
+    showLabel: true,
+    showOutline: true,
   }),
   toy("ct_toy_metal_gear_rex", "Metal Gear Rex", "cloud_town", {
     showLabel: false,
@@ -852,7 +848,6 @@ const nodes: SceneNode[] = [
     animation: "hop",
   }),
   toy("ct_toy_weather_report", "Weather Report JJBA", "cloud_town", {
-    quiet: false,
     showLabel: false,
     sounds: [
       "/sounds/ct_toy_weather_report_01.wav",
@@ -862,8 +857,14 @@ const nodes: SceneNode[] = [
     ],
     animation: "action",
   }),
-  toy("ct_toy_keyboard", "Keyboard", "cloud_town", { quiet: true }),
-  toy("ct_toy_cloud_01", "Cloud", "cloud_town", { quiet: true }),
+  toy("ct_toy_keyboard", "Keyboard", "cloud_town", {
+    showLabel: false,
+    showOutline: false,
+  }),
+  toy("ct_toy_cloud_01", "Cloud", "cloud_town", {
+    showLabel: false,
+    showOutline: false,
+  }),
 
   // ── Toys inside zone_ss_brainfog.glb (parent: ss_brainfog) ──
   toy("ssb_toy_shark", "Shark", "ss_brainfog"),
@@ -1130,9 +1131,9 @@ export function getToyConfig(objName: string):
       animation: ToyAnimation;
       parent: string | null;
       interactive: boolean;
-      quiet: boolean;
       showLabel: boolean;
       showOutline: boolean;
+      labelOffsetY: number;
       focusDistance?: number;
       focusBehavior?: "fit" | "instant";
     }
@@ -1145,9 +1146,9 @@ export function getToyConfig(objName: string):
     animation: node.animation ?? "spin",
     parent: node.parent,
     interactive: node.interactive !== false,
-    quiet: node.quiet === true,
-    showLabel: node.showLabel !== false && node.quiet !== true,
-    showOutline: node.showOutline !== false && node.quiet !== true,
+    showLabel: node.showLabel !== false,
+    showOutline: node.showOutline !== false,
+    labelOffsetY: node.labelOffsetY ?? 0,
     focusDistance: node.focusDistance,
     focusBehavior: node.focusBehavior,
   };

@@ -59,7 +59,8 @@ All behavior is driven by entries in [src/sceneMap.ts](src/sceneMap.ts). The nam
 
 **Toy behavior flags (in sceneMap `toy()` calls):**
 - `interactive: false` — not clickable, no animation/sound. Still glows with parent zone. Used for structural members (bridges, walls, sand ground, cranes).
-- `quiet: true` — toy has no hover label and does not emit its own outline. Still belongs to parent's outline group.
+- `showLabel: false` — no proximity hover label.
+- `showOutline: false` — toy does not emit its own outline on hover. Still belongs to parent's outline group.
 
 ## Adding a new zone
 

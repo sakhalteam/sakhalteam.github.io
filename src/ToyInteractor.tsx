@@ -20,10 +20,13 @@ interface ToyData {
   label: string;
   showLabel: boolean;
   sounds: string[] | null;
-  meshes: THREE.Mesh[];
+  /** Meshes used for pointer raycast — the hitbox subtree if one exists, otherwise the toy's own meshes. */
+  raycastMeshes: THREE.Mesh[];
+  /** Meshes fed to OutlinePass on hover — always the toy's own visible meshes, never a hitbox. */
+  outlineMeshes: THREE.Mesh[];
   animation: ToyAnimation;
-  quiet: boolean;
   showOutline: boolean;
+  labelOffsetY: number;
   focusDistance?: number;
   focusBehavior?: "fit" | "instant";
 }
@@ -162,7 +165,8 @@ export default function ToyInteractor({
       string,
       {
         primary: THREE.Object3D;
-        meshes: THREE.Mesh[];
+        raycastMeshes: THREE.Mesh[];
+        outlineMeshes: THREE.Mesh[];
         config: NonNullable<ReturnType<typeof getToyConfig>>;
       }
     >();
@@ -176,38 +180,46 @@ export default function ToyInteractor({
       if (!config) return;
       if (config.interactive === false) return; // structural member — skip
 
-      // If a paired hitbox exists, use IT as the raycast target; otherwise
-      // fall back to the toy's own meshes (excluding any hitbox subtree that
-      // happens to live under the toy, which we already hid above).
+      // Outline always traces the toy's actual visible meshes (never the
+      // hitbox), so animated/skinned toys outline correctly around their
+      // current pose. Raycast uses the hitbox if one exists — keeps fast,
+      // forgiving clicks on small/moving targets.
+      const ownMeshes = collectMeshesExcludingHitboxes(child);
       const hitboxObj = hitboxByTarget.get(base);
-      const meshes = hitboxObj
-        ? collectMeshes(hitboxObj)
-        : collectMeshesExcludingHitboxes(child);
+      const raycastMeshes = hitboxObj ? collectMeshes(hitboxObj) : ownMeshes;
       const existing = byBase.get(base);
       if (!existing) {
-        byBase.set(base, { primary: child, meshes, config });
+        byBase.set(base, {
+          primary: child,
+          raycastMeshes,
+          outlineMeshes: ownMeshes,
+          config,
+        });
       } else {
         // Dot-suffix duplicate — merge meshes, prefer base-named primary
         if (lower === base) existing.primary = child;
-        existing.meshes.push(...meshes);
+        existing.raycastMeshes.push(...raycastMeshes);
+        existing.outlineMeshes.push(...ownMeshes);
       }
     });
 
-    return Array.from(byBase.values()).map(({ primary, meshes, config }) => {
-      return {
-        obj: primary,
-        baseY: primary.position.y,
-        label: config.label,
-        showLabel: config.showLabel,
-        sounds: config.sounds,
-        meshes,
-        animation: config.animation,
-        quiet: config.quiet,
-        showOutline: config.showOutline,
-        focusDistance: config.focusDistance,
-        focusBehavior: config.focusBehavior,
-      } satisfies ToyData;
-    });
+    return Array.from(byBase.values()).map(
+      ({ primary, raycastMeshes, outlineMeshes, config }) =>
+        ({
+          obj: primary,
+          baseY: primary.position.y,
+          label: config.label,
+          showLabel: config.showLabel,
+          sounds: config.sounds,
+          raycastMeshes,
+          outlineMeshes,
+          animation: config.animation,
+          showOutline: config.showOutline,
+          labelOffsetY: config.labelOffsetY,
+          focusDistance: config.focusDistance,
+          focusBehavior: config.focusBehavior,
+        }) satisfies ToyData,
+    );
   }, [scene, debugHitboxes]);
 
   // Categorize Blender animations: longest clip = idle loop, shorter clips = click actions
@@ -283,12 +295,12 @@ export default function ToyInteractor({
     }
   }, [toys]);
 
-  // All toy meshes for raycasting
-  const allMeshes = useMemo(() => toys.flatMap((t) => t.meshes), [toys]);
+  // All toy meshes for raycasting (hitbox if present, else own meshes)
+  const allMeshes = useMemo(() => toys.flatMap((t) => t.raycastMeshes), [toys]);
   const meshToToy = useMemo(() => {
     const map = new Map<THREE.Mesh, ToyData>();
     for (const toy of toys) {
-      for (const mesh of toy.meshes) map.set(mesh, toy);
+      for (const mesh of toy.raycastMeshes) map.set(mesh, toy);
     }
     return map;
   }, [toys]);
@@ -374,7 +386,7 @@ export default function ToyInteractor({
         if (lastHoveredToy.current?.showOutline) {
           onHoverChange?.([], false);
         }
-        if (toy?.showOutline) onHoverChange?.(toy.meshes, true);
+        if (toy?.showOutline) onHoverChange?.(toy.outlineMeshes, true);
         lastHoveredToy.current = toy ?? null;
       }
 
@@ -618,7 +630,7 @@ export default function ToyInteractor({
           const box = new THREE.Box3().setFromObject(toy.obj);
           const labelPos = new THREE.Vector3();
           box.getCenter(labelPos);
-          labelPos.y = box.max.y + 0.15;
+          labelPos.y = box.max.y + 0.15 + toy.labelOffsetY;
 
           return (
             <Html

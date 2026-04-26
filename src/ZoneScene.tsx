@@ -21,21 +21,15 @@ import {
 import * as THREE from "three";
 import { AdaptiveLabel } from "./AdaptiveLabel";
 import "./App.css";
-import { collectMeshes } from "./meshUtils";
 import Breadcrumbs from "./Breadcrumbs";
-import FlightPath, { type FlightPathConfig } from "./FlightPath";
-import IdleAnimator from "./IdleAnimator";
-import OutlineController from "./Outline";
-import { OUTLINE_STYLES, type OutlineKind } from "./outlineStyles";
-import { SceneOptionsProvider } from "./SceneOptionsContext";
-import SunRays from "./SunRays";
-import ToyInteractor from "./ToyInteractor";
-import LadderPortalIndicator from "./LadderPortalIndicator";
-import Water from "./Water";
-import Waterfall from "./Waterfall";
 import { showComingSoon } from "./comingSoonStore";
 import { useDebugHitboxes } from "./debugFlags";
 import { Atmosphere, AtmospherePanel, AtmosphereProvider } from "./environment";
+import FlightPath, { type FlightPathConfig } from "./FlightPath";
+import IdleAnimator from "./IdleAnimator";
+import { collectMeshes } from "./meshUtils";
+import OutlineController from "./Outline";
+import { OUTLINE_STYLES, type OutlineKind } from "./outlineStyles";
 import { computeOwnBounds } from "./ownBounds";
 import {
   findNodeByObjectName,
@@ -45,7 +39,10 @@ import {
   getZoneConfig,
   sceneMap,
 } from "./sceneMap";
+import { SceneOptionsProvider } from "./SceneOptionsContext";
+import SunRays from "./SunRays";
 import { isToyUnderPointer } from "./toyClickFlag";
+import ToyInteractor from "./ToyInteractor";
 import { useAutoFitCamera } from "./useAutoFitCamera";
 import { useCameraReset } from "./useCameraReset";
 import { useFocusOrbit } from "./useFocusOrbit";
@@ -53,6 +50,8 @@ import { useKeyboardControls } from "./useKeyboardControls";
 import { useOptimizedGLTF } from "./useOptimizedGLTF";
 import { useSceneTransition } from "./useSceneTransition";
 import { useTurntable } from "./useTurntable";
+import Water from "./Water";
+import Waterfall from "./Waterfall";
 
 interface Hotspot {
   name: string;
@@ -430,7 +429,7 @@ function ZoneMesh({
     scene.traverse((obj) => {
       const node = sceneMap.get(obj.name.toLowerCase());
       if (!node || node.type !== "toy") return;
-      // if (node.interactive === false || node.quiet) return;
+      // if (node.interactive === false || node.showOutline === false) return;
       const light = new THREE.PointLight("#ffd9a8", 8, 3, 1.5);
       light.position.set(0, 0.7, 0);
       obj.add(light);
@@ -509,29 +508,6 @@ function ZoneMesh({
           isFocused={isFocused}
         />
       ))}
-      {zoneKey === "cloud_town" &&
-        (() => {
-          // Click on the ladder shortcuts the camera to the dream_zone
-          // hotspot's fitted framing — same call HotspotHitbox makes when
-          // dream_zone itself is clicked.
-          const dream = hotspots.find((h) => h.key === "dream_zone");
-          if (!dream) return null;
-          const size = new THREE.Vector3();
-          dream.box.getSize(size);
-          const radius = size.length() / 2;
-          return (
-            <LadderPortalIndicator
-              scene={scene}
-              onHoverChange={onToyHoverChange}
-              onActivate={() => {
-                onFocus(dream.center, dream.key, radius, {
-                  distance: dream.focusDistance,
-                  behavior: dream.focusBehavior,
-                });
-              }}
-            />
-          );
-        })()}
       <Waterfall scene={scene} />
     </>
   );
@@ -715,9 +691,8 @@ export default function ZoneScene({
   const outlinedObjects = hasToyOutline
     ? toyOutlinedObjects
     : hotspotOutlinedObjects;
-  const outlineSettings = OUTLINE_STYLES[
-    hasToyOutline ? "toy" : hotspotOutlineKind
-  ];
+  const outlineSettings =
+    OUTLINE_STYLES[hasToyOutline ? "toy" : hotspotOutlineKind];
 
   // When a zone declares an atmosphere config, the listed subsystems own the
   // lighting (sun + ambient). Otherwise fall back to the legacy hardcoded
@@ -794,6 +769,7 @@ export default function ZoneScene({
             ref={orbitRef}
             enablePan={true}
             zoomToCursor={true}
+            zoomSpeed={4}
             mouseButtons={{
               LEFT: THREE.MOUSE.ROTATE,
               MIDDLE: THREE.MOUSE.DOLLY,

@@ -80,7 +80,8 @@ Rule of thumb: the abbreviation is whatever Nic finds fastest to type in Blender
 
 **Toy behavior flags (in sceneMap `toy()` calls):**
 - `interactive: false` — toy is not clickable and has no animation/sound. Still glows with parent zone. Used for structural/decorative members (bridges, walls, sand ground, cranes). Shortcut: `structural(key, label, parent)`.
-- `quiet: true` — toy has no own hover label and does not emit its own toy-level outline. Still belongs to parent zone/portal's outline group.
+- `showLabel: false` — toy has no proximity hover label. Still gets its own outline on hover unless `showOutline: false` is also set.
+- `showOutline: false` — toy does not emit its own toy-level outline on hover. Still belongs to parent zone/portal's outline group.
 
 **Depth is implicit, not encoded in the prefix.** A `zone_` inside island.glb and a `zone_` inside zone_cloud_town.glb behave identically — both load a .glb scene (or show coming-soon). The hierarchy comes from which scene contains the object, not the prefix.
 
