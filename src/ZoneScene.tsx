@@ -8,7 +8,7 @@ import {
 } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { EffectComposer, ToneMapping } from "@react-three/postprocessing";
-import { KernelSize, BlendFunction, ToneMappingMode } from "postprocessing";
+import { ToneMappingMode } from "postprocessing";
 import {
   memo,
   Suspense,
@@ -19,36 +19,40 @@ import {
   useState,
 } from "react";
 import * as THREE from "three";
-import "./App.css";
 import { AdaptiveLabel } from "./AdaptiveLabel";
-import OutlineController from "./Outline";
-import { collectMeshes } from "./BloomDriver";
-import { useAutoFitCamera } from "./useAutoFitCamera";
-import { useKeyboardControls } from "./useKeyboardControls";
-import { useOptimizedGLTF } from "./useOptimizedGLTF";
-import { useTurntable } from "./useTurntable";
-import { useFocusOrbit } from "./useFocusOrbit";
-import { useSceneTransition } from "./useSceneTransition";
-import { showComingSoon } from "./comingSoonStore";
-import {
-  getPortalConfig,
-  getZoneConfig,
-  findNodeByObjectName,
-  sceneMap,
-  getNode,
-} from "./sceneMap";
-import ToyInteractor from "./ToyInteractor";
-import { isToyUnderPointer } from "./toyClickFlag";
-import { DEBUG_HITBOXES } from "./debugFlags";
-import { computeOwnBounds } from "./ownBounds";
+import "./App.css";
+import { collectMeshes } from "./meshUtils";
+import Breadcrumbs from "./Breadcrumbs";
 import FlightPath, { type FlightPathConfig } from "./FlightPath";
+import IdleAnimator from "./IdleAnimator";
+import OutlineController from "./Outline";
+import { OUTLINE_STYLES, type OutlineKind } from "./outlineStyles";
+import { SceneOptionsProvider } from "./SceneOptionsContext";
+import SunRays from "./SunRays";
+import ToyInteractor from "./ToyInteractor";
+import LadderPortalIndicator from "./LadderPortalIndicator";
 import Water from "./Water";
 import Waterfall from "./Waterfall";
-import IdleAnimator from "./IdleAnimator";
-import { SceneOptionsProvider } from "./SceneOptionsContext";
-import Breadcrumbs from "./Breadcrumbs";
-import SunRays from "./SunRays";
-import { Atmosphere, AtmosphereProvider, AtmospherePanel } from "./environment";
+import { showComingSoon } from "./comingSoonStore";
+import { useDebugHitboxes } from "./debugFlags";
+import { Atmosphere, AtmospherePanel, AtmosphereProvider } from "./environment";
+import { computeOwnBounds } from "./ownBounds";
+import {
+  findNodeByObjectName,
+  getNode,
+  getPortalConfig,
+  getToyConfig,
+  getZoneConfig,
+  sceneMap,
+} from "./sceneMap";
+import { isToyUnderPointer } from "./toyClickFlag";
+import { useAutoFitCamera } from "./useAutoFitCamera";
+import { useCameraReset } from "./useCameraReset";
+import { useFocusOrbit } from "./useFocusOrbit";
+import { useKeyboardControls } from "./useKeyboardControls";
+import { useOptimizedGLTF } from "./useOptimizedGLTF";
+import { useSceneTransition } from "./useSceneTransition";
+import { useTurntable } from "./useTurntable";
 
 interface Hotspot {
   name: string;
@@ -65,8 +69,6 @@ interface Hotspot {
   focusDistance?: number;
   focusBehavior?: "fit" | "instant";
 }
-
-type OutlineKind = "active" | "inactive" | "toy";
 
 const HotspotHitbox = memo(function HotspotHitbox({
   hotspot,
@@ -89,6 +91,7 @@ const HotspotHitbox = memo(function HotspotHitbox({
   isFocused: (point: THREE.Vector3, id?: string) => boolean;
 }) {
   const [hovered, setHovered] = useState(false);
+  const debugHitboxes = useDebugHitboxes();
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
   const size = useMemo(() => {
     const s = new THREE.Vector3();
@@ -149,7 +152,7 @@ const HotspotHitbox = memo(function HotspotHitbox({
         }}
       >
         <boxGeometry args={[size.x, size.y, size.z]} />
-        {DEBUG_HITBOXES ? (
+        {debugHitboxes ? (
           <meshBasicMaterial
             color={hotspot.url ? "#ff7055" : "#8a6ac0"}
             wireframe
@@ -318,6 +321,18 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
   return result;
 }
 
+function clipTargetsActionToy(clip: THREE.AnimationClip): boolean {
+  return clip.tracks.some((track) => {
+    const dotIdx = track.name.indexOf(".");
+    if (dotIdx < 0) return false;
+    const nodePath = track.name.slice(0, dotIdx);
+    return nodePath.split("/").some((part) => {
+      const base = part.toLowerCase().replace(/\.\d+$/, "");
+      return getToyConfig(base)?.animation === "action";
+    });
+  });
+}
+
 function ZoneMesh({
   glbPath,
   zoneKey,
@@ -350,8 +365,11 @@ function ZoneMesh({
   const { actions } = useAnimations(animations, scene);
 
   useEffect(() => {
-    Object.values(actions).forEach((action) => action?.play());
-  }, [actions]);
+    Object.entries(actions).forEach(([name, action]) => {
+      const clip = animations.find((candidate) => candidate.name === name);
+      if (!clip || !clipTargetsActionToy(clip)) action?.play();
+    });
+  }, [actions, animations]);
 
   useEffect(() => {
     const portalMats = new Set<THREE.Material>();
@@ -465,6 +483,7 @@ function ZoneMesh({
       <IdleAnimator scene={scene} />
       <ToyInteractor
         scene={scene}
+        animations={animations}
         onHoverChange={onToyHoverChange}
         onFocus={onFocus}
       />
@@ -490,6 +509,29 @@ function ZoneMesh({
           isFocused={isFocused}
         />
       ))}
+      {zoneKey === "cloud_town" &&
+        (() => {
+          // Click on the ladder shortcuts the camera to the dream_zone
+          // hotspot's fitted framing — same call HotspotHitbox makes when
+          // dream_zone itself is clicked.
+          const dream = hotspots.find((h) => h.key === "dream_zone");
+          if (!dream) return null;
+          const size = new THREE.Vector3();
+          dream.box.getSize(size);
+          const radius = size.length() / 2;
+          return (
+            <LadderPortalIndicator
+              scene={scene}
+              onHoverChange={onToyHoverChange}
+              onActivate={() => {
+                onFocus(dream.center, dream.key, radius, {
+                  distance: dream.focusDistance,
+                  behavior: dream.focusBehavior,
+                });
+              }}
+            />
+          );
+        })()}
       <Waterfall scene={scene} />
     </>
   );
@@ -590,6 +632,8 @@ function CameraRig({
     onCameraReady(ready);
   }, [ready, onCameraReady]);
 
+  useCameraReset(orbitRef, ready);
+
   return null;
 }
 
@@ -636,22 +680,27 @@ export default function ZoneScene({
   const [loadedScene, setLoadedScene] = useState<THREE.Object3D | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [turntablePlaying, setTurntablePlaying] = useState(true);
-  const [outlinedObjects, setOutlinedObjects] = useState<THREE.Object3D[]>([]);
-  const [outlineKind, setOutlineKind] = useState<OutlineKind>("active");
+  const [hotspotOutlinedObjects, setHotspotOutlinedObjects] = useState<
+    THREE.Object3D[]
+  >([]);
+  const [hotspotOutlineKind, setHotspotOutlineKind] =
+    useState<OutlineKind>("active");
+  const [toyOutlinedObjects, setToyOutlinedObjects] = useState<
+    THREE.Object3D[]
+  >([]);
 
   const { navigateWithTransition, wrapStyle } = useSceneTransition(cameraReady);
 
   const onHoverChange = useCallback((hotspot: Hotspot, hovered: boolean) => {
-    setOutlinedObjects(hovered ? hotspot.meshes : []);
-    setOutlineKind(
+    setHotspotOutlinedObjects(hovered ? hotspot.meshes : []);
+    setHotspotOutlineKind(
       hovered ? (hotspot.type === "active" ? "active" : "inactive") : "active",
     );
   }, []);
 
   const onToyHoverChange = useCallback(
     (objects: THREE.Object3D[], hovered: boolean) => {
-      setOutlinedObjects(hovered ? objects : []);
-      setOutlineKind(hovered ? "toy" : "active");
+      setToyOutlinedObjects(hovered ? objects : []);
     },
     [],
   );
@@ -662,57 +711,13 @@ export default function ZoneScene({
     setTurntablePlaying(playing);
   }, []);
 
-  const activeOutlineSettings = {
-    enabled: true,
-    blur: false,
-    xRay: false,
-    edgeStrength: 2.0,
-    pulseSpeed: 0,
-    visibleEdgeColor: 0x00e5ff,
-    hiddenEdgeColor: 0x000000,
-    kernelSize: KernelSize.SMALL,
-    blendFunction: BlendFunction.ALPHA,
-    width: undefined,
-    height: undefined,
-    patternTexture: undefined,
-  };
-
-  const inactiveOutlineSettings = {
-    enabled: true,
-    blur: false,
-    xRay: false,
-    edgeStrength: 2.0,
-    pulseSpeed: 0,
-    visibleEdgeColor: 0xc8b6ff,
-    hiddenEdgeColor: 0x000000,
-    kernelSize: KernelSize.SMALL,
-    blendFunction: BlendFunction.ALPHA,
-    width: undefined,
-    height: undefined,
-    patternTexture: undefined,
-  };
-
-  const toyOutlineSettings = {
-    enabled: true,
-    blur: false,
-    xRay: false,
-    edgeStrength: 2.0,
-    pulseSpeed: 0,
-    visibleEdgeColor: 0x9ca3af,
-    hiddenEdgeColor: 0x000000,
-    kernelSize: KernelSize.SMALL,
-    blendFunction: BlendFunction.ALPHA,
-    width: undefined,
-    height: undefined,
-    patternTexture: undefined,
-  };
-
-  const outlineSettings =
-    outlineKind === "inactive"
-      ? inactiveOutlineSettings
-      : outlineKind === "toy"
-        ? toyOutlineSettings
-        : activeOutlineSettings;
+  const hasToyOutline = toyOutlinedObjects.length > 0;
+  const outlinedObjects = hasToyOutline
+    ? toyOutlinedObjects
+    : hotspotOutlinedObjects;
+  const outlineSettings = OUTLINE_STYLES[
+    hasToyOutline ? "toy" : hotspotOutlineKind
+  ];
 
   // When a zone declares an atmosphere config, the listed subsystems own the
   // lighting (sun + ambient). Otherwise fall back to the legacy hardcoded

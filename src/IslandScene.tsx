@@ -1,36 +1,37 @@
 // IslandScene.tsx
 
+import { Environment, Html, OrbitControls } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { EffectComposer } from "@react-three/postprocessing";
 import {
+  memo,
   Suspense,
-  useRef,
-  useMemo,
-  useState,
   useCallback,
   useEffect,
-  memo,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Environment, Html } from "@react-three/drei";
-import { EffectComposer } from "@react-three/postprocessing";
-import { useOptimizedGLTF } from "./useOptimizedGLTF";
-import { useKeyboardControls } from "./useKeyboardControls";
-import { useTurntable } from "./useTurntable";
-import { useFocusOrbit } from "./useFocusOrbit";
-import OutlineController from "./Outline";
-import { KernelSize, BlendFunction } from "postprocessing";
+import * as THREE from "three";
 import { AdaptiveLabel } from "./AdaptiveLabel";
-import { collectMeshes } from "./BloomDriver";
-import ToyInteractor from "./ToyInteractor";
+import { playCyclingSound } from "./audio";
+import { collectMeshes } from "./meshUtils";
+import { useDebugHitboxes } from "./debugFlags";
 import IdleAnimator from "./IdleAnimator";
+import OutlineController from "./Outline";
+import { OUTLINE_STYLES, type OutlineKind } from "./outlineStyles";
+import { computeOwnBounds } from "./ownBounds";
+import { findNodeByObjectName, getZoneConfig, sceneMap } from "./sceneMap";
 import { isToyUnderPointer } from "./toyClickFlag";
+import ToyInteractor from "./ToyInteractor";
+import { startTransition } from "./transitionStore";
+import { useFocusOrbit } from "./useFocusOrbit";
+import { useKeyboardControls } from "./useKeyboardControls";
+import { useOptimizedGLTF } from "./useOptimizedGLTF";
+import { useTurntable } from "./useTurntable";
+import { useCameraReset } from "./useCameraReset";
 import Water from "./Water";
 import Whirlpool from "./Whirlpool";
-import { playCyclingSound } from "./audio";
-import { getZoneConfig, findNodeByObjectName, sceneMap } from "./sceneMap";
-import { DEBUG_HITBOXES } from "./debugFlags";
-import { computeOwnBounds } from "./ownBounds";
-import { startTransition } from "./transitionStore";
-import * as THREE from "three";
 
 interface ZoneMarker {
   name: string;
@@ -168,6 +169,7 @@ const ZoneHitbox = memo(function ZoneHitbox({
   isFocused: (point: THREE.Vector3, id?: string) => boolean;
 }) {
   const [hovered, setHovered] = useState(false);
+  const debugHitboxes = useDebugHitboxes();
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
   const { size, center, focusRadius } = useMemo(() => {
     const s = new THREE.Vector3();
@@ -228,7 +230,7 @@ const ZoneHitbox = memo(function ZoneHitbox({
         }}
       >
         <boxGeometry args={[size.x, size.y, size.z]} />
-        {DEBUG_HITBOXES ? (
+        {debugHitboxes ? (
           <meshBasicMaterial
             color={marker.type === "active" ? "#ff7055" : "#8a6ac0"}
             wireframe
@@ -423,6 +425,8 @@ function IslandCameraRig({
     onPlayingChange(playing);
   }, [playing, onPlayingChange]);
 
+  useCameraReset(orbitRef, true);
+
   return null;
 }
 
@@ -443,9 +447,7 @@ export default function IslandScene({
   const orbitRef = useRef<any>(null);
   const turntableToggleRef = useRef<(() => void) | null>(null);
   const [outlinedObjects, setOutlinedObjects] = useState<THREE.Object3D[]>([]);
-  const [outlineKind, setOutlineKind] = useState<"active" | "inactive" | "toy">(
-    "active",
-  );
+  const [outlineKind, setOutlineKind] = useState<OutlineKind>("active");
   const [dollyTarget, setDollyTarget] = useState<THREE.Vector3 | null>(null);
   const { focus: focusOrbitTarget, isFocused } = useFocusOrbit(orbitRef);
 
@@ -486,57 +488,7 @@ export default function IslandScene({
     [onTurntableChange],
   );
 
-  const activeOutlineSettings = {
-    enabled: true,
-    blur: false,
-    xRay: false,
-    edgeStrength: 2.0,
-    pulseSpeed: 0,
-    visibleEdgeColor: 0x00e5ff,
-    hiddenEdgeColor: 0x000000,
-    kernelSize: KernelSize.SMALL,
-    blendFunction: BlendFunction.ALPHA,
-    width: undefined,
-    height: undefined,
-    patternTexture: undefined,
-  };
-
-  const inactiveOutlineSettings = {
-    enabled: true,
-    blur: false,
-    xRay: false,
-    edgeStrength: 2.0,
-    pulseSpeed: 0,
-    visibleEdgeColor: 0xc8b6ff,
-    hiddenEdgeColor: 0x000000,
-    kernelSize: KernelSize.SMALL,
-    blendFunction: BlendFunction.ALPHA,
-    width: undefined,
-    height: undefined,
-    patternTexture: undefined,
-  };
-
-  const toyOutlineSettings = {
-    enabled: true,
-    blur: false,
-    xRay: false,
-    edgeStrength: 2.0,
-    pulseSpeed: 0,
-    visibleEdgeColor: 0x9ca3af,
-    hiddenEdgeColor: 0x000000,
-    kernelSize: KernelSize.SMALL,
-    blendFunction: BlendFunction.ALPHA,
-    width: undefined,
-    height: undefined,
-    patternTexture: undefined,
-  };
-
-  const outlineSettings =
-    outlineKind === "inactive"
-      ? inactiveOutlineSettings
-      : outlineKind === "toy"
-        ? toyOutlineSettings
-        : activeOutlineSettings;
+  const outlineSettings = OUTLINE_STYLES[outlineKind];
 
   return (
     <Canvas

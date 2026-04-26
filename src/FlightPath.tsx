@@ -30,7 +30,7 @@ import * as THREE from "three";
 import { getZoneConfig, findNodeByObjectName } from "./sceneMap";
 import { useSceneOptions } from "./SceneOptionsContext";
 import { AdaptiveLabel } from "./AdaptiveLabel";
-import { DEBUG_HITBOXES } from "./debugFlags";
+import { useDebugHitboxes } from "./debugFlags";
 import { computeOwnBounds } from "./ownBounds";
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
@@ -103,6 +103,7 @@ export default function FlightPath({
   ) => void;
   isFocused: (point: THREE.Vector3, id?: string) => boolean;
 }) {
+  const debugHitboxes = useDebugHitboxes();
   const data = useMemo(() => {
     const objLower = config.objectName.toLowerCase();
     const escaped = objLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -449,7 +450,7 @@ export default function FlightPath({
         }}
       >
         <boxGeometry args={[data.hitSize.x, data.hitSize.y, data.hitSize.z]} />
-        {DEBUG_HITBOXES ? (
+        {debugHitboxes ? (
           <meshBasicMaterial
             color={cfg.url ? "#ff7055" : "#8a6ac0"}
             wireframe

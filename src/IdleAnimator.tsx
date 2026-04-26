@@ -4,12 +4,17 @@
 // any object whose sceneMap entry has an `idle` field, records its rest
 // transform, and drives it each frame from a tiny registry keyed by IdleKind.
 //
-// Works on any node type — toys, zones, portals — so "bob the floating
+// Works on any node type — toys, zones, portals — so "undulate the floating
 // Weather Report portal", "gentle float on water pokemon", and (future)
 // "slow-spin crystal" all share the same API:
 //
-//   idle: "bob"                                  // use defaults
-//   idle: { kind: "bob", amplitude: 0.3, period: 6 }   // tune it
+//   idle: "undulate"                                  // use defaults
+//   idle: { kind: "undulate", amplitude: 0.3, period: 6 }   // tune it
+//
+// Note: idle motion (always-on, here) is deliberately separate from
+// `animation` (click-triggered, in ToyInteractor). Some value names overlap
+// historically — `idle: "undulate"` and `animation: "bob"` both produce a
+// y-axis sine — but they're independent code paths and never interfere.
 //
 // Click animations in ToyInteractor write position.y = baseY + offset and run
 // in their own useFrame. Mounting IdleAnimator BEFORE ToyInteractor in the
@@ -37,8 +42,9 @@ interface IdleDef {
 const TAU = Math.PI * 2;
 
 const IDLE: Record<Exclude<IdleKind, "none">, IdleDef> = {
-  // Gentle y-bob, strong enough to read at a glance (zones/portals).
-  bob: {
+  // Gentle y-axis undulation, strong enough to read at a glance
+  // (zones/portals default).
+  undulate: {
     defaults: { amplitude: 0.12, period: 3, axis: "y" },
     apply: (obj, base, t, phase, amp, freq) => {
       obj.position.y = base.y + Math.sin(t * freq + phase) * amp;

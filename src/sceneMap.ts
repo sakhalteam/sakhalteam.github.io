@@ -22,6 +22,58 @@ import type { AtmosphereSubsystem, Weather } from "./environment/presets";
  *   zones/portals are keyed by their STRIPPED name (no "zone_"/"portal_" prefix).
  *   Toys are keyed by their FULL object name.
  *   parent references use stripped keys for zones/portals.
+ *
+ * ─── Per-node options cheat sheet ───────────────────────────────────────
+ * (Open this when you forget what's available. Defined on SceneNode below;
+ *  what each helper accepts may differ — the helpers' opts type is the
+ *  authoritative list.)
+ *
+ *   zone(key, label, opts):
+ *     path           string | null       URL route; auto-derived if omitted
+ *     glbPath        string | null       GLB asset path; auto-derived
+ *     env            string              drei Environment HDRI preset
+ *     atmosphere     AtmosphereConfig    sky/sun/clouds/etc. subsystems
+ *     parent         string              sceneMap parent key
+ *     children       string[]            sub-zones (for QuickNav tree only)
+ *     sounds         string[]            click sounds (cycles)
+ *     turntable      boolean             auto-rotate camera; default true
+ *     camera         { padding, elevation, azimuth, min/maxZoomMultiplier }
+ *     idle           IdleConfig          always-on motion (see below)
+ *     labelOffsetY   number              extra world-units to lift hover label
+ *     fullBleed      boolean             canvas edge-to-edge; UI floats
+ *     focusDistance  number              click-to-focus override (world-units)
+ *     focusBehavior  "fit" | "instant"   "instant" = no tween, fire immediately
+ *
+ *   portal(key, label, url, parent, opts):
+ *     idle, labelOffsetY, focusDistance, focusBehavior  (subset of above)
+ *
+ *   toy(key, label, parent, opts):
+ *     sounds, animation, idle, focusDistance, focusBehavior
+ *     interactive    boolean             clickable? default true
+ *     quiet          boolean             shorthand for no own label / no toy-level outline
+ *     showLabel      boolean             proximity label on hover; default true
+ *     showOutline    boolean             toy-level outline on hover; default true
+ *
+ *   site(key, label, url): no opts — used only for QuickNav listings.
+ *
+ * ─── Animation systems (two separate things, don't conflate) ───────────
+ *
+ *   idle:       always-on, code-generated motion (math, no GLB needed).
+ *               Values: "undulate" | "float" | "spin" | "none"
+ *               Or { kind, amplitude?, period?, axis? } to tune.
+ *               Driven by IdleAnimator.tsx.
+ *
+ *   animation:  click-triggered behaviour. Values:
+ *                 "spin"|"hop"|"grow"|"wobble"|"bob"|"none"  — code presets
+ *                 "action"  — play Blender-authored clips from the GLB.
+ *                             Clips matching /idle/ in their name auto-loop;
+ *                             everything else cycles through on click.
+ *               Driven by ToyInteractor.tsx.
+ *
+ *   The two fields share some value names (e.g. `idle: "undulate"` is
+ *   geometrically similar to `animation: "bob"`) but they're different
+ *   code paths and never interfere. Set both on the same toy if you want
+ *   gentle always-on motion plus a clicker reaction.
  */
 
 export type NodeType = "zone" | "portal" | "toy" | "site";
@@ -62,15 +114,21 @@ export type ToyAnimation =
  * root transform, so Blender-parented children (e.g. ct_toy_metal_gear_rex
  * under portal_weather_report) ride along without extra wiring.
  *
- *   "bob"   — gentle y-sine (zones/portals default)
- *   "float" — subtle y-sine (water pokemon default)
- *   "spin"  — slow continuous rotation around chosen axis
- *   "none"  — disabled
+ *   "undulate" — gentle y-sine (zones/portals default)
+ *   "float"    — subtle y-sine (water pokemon default)
+ *   "spin"     — slow continuous rotation around chosen axis
+ *   "none"     — disabled
  *
  * Pass a bare string for defaults, or an object to override amplitude /
  * period / axis per-node.
+ *
+ * NOTE: deliberately distinct from `animation` (click-triggered). The two
+ * fields share some value names by accident of vocabulary (e.g. `bob` was
+ * also a click-anim) so `idle` was renamed `bob → undulate` in 2026-04 to
+ * make the mental model crisper. They use different code paths and never
+ * interfere; you can set both on the same toy.
  */
-export type IdleKind = "bob" | "float" | "spin" | "none";
+export type IdleKind = "undulate" | "float" | "spin" | "none";
 export type IdleConfig =
   | IdleKind
   | {
@@ -96,10 +154,12 @@ export interface SceneNode {
   idle?: IdleConfig;
   /** If false, toy is not clickable and has no animation/sound — pure outline-group member. */
   interactive?: boolean;
-  /** If true, toy does not render its own label and does not emit a toy hover outline. Still belongs to parent's outline group. */
+  /** If true, shorthand for showLabel: false and showOutline: false. Still belongs to parent's outline group. */
   quiet?: boolean;
   /** Whether to show a proximity label on hover. Default true. When false, the toy gets a subtle emissive tint on hover instead. */
   showLabel?: boolean;
+  /** Whether to emit a toy-level outline on hover. Default true. */
+  showOutline?: boolean;
   /** Zones/portals: extra world-units to lift the hover label above the default (bbox-top + small pad). Use when a toy parented to the portal makes the default label clip. */
   labelOffsetY?: number;
   /** Zones: render the 3D canvas edge-to-edge under floating overlays (header/footer/panels become absolutely-positioned over the scene). Default false. */
@@ -221,6 +281,7 @@ function toy(
     interactive?: boolean;
     quiet?: boolean;
     showLabel?: boolean;
+    showOutline?: boolean;
     focusDistance?: number;
     focusBehavior?: "fit" | "instant";
   } = {},
@@ -240,6 +301,7 @@ function toy(
     ...(opts.interactive === false && { interactive: false }),
     ...(opts.quiet === true && { quiet: true }),
     ...(opts.showLabel === false && { showLabel: false }),
+    ...(opts.showOutline === false && { showOutline: false }),
     ...(opts.focusDistance !== undefined && {
       focusDistance: opts.focusDistance,
     }),
@@ -331,7 +393,7 @@ const nodes: SceneNode[] = [
     ],
   }),
   zone("ss_brainfog", "S.S. Brainfog", {
-    turntable: false,
+    turntable: true,
     children: [
       "portal_adhdo",
       "portal_karasu_drop",
@@ -341,7 +403,7 @@ const nodes: SceneNode[] = [
   }),
   zone("cloud_town", "Cloud Town", {
     env: "city",
-    turntable: false,
+    turntable: true,
     fullBleed: true,
     camera: { padding: 1, elevation: 0.45, azimuth: 0.3 },
     atmosphere: {
@@ -505,13 +567,13 @@ const nodes: SceneNode[] = [
     glbPath: null,
     path: null,
     parent: "cloud_town",
-    idle: { kind: "bob", amplitude: 0.15, period: 5 }, // ← override here
+    idle: { kind: "undulate", amplitude: 0.15, period: 5 }, // ← override here
   }),
   zone("pool_time", "Pool Time", {
     glbPath: null,
     path: null,
     parent: "cloud_town",
-    idle: "bob",
+    idle: "undulate",
     labelOffsetY: 2,
   }),
 
@@ -536,7 +598,7 @@ const nodes: SceneNode[] = [
   portal("nikbeat", "NikBeat", "/nikbeat/", "beach_party"),
   portal("pokemon_park", "Pokemon Park", "/pokemon-park/", "pokemon_island"),
   portal("weather_report", "Weather Report", "/weather-report/", "cloud_town", {
-    idle: "bob",
+    idle: "undulate",
     labelOffsetY: 5,
   }),
   portal("famima", "Family Mart", "/famima/", "island"),
@@ -770,9 +832,19 @@ const nodes: SceneNode[] = [
   toy("bs_toy_tree_stump", "Tree Stump", "bird_sanctuary"),
 
   // ── Toys inside zone_cloud_town.glb (parent: cloud_town) ──
-  toy("ct_toy_ladder", "Ladder", "cloud_town", { quiet: true }),
+  // Ladder interactivity (hover outline, toast, click → dream_zone shortcut)
+  // is owned entirely by LadderPortalIndicator.tsx. interactive:false makes
+  // ToyInteractor skip the ladder completely (no toy-level click/focus/anim
+  // race with the indicator's own click handler). quiet: true keeps it out
+  // of the toy label + outline pipeline; LadderPortalIndicator drives those
+  // via its own hover proxy.
+  toy("ct_toy_ladder", "Ladder", "cloud_town", {
+    interactive: false,
+    quiet: false,
+    animation: "none",
+  }),
   toy("ct_toy_metal_gear_rex", "Metal Gear Rex", "cloud_town", {
-    quiet: true,
+    showLabel: false,
     sounds: [
       "/sounds/ct_toy_metal_gear_rex_01.wav",
       "/sounds/ct_toy_metal_gear_rex_02.wav",
@@ -780,7 +852,8 @@ const nodes: SceneNode[] = [
     animation: "hop",
   }),
   toy("ct_toy_weather_report", "Weather Report JJBA", "cloud_town", {
-    quiet: true,
+    quiet: false,
+    showLabel: false,
     sounds: [
       "/sounds/ct_toy_weather_report_01.wav",
       "/sounds/ct_toy_weather_report_02.wav",
@@ -1059,6 +1132,7 @@ export function getToyConfig(objName: string):
       interactive: boolean;
       quiet: boolean;
       showLabel: boolean;
+      showOutline: boolean;
       focusDistance?: number;
       focusBehavior?: "fit" | "instant";
     }
@@ -1072,7 +1146,8 @@ export function getToyConfig(objName: string):
     parent: node.parent,
     interactive: node.interactive !== false,
     quiet: node.quiet === true,
-    showLabel: node.showLabel !== false,
+    showLabel: node.showLabel !== false && node.quiet !== true,
+    showOutline: node.showOutline !== false && node.quiet !== true,
     focusDistance: node.focusDistance,
     focusBehavior: node.focusBehavior,
   };

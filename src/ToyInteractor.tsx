@@ -23,6 +23,7 @@ interface ToyData {
   meshes: THREE.Mesh[];
   animation: ToyAnimation;
   quiet: boolean;
+  showOutline: boolean;
   focusDistance?: number;
   focusBehavior?: "fit" | "instant";
 }
@@ -55,7 +56,7 @@ function collectMeshesExcludingHitboxes(obj: THREE.Object3D): THREE.Mesh[] {
 }
 
 import { setToyUnderPointer } from "./toyClickFlag";
-import { DEBUG_HITBOXES } from "./debugFlags";
+import { useDebugHitboxes } from "./debugFlags";
 
 /**
  * ToyInteractor — gentle bob + click-to-spin + sound + proximity labels.
@@ -101,6 +102,9 @@ export default function ToyInteractor({
   const actionClipsRef = useRef<Map<string, THREE.AnimationAction[]>>(
     new Map(),
   );
+  // Per-toy cycle index for click actions, mirrors playCyclingSound's behavior:
+  // each click advances to the next clip and wraps. One clip = always plays it.
+  const actionCycleRef = useRef<Map<string, number>>(new Map());
   const mixer = useMemo(() => {
     if (animations.length === 0) return null;
     const m = new THREE.AnimationMixer(scene);
@@ -109,6 +113,7 @@ export default function ToyInteractor({
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
   const mouseScreen = useRef<{ x: number; y: number }>({ x: -9999, y: -9999 });
   const { camera, gl } = useThree();
+  const debugHitboxes = useDebugHitboxes();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const pointer = useMemo(() => new THREE.Vector2(), []);
   const tmpVec3 = useMemo(() => new THREE.Vector3(), []);
@@ -126,7 +131,7 @@ export default function ToyInteractor({
     // which would also skip the raycaster). A hitbox can then stand in as
     // the click target for its paired toy.
     const hitboxByTarget = new Map<string, THREE.Object3D>();
-    const hitboxMat = DEBUG_HITBOXES
+    const hitboxMat = debugHitboxes
       ? new THREE.MeshBasicMaterial({
           color: "#7dd3fc",
           wireframe: true,
@@ -198,11 +203,12 @@ export default function ToyInteractor({
         meshes,
         animation: config.animation,
         quiet: config.quiet,
+        showOutline: config.showOutline,
         focusDistance: config.focusDistance,
         focusBehavior: config.focusBehavior,
       } satisfies ToyData;
     });
-  }, [scene]);
+  }, [scene, debugHitboxes]);
 
   // Categorize Blender animations: longest clip = idle loop, shorter clips = click actions
   useMemo(() => {
@@ -232,17 +238,26 @@ export default function ToyInteractor({
 
       if (toyClips.length === 0) continue;
 
-      // Sort by duration descending — longest = idle loop
+      // Sort by duration descending. If an explicit idle clip exists, it loops.
+      // Otherwise legacy multi-clip toys use longest = idle, shorter = click.
+      // Single-clip toys are treated as click-only actions.
       toyClips.sort((a, b) => b.duration - a.duration);
 
-      // First clip = idle (loop always)
-      const idleAction = mixer.clipAction(toyClips[0]);
-      idleAction.play();
+      const explicitIdle = toyClips.find((clip) =>
+        /idle|loop|cycle/i.test(clip.name),
+      );
+      const idleClip =
+        explicitIdle ?? (toyClips.length > 1 ? toyClips[0] : null);
+      if (idleClip) {
+        const idleAction = mixer.clipAction(idleClip);
+        idleAction.play();
+      }
 
-      // Rest = action clips (play once on click)
+      // Non-idle clips = action clips (play once on click)
       const clickActions: THREE.AnimationAction[] = [];
-      for (let i = 1; i < toyClips.length; i++) {
-        const action = mixer.clipAction(toyClips[i]);
+      for (const clip of toyClips) {
+        if (clip === idleClip) continue;
+        const action = mixer.clipAction(clip);
         action.setLoop(THREE.LoopOnce, 1);
         action.clampWhenFinished = false; // reset to start after playing
         clickActions.push(action);
@@ -314,12 +329,14 @@ export default function ToyInteractor({
       if (bobState.current.has(name)) return;
       bobState.current.set(name, { startTime: -1 });
     } else if (toy.animation === "action") {
-      // Play Blender-authored action clips once (e.g. harpy loop-de-loop)
+      // Play Blender-authored click actions one at a time, cycling through
+      // them on repeat clicks (mirrors how `sounds: [...]` cycles audio).
+      // 1 clip = always plays it. N clips = round-robin per click.
       const actions = actionClipsRef.current.get(name);
-      if (actions) {
-        for (const action of actions) {
-          action.reset().play();
-        }
+      if (actions && actions.length > 0) {
+        const idx = actionCycleRef.current.get(name) ?? 0;
+        actions[idx].reset().play();
+        actionCycleRef.current.set(name, (idx + 1) % actions.length);
       }
     } else if (toy.animation !== "none") {
       // 'spin' (default)
@@ -351,13 +368,13 @@ export default function ToyInteractor({
         state.hovered = toy?.obj.name === name;
       }
 
-      // Notify parent when hovered toy changes. Quiet toys belong to their
-      // parent zone's outline group instead of emitting a toy-level outline.
+      // Notify parent when hovered toy changes. Some decorative toys can keep
+      // their label hidden while still emitting a toy-level outline.
       if (toy?.obj.name !== lastHoveredToy.current?.obj.name) {
-        if (lastHoveredToy.current && !lastHoveredToy.current.quiet) {
+        if (lastHoveredToy.current?.showOutline) {
           onHoverChange?.([], false);
         }
-        if (toy && !toy.quiet) onHoverChange?.(toy.meshes, true);
+        if (toy?.showOutline) onHoverChange?.(toy.meshes, true);
         lastHoveredToy.current = toy ?? null;
       }
 
@@ -410,7 +427,7 @@ export default function ToyInteractor({
       canvas.removeEventListener("click", onClick, { capture: true });
       if (canvas.style.cursor === "pointer") canvas.style.cursor = "";
       if (lastHoveredToy.current) {
-        if (!lastHoveredToy.current.quiet) onHoverChange?.([], false);
+        if (lastHoveredToy.current.showOutline) onHoverChange?.([], false);
         lastHoveredToy.current = null;
       }
     };
@@ -542,22 +559,6 @@ export default function ToyInteractor({
         state.opacity = Math.max(state.opacity - FADE_SPEED * delta, 0);
       }
 
-      // Hover glow for labelless toys — subtle emissive tint
-      if (!toy.showLabel) {
-        for (const mesh of toy.meshes) {
-          const mat = mesh.material as THREE.MeshStandardMaterial;
-          if (mat.emissive) {
-            if (state.hovered) {
-              mat.emissive.setRGB(0.15, 0.15, 0.2);
-              mat.emissiveIntensity = 0.5;
-            } else {
-              mat.emissive.setRGB(0, 0, 0);
-              mat.emissiveIntensity = 0;
-            }
-          }
-        }
-      }
-
       // Update DOM directly for performance (no React re-renders per frame)
       if (state.labelDiv) {
         state.labelDiv.style.opacity = String(state.opacity);
@@ -588,7 +589,7 @@ export default function ToyInteractor({
 
   return (
     <>
-      {DEBUG_HITBOXES &&
+      {debugHitboxes &&
         toys.map((toy) => {
           const box = new THREE.Box3().setFromObject(toy.obj);
           const size = new THREE.Vector3();
@@ -612,7 +613,7 @@ export default function ToyInteractor({
           );
         })}
       {toys
-        .filter((t) => !t.quiet && t.showLabel)
+        .filter((t) => t.showLabel)
         .map((toy) => {
           const box = new THREE.Box3().setFromObject(toy.obj);
           const labelPos = new THREE.Vector3();

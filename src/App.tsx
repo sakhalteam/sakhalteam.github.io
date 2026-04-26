@@ -6,6 +6,7 @@ import ZoneScene from "./ZoneScene";
 import QuickNav from "./QuickNav";
 import CloudTransition from "./CloudTransition";
 import ComingSoonToast from "./ComingSoonToast";
+import DebugToggle from "./DebugToggle";
 import { useSceneTransition } from "./useSceneTransition";
 import { getActiveZones } from "./sceneMap";
 import { showComingSoon } from "./comingSoonStore";
@@ -69,6 +70,7 @@ export default function App() {
       <QuickNav />
       <CloudTransition />
       <ComingSoonToast />
+      <DebugToggle />
       <Routes>
         <Route path="/" element={<HomePage />} />
         {zoneRoutes.map((z) => (
