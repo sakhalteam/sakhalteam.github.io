@@ -1,7 +1,7 @@
 // useAutoFitCamera.ts
 
-import { useEffect, useState } from "react";
 import { useThree } from "@react-three/fiber";
+import { useEffect, useState } from "react";
 import * as THREE from "three";
 
 /**
@@ -33,7 +33,7 @@ export function useAutoFitCamera(
     /** Azimuth offset in radians (rotates camera around Y axis). Default: slight 3/4 angle */
     azimuth = 0.4,
     /** OrbitControls min zoom distance as a multiplier of model radius */
-    minZoomMultiplier = 0.3,
+    minZoomMultiplier = 0.08,
     /** OrbitControls max zoom distance as a multiplier of model radius */
     maxZoomMultiplier = 7,
   } = {},
@@ -114,7 +114,7 @@ export function useAutoFitCamera(
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
     const radius = sphere.radius;
-    const minDistance = Math.max(radius * minZoomMultiplier, 0.75);
+    const minDistance = Math.max(radius * minZoomMultiplier, 0.25);
     const maxDistance = Math.max(radius * maxZoomMultiplier, minDistance + 10);
 
     // Auto-detect elevation from bounding box aspect ratio

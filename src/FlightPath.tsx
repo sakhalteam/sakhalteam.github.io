@@ -35,6 +35,7 @@ import { computeOwnBounds } from "./ownBounds";
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const LOCAL_X = new THREE.Vector3(1, 0, 0);
+const SHOW_BARREL_ROLL_TRIGGERS_WITH_DEBUG_HITBOXES = true;
 
 function distanceToSegment(
   point: THREE.Vector3,
@@ -397,21 +398,23 @@ export default function FlightPath({
 
   return (
     <>
-      {/* Debug visualisation for barrel-roll trigger radii. Uncomment to see
+      {/* Debug visualisation for barrel-roll trigger radii. Toggle Hitboxes to see
           the red/green wireframe spheres at each `*_barrel_roll_trigger` empty
           — handy for positioning triggers or diagnosing collision issues. */}
-      {/* {data.rollTriggers.map((triggerPos, index) => (
-        <mesh key={`roll-trigger-${index}`} position={triggerPos}>
-          <sphereGeometry args={[config.rollTriggerRadius ?? 4, 16, 12]} />
-          <meshBasicMaterial
-            color={debugNearTrigger ? "#22c55e" : "#ff4d4f"}
-            wireframe
-            transparent
-            opacity={0.45}
-            depthWrite={false}
-          />
-        </mesh>
-      ))} */}
+      {debugHitboxes &&
+        SHOW_BARREL_ROLL_TRIGGERS_WITH_DEBUG_HITBOXES &&
+        data.rollTriggers.map((triggerPos, index) => (
+          <mesh key={`roll-trigger-${index}`} position={triggerPos}>
+            <sphereGeometry args={[config.rollTriggerRadius ?? 4, 16, 12]} />
+            <meshBasicMaterial
+              color={debugNearTrigger ? "#22c55e" : "#ff4d4f"}
+              wireframe
+              transparent
+              opacity={0.45}
+              depthWrite={false}
+            />
+          </mesh>
+        ))}
       <group ref={followerRef}>
       <mesh
         ref={hitboxRef}

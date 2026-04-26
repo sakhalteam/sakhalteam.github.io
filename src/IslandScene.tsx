@@ -15,9 +15,9 @@ import {
 import * as THREE from "three";
 import { AdaptiveLabel } from "./AdaptiveLabel";
 import { playCyclingSound } from "./audio";
-import { collectMeshes } from "./meshUtils";
 import { useDebugHitboxes } from "./debugFlags";
 import IdleAnimator from "./IdleAnimator";
+import { collectMeshes } from "./meshUtils";
 import OutlineController from "./Outline";
 import { OUTLINE_STYLES, type OutlineKind } from "./outlineStyles";
 import { computeOwnBounds } from "./ownBounds";
@@ -25,11 +25,11 @@ import { findNodeByObjectName, getZoneConfig, sceneMap } from "./sceneMap";
 import { isToyUnderPointer } from "./toyClickFlag";
 import ToyInteractor from "./ToyInteractor";
 import { startTransition } from "./transitionStore";
+import { useCameraReset } from "./useCameraReset";
 import { useFocusOrbit } from "./useFocusOrbit";
 import { useKeyboardControls } from "./useKeyboardControls";
 import { useOptimizedGLTF } from "./useOptimizedGLTF";
 import { useTurntable } from "./useTurntable";
-import { useCameraReset } from "./useCameraReset";
 import Water from "./Water";
 import Whirlpool from "./Whirlpool";
 
@@ -538,8 +538,9 @@ export default function IslandScene({
           MIDDLE: THREE.MOUSE.DOLLY,
           RIGHT: THREE.MOUSE.PAN,
         }}
-        minDistance={6}
+        minDistance={2}
         maxDistance={50}
+        zoomSpeed={2}
       />
       <IslandCameraRig
         orbitRef={orbitRef}

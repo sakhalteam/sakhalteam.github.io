@@ -171,3 +171,6 @@ Authoring rule of thumb:
 
 Future tightening option: change the regex from `idle|loop|cycle` → just `idle` for stricter matching, less foot-gun. Currently disabled (Nic prefers to be careful in Blender).
 
+### new zone idea: a zone with a train running through it, like one that you can get to from zone_the_tunnels. on one track in the subway, you get the train that takes you to jr_jingle_journey. on the other track, you get one that takes you to this new zone.
+
+###
