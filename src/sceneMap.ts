@@ -427,7 +427,7 @@ const nodes: SceneNode[] = [
       "ct_toy_metal_gear_rex",
       "ct_toy_keyboard",
       "ct_toy_cloud_01",
-      "ct_toy_ladderrr",
+      "ct_toy_ladder",
       "ct_toy_weather_report",
       "dream_zone",
       "pool_time",
@@ -834,9 +834,9 @@ const nodes: SceneNode[] = [
   toy("bs_toy_tree_stump", "Tree Stump", "bird_sanctuary"),
 
   // ── Toys inside zone_cloud_town.glb (parent: cloud_town) ──
-  toy("ct_toy_ladderrr", "Ladderrr", "cloud_town", {
+  toy("ct_toy_ladder", "ladder", "cloud_town", {
     animation: "none",
-    showLabel: true,
+    showLabel: false,
     showOutline: true,
   }),
   toy("ct_toy_metal_gear_rex", "Metal Gear Rex", "cloud_town", {
@@ -855,7 +855,7 @@ const nodes: SceneNode[] = [
       "/sounds/ct_toy_weather_report_03.wav",
       "/sounds/ct_toy_weather_report_04.wav",
     ],
-    animation: "action",
+    animation: "none",
   }),
   toy("ct_toy_keyboard", "Keyboard", "cloud_town", {
     showLabel: false,
