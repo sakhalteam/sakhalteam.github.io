@@ -232,6 +232,7 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
     if (lower.endsWith("_hitbox")) continue;
     if (/_flight_(?:start|end|finish)(?:_\d+)?$/.test(lower)) continue;
     if (/_barrel_roll_trigger(?:_\d+)?$/.test(lower)) continue;
+    if (lower.endsWith("_nose")) continue;
     // FlightPath owns its own click hitbox (follows the moving mesh) — skip
     // the static hotspot the normal scanner would add at the initial bbox.
     if (flighted.has(lower)) continue;
@@ -453,10 +454,6 @@ function ZoneMesh({
       zone_starlight_zone: {
         duration: 10,
         rollTriggerRadius: 10,
-        // headingOffset: Math.PI,
-        // // Dial these in to fix the sideways pose. Radians.
-        // pitchOffset: -Math.PI / 1, // or -Math.PI / 2
-        // rollOffset: 180,
       },
     };
 

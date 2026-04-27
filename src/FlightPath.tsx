@@ -4,10 +4,20 @@
 // fade-in/out at the ends of each cycle. Also renders an invisible follower
 // hitbox that handles clicks so the flying object is navigable.
 //
+// Orientation is computed automatically: the model is rotated each frame so
+// its "authored forward" direction aligns with the current path direction
+// (`setFromUnitVectors`). No hand-tweaking radians per model.
+//
+// "Authored forward" defaults to the model's local +Z. To override (model
+// authored facing some other axis, or you just don't feel like rotating in
+// Blender), drop a `<obj>_nose` empty at the tip of the nose — the vector
+// from the object origin to that empty becomes forward.
+//
 // Blender-side contract (all siblings at the GLB scene root):
 //   zone_<key>                                        the flying mesh (animated + clicked)
 //   <zone_<key>>_flight_start[_NN]                    empty marking cycle-start position
 //   <zone_<key>>_flight_end[_NN] | _flight_finish[_NN] empty marking cycle-end position
+//   <zone_<key>>_nose                                 optional empty at the nose tip; overrides default forward axis
 //   <any_prefix>_barrel_roll_trigger[_NN]             optional empty; arwing barrel-rolls when it enters its radius
 //     (name the prefix anything you like — e.g. "starlight_" — as long as
 //     it does NOT start with "zone_" or "portal_" or it'll get picked up
@@ -34,7 +44,6 @@ import { useDebugHitboxes } from "./debugFlags";
 import { computeOwnBounds } from "./ownBounds";
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
-const LOCAL_X = new THREE.Vector3(1, 0, 0);
 const SHOW_BARREL_ROLL_TRIGGERS_WITH_DEBUG_HITBOXES = true;
 
 function distanceToSegment(
@@ -45,7 +54,11 @@ function distanceToSegment(
   const ab = b.clone().sub(a);
   const lengthSq = ab.lengthSq();
   if (lengthSq === 0) return point.distanceTo(a);
-  const t = THREE.MathUtils.clamp(point.clone().sub(a).dot(ab) / lengthSq, 0, 1);
+  const t = THREE.MathUtils.clamp(
+    point.clone().sub(a).dot(ab) / lengthSq,
+    0,
+    1,
+  );
   return point.distanceTo(a.clone().addScaledVector(ab, t));
 }
 
@@ -71,7 +84,9 @@ export interface FlightPathConfig {
   fadeIn: number;
   /** Fraction of cycle spent fading out at end. 0..0.5. */
   fadeOut: number;
-  /** Extra yaw in radians applied in world-Y space (fixes heading). */
+  /** Extra yaw in radians on top of auto-alignment. Usually 0 — only set this
+   *  if the auto-aligned model still looks rotated (e.g. nose along an axis
+   *  not covered by the default forward / `_nose` empty). */
   headingOffset?: number;
   /** Local-space pitch correction in radians (rotates around model +X). */
   pitchOffset?: number;
@@ -110,12 +125,14 @@ export default function FlightPath({
     const escaped = objLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const startRe = new RegExp(`^${escaped}_flight_start(?:_(\\d+))?$`);
     const endRe = new RegExp(`^${escaped}_flight_(?:end|finish)(?:_(\\d+))?$`);
+    const noseName = `${objLower}_nose`;
     // Any prefix ending in `_barrel_roll_trigger` (optionally numbered).
     // We don't tie this to the flying obj's name so users can pick a prefix
     // that won't collide with hotspot scanning (e.g. `starlight_`).
     const rollTriggerRe = /_barrel_roll_trigger(?:_\d+)?$/;
 
     let obj: THREE.Object3D | undefined;
+    let noseEmpty: THREE.Object3D | undefined;
     const startMap = new Map<string, THREE.Vector3>();
     const endMap = new Map<string, THREE.Vector3>();
     const markerObjects: THREE.Object3D[] = [];
@@ -125,6 +142,11 @@ export default function FlightPath({
       const n = o.name.toLowerCase();
       if (n === objLower) {
         obj = o;
+        return;
+      }
+      if (n === noseName) {
+        noseEmpty = o;
+        markerObjects.push(o);
         return;
       }
       const sm = n.match(startRe);
@@ -149,24 +171,28 @@ export default function FlightPath({
 
     // Pair start/end empties by matching numeric suffix. Unsuffixed pairs use "".
     const keys = [...new Set([...startMap.keys(), ...endMap.keys()])].sort();
-    const rawPairs: { startPos: THREE.Vector3; endPos: THREE.Vector3 }[] = [];
+    const pairs: { startPos: THREE.Vector3; endPos: THREE.Vector3 }[] = [];
     for (const k of keys) {
       const s = startMap.get(k);
       const e = endMap.get(k);
-      if (s && e) rawPairs.push({ startPos: s, endPos: e });
+      if (s && e) pairs.push({ startPos: s, endPos: e });
     }
-    if (rawPairs.length === 0) return null;
+    if (pairs.length === 0) return null;
 
-    // Use pair 0 as the reference heading, then solve an absolute yaw for the
-    // active pair each frame while preserving the authored pitch/roll.
-    const yawOf = (a: THREE.Vector3, b: THREE.Vector3) =>
-      Math.atan2(b.x - a.x, b.z - a.z);
-    const baseYaw = yawOf(rawPairs[0].startPos, rawPairs[0].endPos);
-    const pairs = rawPairs.map(({ startPos, endPos }) => ({
-      startPos,
-      endPos,
-      yawOffset: yawOf(startPos, endPos) - baseYaw,
-    }));
+    // Determine the model's "forward" axis in LOCAL space. Default is +Z; if
+    // the author dropped a `<obj>_nose` empty, use (nose - obj) projected
+    // back into local space instead. This is what `setFromUnitVectors` will
+    // align to the path direction every frame.
+    let authoredForwardLocal = new THREE.Vector3(0, 0, 1);
+    if (noseEmpty) {
+      const noseWorld = noseEmpty.getWorldPosition(new THREE.Vector3());
+      const objWorld = obj.getWorldPosition(new THREE.Vector3());
+      const fwdWorld = noseWorld.sub(objWorld);
+      if (fwdWorld.lengthSq() > 1e-6) {
+        const invQuat = obj.quaternion.clone().invert();
+        authoredForwardLocal = fwdWorld.applyQuaternion(invQuat).normalize();
+      }
+    }
 
     // Collect all meshes + flip their materials into transparent mode.
     const meshes: THREE.Mesh[] = [];
@@ -217,6 +243,8 @@ export default function FlightPath({
       meshes,
       basePosition: obj.position.clone(),
       baseQuaternion: obj.quaternion.clone(),
+      authoredForwardLocal,
+      forwardSource: noseEmpty ? ("nose-empty" as const) : ("local-+Z" as const),
       hitSize: size,
       rangedRoots,
       groundedRoots,
@@ -231,6 +259,16 @@ export default function FlightPath({
     if (!data) return;
     for (const m of data.markerObjects) m.visible = false;
   }, [data]);
+
+  // One-shot sanity log — confirms which "forward" axis was picked so the
+  // user can verify a `_nose` empty was found (or fell back to local +Z).
+  useEffect(() => {
+    if (!data) return;
+    console.log(
+      `[FlightPath:${config.objectName}] forward source: ${data.forwardSource}`,
+      data.authoredForwardLocal.toArray().map((n) => n.toFixed(3)),
+    );
+  }, [data, config.objectName]);
 
   // Register that this zone has flight variants so the cog panel shows the toggle.
   useEffect(() => {
@@ -259,8 +297,13 @@ export default function FlightPath({
   const labelRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
   const [debugNearTrigger, setDebugNearTrigger] = useState(false);
-  const yawQuatRef = useRef(new THREE.Quaternion());
+  const fwdArrowRef = useRef<THREE.ArrowHelper>(null);
+  const pathArrowRef = useRef<THREE.ArrowHelper>(null);
+  const headingQuatRef = useRef(new THREE.Quaternion());
+  const alignQuatRef = useRef(new THREE.Quaternion());
   const rollQuatRef = useRef(new THREE.Quaternion());
+  const tmpVecARef = useRef(new THREE.Vector3());
+  const tmpVecBRef = useRef(new THREE.Vector3());
   const rollAngleRef = useRef(0);
   const rollingRef = useRef(false);
   const wasNearTriggerRef = useRef(false);
@@ -276,28 +319,57 @@ export default function FlightPath({
     [config.pitchOffset, config.rollOffset],
   );
 
-  const applyPose = (pairIndex: number, t: number, worldPos?: THREE.Vector3) => {
+  const applyPose = (
+    pairIndex: number,
+    t: number,
+    worldPos?: THREE.Vector3,
+  ) => {
     if (!data) return;
     const pair = data.pairs[pairIndex];
     const targetWorldPos =
-      worldPos ?? nextWorldPosRef.current.lerpVectors(pair.startPos, pair.endPos, t);
+      worldPos ??
+      nextWorldPosRef.current.lerpVectors(pair.startPos, pair.endPos, t);
 
     if (data.obj.parent) {
-      data.obj.position.copy(data.obj.parent.worldToLocal(targetWorldPos.clone()));
+      data.obj.position.copy(
+        data.obj.parent.worldToLocal(targetWorldPos.clone()),
+      );
     } else {
       data.obj.position.copy(targetWorldPos);
     }
 
-    yawQuatRef.current.setFromAxisAngle(
+    // Auto-align: rotate the model so its authored "forward" axis maps to the
+    // current path direction. setFromUnitVectors handles yaw + pitch in one
+    // shot, so diagonal/climbing paths work for free.
+    const authoredFwdWorld = tmpVecARef.current
+      .copy(data.authoredForwardLocal)
+      .applyQuaternion(data.baseQuaternion)
+      .normalize();
+    const pathDir = tmpVecBRef.current
+      .copy(pair.endPos)
+      .sub(pair.startPos)
+      .normalize();
+    alignQuatRef.current.setFromUnitVectors(authoredFwdWorld, pathDir);
+
+    // Optional fine-tune: extra world-Y rotation on top of auto-alignment.
+    headingQuatRef.current.setFromAxisAngle(
       WORLD_UP,
-      pair.yawOffset + (config.headingOffset ?? 0),
+      config.headingOffset ?? 0,
     );
-    rollQuatRef.current.setFromAxisAngle(LOCAL_X, rollAngleRef.current);
+
+    // Barrel roll spins the geometry around the model's nose-to-tail axis,
+    // which is `authoredForwardLocal` in local space. Applied innermost so
+    // it rotates the geometry before any orientation is composed on top.
+    rollQuatRef.current.setFromAxisAngle(
+      data.authoredForwardLocal,
+      rollAngleRef.current,
+    );
     data.obj.quaternion
       .copy(localCorrection)
       .multiply(rollQuatRef.current)
       .premultiply(data.baseQuaternion)
-      .premultiply(yawQuatRef.current);
+      .premultiply(alignQuatRef.current)
+      .premultiply(headingQuatRef.current);
   };
 
   useEffect(() => {
@@ -343,7 +415,8 @@ export default function FlightPath({
     // per approach, not continuously while inside the trigger radius.
     const radius = config.rollTriggerRadius ?? 4;
     const nearTrigger = data.rollTriggers.some(
-      (p) => distanceToSegment(p, prevWorldPosRef.current, nextWorldPos) < radius,
+      (p) =>
+        distanceToSegment(p, prevWorldPosRef.current, nextWorldPos) < radius,
     );
     if (nearTrigger !== debugNearTrigger) {
       setDebugNearTrigger(nearTrigger);
@@ -384,6 +457,16 @@ export default function FlightPath({
       data.obj.getWorldPosition(currentWorldPosRef.current);
       followerRef.current.position.copy(currentWorldPosRef.current);
     }
+    if (fwdArrowRef.current) {
+      const fwd = new THREE.Vector3(0, 0, 1)
+        .applyQuaternion(data.obj.quaternion)
+        .normalize();
+      fwdArrowRef.current.setDirection(fwd);
+    }
+    if (pathArrowRef.current) {
+      const pdir = pair.endPos.clone().sub(pair.startPos).normalize();
+      pathArrowRef.current.setDirection(pdir);
+    }
     if (hitboxRef.current) {
       // Only clickable when mostly visible — avoids phantom clicks during fade.
       hitboxRef.current.visible = opacity > 0.6;
@@ -416,92 +499,120 @@ export default function FlightPath({
           </mesh>
         ))}
       <group ref={followerRef}>
-      <mesh
-        ref={hitboxRef}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          setHovered(true);
-          document.body.style.cursor = "pointer";
-        }}
-        onPointerOut={() => {
-          setHovered(false);
-          document.body.style.cursor = "auto";
-        }}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          const point = data.obj.position.clone();
-          // Flight-path targets move every frame, so point-distance focus
-          // matching fails after a few ms. Use the object name as a stable id.
-          const id = `flight:${config.objectName}`;
-          const node = findNodeByObjectName(config.objectName);
-          const focusOpts = {
-            distance: node?.focusDistance,
-            behavior: node?.focusBehavior,
-          };
-          if (!isFocused(point, id)) {
-            // hitSize is already padded 1.3x; use half the diagonal as radius.
-            const radius = data.hitSize.length() / 2;
-            onFocus(point, id, radius, focusOpts);
-            // For "instant" behavior, fire the action this same click.
-            if (focusOpts.behavior !== "instant") return;
-          }
-          if (cfg.url) onNavigate(cfg.url, cfg.internal);
-          else onComingSoon(cfg.label);
-        }}
-      >
-        <boxGeometry args={[data.hitSize.x, data.hitSize.y, data.hitSize.z]} />
-        {debugHitboxes ? (
-          <meshBasicMaterial
-            color={cfg.url ? "#ff7055" : "#8a6ac0"}
-            wireframe
-            transparent
-            opacity={0.6}
-          />
-        ) : (
-          <meshStandardMaterial visible={false} />
+        {debugHitboxes && (
+          <>
+            {/* Yellow arrow = model's local +Z transformed by current quaternion
+                (i.e. "where the FlightPath system thinks the nose is pointing").
+                Cyan arrow = path direction (start → end). When they don't align
+                on pair 0, the angle between them is the headingOffset to set. */}
+            <arrowHelper
+              ref={fwdArrowRef}
+              args={[
+                new THREE.Vector3(0, 0, 1),
+                new THREE.Vector3(0, 0, 0),
+                Math.max(data.hitSize.length() * 0.7, 3),
+                0xffff00,
+              ]}
+            />
+            <arrowHelper
+              ref={pathArrowRef}
+              args={[
+                new THREE.Vector3(0, 0, 1),
+                new THREE.Vector3(0, 0, 0),
+                Math.max(data.hitSize.length() * 0.7, 3),
+                0x00ffff,
+              ]}
+            />
+          </>
         )}
-      </mesh>
-      <AdaptiveLabel
-        position={[0, data.hitSize.y / 2 + 0.4, 0]}
-        nearDistance={5}
-        farDistance={60}
-      >
-        <div
-          ref={labelRef}
-          style={{
-            background: hovered ? "rgba(0,0,0,0.9)" : "rgba(0,0,0,0.75)",
-            color: hovered
-              ? cfg.url
-                ? "#ff8a6a"
-                : "#7dd3fc"
-              : cfg.url
-                ? "#e05a3a"
-                : "#9ca3af",
-            padding: hovered ? "4px 14px" : "3px 10px",
-            borderRadius: "99px",
-            fontSize: hovered ? "14px" : "12px",
-            letterSpacing: "0.1em",
-            whiteSpace: "nowrap",
-            border: `1px solid ${
-              hovered
-                ? cfg.url
-                  ? "rgba(224,90,58,0.8)"
-                  : "rgba(125,211,252,0.5)"
-                : "rgba(255,255,255,0.1)"
-            }`,
-            boxShadow: hovered
-              ? `0 0 12px ${cfg.url ? "rgba(224,90,58,0.5)" : "rgba(125,211,252,0.3)"}`
-              : "none",
-            transition: "all 0.15s ease",
-            pointerEvents: "none",
+        <mesh
+          ref={hitboxRef}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            setHovered(true);
+            document.body.style.cursor = "pointer";
+          }}
+          onPointerOut={() => {
+            setHovered(false);
+            document.body.style.cursor = "auto";
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            const point = data.obj.position.clone();
+            // Flight-path targets move every frame, so point-distance focus
+            // matching fails after a few ms. Use the object name as a stable id.
+            const id = `flight:${config.objectName}`;
+            const node = findNodeByObjectName(config.objectName);
+            const focusOpts = {
+              distance: node?.focusDistance,
+              behavior: node?.focusBehavior,
+            };
+            if (!isFocused(point, id)) {
+              // hitSize is already padded 1.3x; use half the diagonal as radius.
+              const radius = data.hitSize.length() / 2;
+              onFocus(point, id, radius, focusOpts);
+              // For "instant" behavior, fire the action this same click.
+              if (focusOpts.behavior !== "instant") return;
+            }
+            if (cfg.url) onNavigate(cfg.url, cfg.internal);
+            else onComingSoon(cfg.label);
           }}
         >
-          {cfg.label}
-        </div>
-      </AdaptiveLabel>
+          <boxGeometry
+            args={[data.hitSize.x, data.hitSize.y, data.hitSize.z]}
+          />
+          {debugHitboxes ? (
+            <meshBasicMaterial
+              color={cfg.url ? "#ff7055" : "#8a6ac0"}
+              wireframe
+              transparent
+              opacity={0.6}
+            />
+          ) : (
+            <meshStandardMaterial visible={false} />
+          )}
+        </mesh>
+        <AdaptiveLabel
+          position={[0, data.hitSize.y / 2 + 0.4, 0]}
+          nearDistance={5}
+          farDistance={60}
+        >
+          <div
+            ref={labelRef}
+            style={{
+              background: hovered ? "rgba(0,0,0,0.9)" : "rgba(0,0,0,0.75)",
+              color: hovered
+                ? cfg.url
+                  ? "#ff8a6a"
+                  : "#7dd3fc"
+                : cfg.url
+                  ? "#e05a3a"
+                  : "#9ca3af",
+              padding: hovered ? "4px 14px" : "3px 10px",
+              borderRadius: "99px",
+              fontSize: hovered ? "14px" : "12px",
+              letterSpacing: "0.1em",
+              whiteSpace: "nowrap",
+              border: `1px solid ${
+                hovered
+                  ? cfg.url
+                    ? "rgba(224,90,58,0.8)"
+                    : "rgba(125,211,252,0.5)"
+                  : "rgba(255,255,255,0.1)"
+              }`,
+              boxShadow: hovered
+                ? `0 0 12px ${cfg.url ? "rgba(224,90,58,0.5)" : "rgba(125,211,252,0.3)"}`
+                : "none",
+              transition: "all 0.15s ease",
+              pointerEvents: "none",
+            }}
+          >
+            {cfg.label}
+          </div>
+        </AdaptiveLabel>
       </group>
     </>
   );
