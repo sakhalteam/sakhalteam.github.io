@@ -222,23 +222,27 @@ export default function ToyInteractor({
     );
   }, [scene, debugHitboxes]);
 
-  // Categorize Blender animations: longest clip = idle loop, shorter clips = click actions
+  // Categorize Blender animations: shorter clips = click actions cycled per
+  // click. Named idle/loop/cycle clips are handled by IdleClipPlayer (own
+  // mixer) and skipped here entirely. Legacy multi-clip toys with no named
+  // idle still get a longest-as-idle fallback.
   useMemo(() => {
     if (!mixer || animations.length === 0) return;
     actionClipsRef.current.clear();
 
     const actionToys = toys.filter((t) => t.animation === "action");
     for (const toy of actionToys) {
-      // Collect all descendant names for matching tracks to this toy
       const descendants = new Set<string>();
       toy.obj.traverse((d) => {
         if (d.name) descendants.add(d.name);
       });
 
-      // Find clips whose tracks reference this toy's descendants
       const toyClips: THREE.AnimationClip[] = [];
       for (const clip of animations) {
         if (clip.duration <= 0) continue; // skip zero-length clips like "STAY STILL"
+        // Named-idle clips auto-loop via IdleClipPlayer — skip here so we
+        // don't double-trigger.
+        if (/idle|loop|cycle/i.test(clip.name)) continue;
         const hasMatch = clip.tracks.some((track) => {
           const dotIdx = track.name.indexOf(".");
           if (dotIdx < 0) return false;
@@ -250,28 +254,21 @@ export default function ToyInteractor({
 
       if (toyClips.length === 0) continue;
 
-      // Sort by duration descending. If an explicit idle clip exists, it loops.
-      // Otherwise legacy multi-clip toys use longest = idle, shorter = click.
-      // Single-clip toys are treated as click-only actions.
+      // Legacy fallback: toys with multiple unnamed clips treat longest as
+      // an idle loop. Toys that want explicit control should name a clip
+      // with /idle|loop|cycle/ instead.
       toyClips.sort((a, b) => b.duration - a.duration);
-
-      const explicitIdle = toyClips.find((clip) =>
-        /idle|loop|cycle/i.test(clip.name),
-      );
-      const idleClip =
-        explicitIdle ?? (toyClips.length > 1 ? toyClips[0] : null);
-      if (idleClip) {
-        const idleAction = mixer.clipAction(idleClip);
-        idleAction.play();
+      const fallbackIdleClip = toyClips.length > 1 ? toyClips[0] : null;
+      if (fallbackIdleClip) {
+        mixer.clipAction(fallbackIdleClip).play();
       }
 
-      // Non-idle clips = action clips (play once on click)
       const clickActions: THREE.AnimationAction[] = [];
       for (const clip of toyClips) {
-        if (clip === idleClip) continue;
+        if (clip === fallbackIdleClip) continue;
         const action = mixer.clipAction(clip);
         action.setLoop(THREE.LoopOnce, 1);
-        action.clampWhenFinished = false; // reset to start after playing
+        action.clampWhenFinished = false;
         clickActions.push(action);
       }
 

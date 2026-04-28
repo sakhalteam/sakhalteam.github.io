@@ -138,6 +138,25 @@ export type IdleConfig =
       axis?: "x" | "y" | "z";
     };
 
+/**
+ * Flight config — make a toy fly along a shared path defined by Blender
+ * empties named `<group>_flight_start_NN` / `<group>_flight_finish_NN`.
+ *
+ *   group:    prefix of the path empties. Multiple toys can share the same
+ *             group (e.g. all four Star Fox arwings on group "arwing").
+ *   phase:    0..1 offset into the cycle on mount. Stagger several toys on
+ *             the same group with different phases so they don't stack.
+ *   duration: seconds per cycle. Defaults to 18.
+ *   rollTriggerRadius: world distance at which a `*_barrel_roll_trigger`
+ *             empty fires a barrel roll. Defaults to 4.
+ */
+export interface FlightConfig {
+  group: string;
+  phase?: number;
+  duration?: number;
+  rollTriggerRadius?: number;
+}
+
 export interface SceneNode {
   key: string;
   label: string;
@@ -152,6 +171,7 @@ export interface SceneNode {
   sounds?: string[];
   animation?: ToyAnimation;
   idle?: IdleConfig;
+  flight?: FlightConfig;
   /** If false, toy is not clickable and has no animation/sound — pure outline-group member. */
   interactive?: boolean;
   /** Whether to show a proximity label on hover. Default true. When false, the toy gets a subtle emissive tint on hover instead. */
@@ -276,6 +296,7 @@ function toy(
     sounds?: string[];
     animation?: ToyAnimation;
     idle?: IdleConfig;
+    flight?: FlightConfig;
     interactive?: boolean;
     showLabel?: boolean;
     showOutline?: boolean;
@@ -296,6 +317,7 @@ function toy(
     ...(opts.sounds && { sounds: opts.sounds }),
     ...(opts.animation && { animation: opts.animation }),
     ...(opts.idle && { idle: opts.idle }),
+    ...(opts.flight && { flight: opts.flight }),
     ...(opts.interactive === false && { interactive: false }),
     ...(opts.showLabel === false && { showLabel: false }),
     ...(opts.showOutline === false && { showOutline: false }),
@@ -345,7 +367,6 @@ const nodes: SceneNode[] = [
     path: "/",
     url: null,
     glbPath: "/island.glb",
-    environmentPreset: "night",
     parent: null,
     children: [
       // Zones
@@ -427,8 +448,16 @@ const nodes: SceneNode[] = [
       "ct_toy_metal_gear_rex",
       "ct_toy_keyboard",
       "ct_toy_cloud_01",
+      "ct_toy_cloud_02",
+      "ct_toy_cloud_03",
+      "ct_toy_cloud_04",
+      "ct_toy_cloud_05",
       "ct_toy_ladder",
       "ct_toy_weather_report",
+      "ct_toy_fox_arwing",
+      "ct_toy_falco_arwing",
+      "ct_toy_peppy_arwing",
+      "ct_toy_slippy_arwing",
       "dream_zone",
       "pool_time",
       "starlight_zone",
@@ -438,9 +467,6 @@ const nodes: SceneNode[] = [
     glbPath: null,
     path: null,
     parent: "cloud_town",
-    // Arwing flies — chasing it with a focus tween makes it leave frame
-    // anyway. Click fires the action immediately.
-    focusBehavior: "instant",
   }),
   zone("tower_of_knowledge", "Tower Of Knowledge", {
     env: "apartment",
@@ -839,6 +865,62 @@ const nodes: SceneNode[] = [
     showLabel: false,
     showOutline: true,
   }),
+  toy("ct_toy_fox_arwing", "Fox's Arwing", "cloud_town", {
+    sounds: [
+      "/sounds/fox_snes.wav",
+      "/sounds/fox_break_through_fleet.wav",
+      "/sounds/fox_cant_leave_slippy.wav",
+      "/sounds/fox_open_the_wings.wav",
+      "/sounds/fox_all_range_mode.wav",
+      "/sounds/fox_uh_oh_spotted.wav",
+    ],
+    animation: "none",
+    flight: { group: "arwing", phase: 0, duration: 18, rollTriggerRadius: 10 },
+    focusBehavior: "instant",
+  }),
+  toy("ct_toy_falco_arwing", "Falco's Arwing", "cloud_town", {
+    sounds: [
+      "/sounds/falco_snes.wav",
+      "/sounds/falco_all_right.wav",
+      "/sounds/falco_got_company.wav",
+      "/sounds/falco_outta_my_way.wav",
+      "/sounds/falco_jp_01.wav",
+      "/sounds/falco_jp_02.wav",
+    ],
+    animation: "none",
+    flight: { group: "arwing", phase: 0.25, duration: 18, rollTriggerRadius: 10 },
+    focusBehavior: "instant",
+  }),
+  toy("ct_toy_peppy_arwing", "Peppy's Arwing", "cloud_town", {
+    sounds: [
+      "/sounds/peppy_snes.wav",
+      "/sounds/peppy_jp_01.wav",
+      "/sounds/peppy_jp_02.wav",
+      "/sounds/peppy_en_01.wav",
+      "/sounds/peppy_knock_it_off.wav",
+      "/sounds/peppy_a-ok.wav",
+      "/sounds/peppy_barrel_roll.wav",
+    ],
+    animation: "none",
+    flight: { group: "arwing", phase: 0.5, duration: 18, rollTriggerRadius: 10 },
+    focusBehavior: "instant",
+  }),
+  toy("ct_toy_slippy_arwing", "Slippy's Arwing", "cloud_town", {
+    sounds: [
+      "/sounds/slippy_snes.wav",
+      "/sounds/slippy_yeah_yeah.wav",
+      "/sounds/slippy_ahhhhh.wav",
+      "/sounds/slippy_oh_no.wav",
+      "/sounds/slippy_sheesh_you_too.wav",
+      "/sounds/slippy_ships_shielded_too.wav",
+      "/sounds/slippy_thanks_I_thought.wav",
+      "/sounds/slippy_jp_01.wav",
+      "/sounds/slippy_daijoubu.wav",
+    ],
+    animation: "none",
+    flight: { group: "arwing", phase: 0.75, duration: 18, rollTriggerRadius: 10 },
+    focusBehavior: "instant",
+  }),
   toy("ct_toy_metal_gear_rex", "Metal Gear Rex", "cloud_town", {
     showLabel: false,
     sounds: [
@@ -862,6 +944,22 @@ const nodes: SceneNode[] = [
     showOutline: false,
   }),
   toy("ct_toy_cloud_01", "Cloud", "cloud_town", {
+    showLabel: false,
+    showOutline: false,
+  }),
+  toy("ct_toy_cloud_02", "Cloud", "cloud_town", {
+    showLabel: false,
+    showOutline: false,
+  }),
+  toy("ct_toy_cloud_03", "Cloud", "cloud_town", {
+    showLabel: false,
+    showOutline: false,
+  }),
+  toy("ct_toy_cloud_04", "Cloud", "cloud_town", {
+    showLabel: false,
+    showOutline: false,
+  }),
+  toy("ct_toy_cloud_05", "Cloud", "cloud_town", {
     showLabel: false,
     showOutline: false,
   }),
@@ -1043,6 +1141,11 @@ export function getSisterSites(): SceneNode[] {
 
 export function getPortals(): SceneNode[] {
   return nodes.filter((n) => n.type === "portal");
+}
+
+/** All nodes (toys, zones, portals) with a `flight` config. */
+export function getFlightNodes(): SceneNode[] {
+  return nodes.filter((n) => !!n.flight);
 }
 
 /**

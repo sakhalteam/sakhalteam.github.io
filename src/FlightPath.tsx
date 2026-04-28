@@ -1,47 +1,41 @@
 // FlightPath.tsx
 //
-// Animates a zone mesh along a straight line between two empty markers, with
-// fade-in/out at the ends of each cycle. Also renders an invisible follower
-// hitbox that handles clicks so the flying object is navigable.
+// Pure movement driver for a single flying object. Animates its position
+// along a series of straight-line segments defined by Blender empties, with
+// fade-in/out at the ends of each cycle, automatic nose-to-path alignment,
+// barrel rolls near trigger empties, and a "ranged vs grounded" variant
+// toggle for ships that have both wings-out and wings-folded subtrees.
 //
-// Orientation is computed automatically: the model is rotated each frame so
-// its "authored forward" direction aligns with the current path direction
-// (`setFromUnitVectors`). No hand-tweaking radians per model.
+// Click handling, hover labels, outline glow, sounds — all of that comes
+// from ToyInteractor / HotspotHitbox just like any other object. FlightPath
+// only writes the obj's transform every frame; the rest of the system sees
+// a moving toy and treats it normally.
 //
-// "Authored forward" defaults to the model's local +Z. To override (model
-// authored facing some other axis, or you just don't feel like rotating in
-// Blender), drop a `<obj>_nose` empty at the tip of the nose — the vector
-// from the object origin to that empty becomes forward.
+// "Authored forward" defaults to the model's local +Z. To override, drop a
+// `<obj>_nose` empty at the tip of the nose — vector from origin to that
+// empty becomes forward.
 //
-// Blender-side contract (all siblings at the GLB scene root):
-//   zone_<key>                                        the flying mesh (animated + clicked)
-//   <zone_<key>>_flight_start[_NN]                    empty marking cycle-start position
-//   <zone_<key>>_flight_end[_NN] | _flight_finish[_NN] empty marking cycle-end position
-//   <zone_<key>>_nose                                 optional empty at the nose tip; overrides default forward axis
-//   <any_prefix>_barrel_roll_trigger[_NN]             optional empty; arwing barrel-rolls when it enters its radius
-//     (name the prefix anything you like — e.g. "starlight_" — as long as
-//     it does NOT start with "zone_" or "portal_" or it'll get picked up
-//     as a hotspot by the scanner.)
+// Blender-side contract:
+//   <obj>                                            the flying mesh
+//   <pathGroup>_flight_start[_NN]                    cycle-start empty
+//   <pathGroup>_flight_end[_NN] | _flight_finish[_NN] cycle-end empty
+//   <obj>_nose                                       optional forward override
+//   <any_prefix>_barrel_roll_trigger[_NN]            optional roll trigger
+//
+// `pathGroup` defaults to the object name, so single-flier setups don't need
+// any extra config. For multi-ship squadrons (e.g. four arwings on the same
+// path), set `pathGroup: "arwing"` on each toy and they all share the empties
+// — stagger them with `phase: 0 / 0.25 / 0.5 / 0.75` so they don't stack.
 //
 // Numbered suffixes (_01, _02, …) define multiple start/end pairs; each full
-// cycle advances to the next pair (wrapping), so the mesh alternates paths.
-// Start and end are paired by matching suffix. Unsuffixed is also valid.
-//
-// Example for Starlight Zone (object name = "zone_starlight_zone"):
-//   zone_starlight_zone
-//   zone_starlight_zone_flight_start_01
-//   zone_starlight_zone_flight_finish_01
-//   zone_starlight_zone_flight_start_02
-//   zone_starlight_zone_flight_finish_02
+// cycle advances to the next pair (wrapping). Start and end are paired by
+// matching suffix. Unsuffixed is also valid.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { getZoneConfig, findNodeByObjectName } from "./sceneMap";
 import { useSceneOptions } from "./SceneOptionsContext";
-import { AdaptiveLabel } from "./AdaptiveLabel";
 import { useDebugHitboxes } from "./debugFlags";
-import { computeOwnBounds } from "./ownBounds";
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const SHOW_BARREL_ROLL_TRIGGERS_WITH_DEBUG_HITBOXES = true;
@@ -63,10 +57,9 @@ function distanceToSegment(
 }
 
 /**
- * Classify a descendant of the flying zone object into a variant group.
- * Anything containing `all_range_mode` in its name is the "ranged" variant;
- * anything containing `closed` or `feet` is the "grounded" variant. Names
- * that match neither are considered always-visible structural parts (body).
+ * Classify a descendant of the flying object into a variant group.
+ * `all_range_mode` substring → "ranged"; `_closed`/`_feet` → "grounded".
+ * Other names are always-visible structural parts.
  */
 function classifyVariant(name: string): "ranged" | "grounded" | null {
   const n = name.toLowerCase();
@@ -76,21 +69,26 @@ function classifyVariant(name: string): "ranged" | "grounded" | null {
 }
 
 export interface FlightPathConfig {
-  /** Object name of the flying zone, e.g. "zone_star_zone". */
+  /** Object name of the flying mesh, e.g. "ct_toy_fox_arwing". */
   objectName: string;
+  /** Prefix used to find `<group>_flight_start_NN` empties. Defaults to
+   *  `objectName`. Multiple flying toys can share a group. */
+  pathGroup?: string;
+  /** Cycle-clock offset on mount, 0..1. Stagger several toys on one
+   *  pathGroup with different phases so they trail each other instead of
+   *  stacking. Defaults to 0. */
+  phaseOffset?: number;
   /** Seconds per full cycle (start → end). */
   duration: number;
   /** Fraction of cycle spent fading in at start. 0..0.5. */
   fadeIn: number;
   /** Fraction of cycle spent fading out at end. 0..0.5. */
   fadeOut: number;
-  /** Extra yaw in radians on top of auto-alignment. Usually 0 — only set this
-   *  if the auto-aligned model still looks rotated (e.g. nose along an axis
-   *  not covered by the default forward / `_nose` empty). */
+  /** Extra yaw in radians on top of auto-alignment. Usually 0. */
   headingOffset?: number;
-  /** Local-space pitch correction in radians (rotates around model +X). */
+  /** Local-space pitch correction in radians. */
   pitchOffset?: number;
-  /** Local-space roll correction in radians (rotates around model +Z). */
+  /** Local-space roll correction in radians. */
   rollOffset?: number;
   /** Seconds for one full barrel roll (2π). Defaults to 0.6. */
   rollDuration?: number;
@@ -102,33 +100,18 @@ export interface FlightPathConfig {
 export default function FlightPath({
   scene,
   config,
-  onNavigate,
-  onComingSoon,
-  onFocus,
-  isFocused,
 }: {
   scene: THREE.Object3D;
   config: FlightPathConfig;
-  onNavigate: (url: string, internal: boolean) => void;
-  onComingSoon: (label: string) => void;
-  onFocus: (
-    point: THREE.Vector3,
-    id?: string,
-    radius?: number,
-    opts?: { distance?: number; behavior?: "fit" | "instant" },
-  ) => void;
-  isFocused: (point: THREE.Vector3, id?: string) => boolean;
 }) {
   const debugHitboxes = useDebugHitboxes();
   const data = useMemo(() => {
     const objLower = config.objectName.toLowerCase();
-    const escaped = objLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const groupLower = (config.pathGroup ?? config.objectName).toLowerCase();
+    const escaped = groupLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const startRe = new RegExp(`^${escaped}_flight_start(?:_(\\d+))?$`);
     const endRe = new RegExp(`^${escaped}_flight_(?:end|finish)(?:_(\\d+))?$`);
     const noseName = `${objLower}_nose`;
-    // Any prefix ending in `_barrel_roll_trigger` (optionally numbered).
-    // We don't tie this to the flying obj's name so users can pick a prefix
-    // that won't collide with hotspot scanning (e.g. `starlight_`).
     const rollTriggerRe = /_barrel_roll_trigger(?:_\d+)?$/;
 
     let obj: THREE.Object3D | undefined;
@@ -169,7 +152,6 @@ export default function FlightPath({
 
     if (!obj) return null;
 
-    // Pair start/end empties by matching numeric suffix. Unsuffixed pairs use "".
     const keys = [...new Set([...startMap.keys(), ...endMap.keys()])].sort();
     const pairs: { startPos: THREE.Vector3; endPos: THREE.Vector3 }[] = [];
     for (const k of keys) {
@@ -179,10 +161,6 @@ export default function FlightPath({
     }
     if (pairs.length === 0) return null;
 
-    // Determine the model's "forward" axis in LOCAL space. Default is +Z; if
-    // the author dropped a `<obj>_nose` empty, use (nose - obj) projected
-    // back into local space instead. This is what `setFromUnitVectors` will
-    // align to the path direction every frame.
     let authoredForwardLocal = new THREE.Vector3(0, 0, 1);
     if (noseEmpty) {
       const noseWorld = noseEmpty.getWorldPosition(new THREE.Vector3());
@@ -194,7 +172,7 @@ export default function FlightPath({
       }
     }
 
-    // Collect all meshes + flip their materials into transparent mode.
+    // Collect meshes for fade-in/out opacity control.
     const meshes: THREE.Mesh[] = [];
     obj.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -207,8 +185,7 @@ export default function FlightPath({
       }
     });
 
-    // Detect variant groups (ranged vs grounded). Record by top-level child
-    // so we can toggle entire subtrees in one go.
+    // Detect ranged/grounded variant subtrees on the object's direct children.
     const rangedRoots: THREE.Object3D[] = [];
     const groundedRoots: THREE.Object3D[] = [];
     for (const child of obj.children) {
@@ -217,23 +194,6 @@ export default function FlightPath({
       else if (cls === "grounded") groundedRoots.push(child);
     }
     const hasVariants = rangedRoots.length > 0 || groundedRoots.length > 0;
-
-    // Hitbox size from the flying object's initial bbox. Temporarily hide
-    // variant subtrees (ranged + grounded) so only the "base" hull contributes
-    // — otherwise the union of all variants blows the hitbox way up.
-    // computeOwnBounds with visibleOnly:true does the filtering and also
-    // skips flight markers + any nested sceneMap-owned clickables.
-    const restoreVisible: [THREE.Object3D, boolean][] = [];
-    for (const r of [...rangedRoots, ...groundedRoots]) {
-      restoreVisible.push([r, r.visible]);
-      r.visible = false;
-    }
-    const bbox = computeOwnBounds(obj, { visibleOnly: true });
-    for (const [o, v] of restoreVisible) o.visible = v;
-    const size = new THREE.Vector3();
-    bbox.getSize(size);
-    // Pad a bit so it's forgiving to click.
-    size.multiplyScalar(1.3);
 
     return {
       obj,
@@ -245,23 +205,21 @@ export default function FlightPath({
       baseQuaternion: obj.quaternion.clone(),
       authoredForwardLocal,
       forwardSource: noseEmpty ? ("nose-empty" as const) : ("local-+Z" as const),
-      hitSize: size,
       rangedRoots,
       groundedRoots,
       hasVariants,
     };
-  }, [scene, config.objectName]);
+  }, [scene, config.objectName, config.pathGroup]);
 
   const { allRangeMode, setHasFlightVariants } = useSceneOptions();
 
-  // Hide empty markers so they don't produce any visual artifacts.
+  // Hide marker empties so they don't render.
   useEffect(() => {
     if (!data) return;
     for (const m of data.markerObjects) m.visible = false;
   }, [data]);
 
-  // One-shot sanity log — confirms which "forward" axis was picked so the
-  // user can verify a `_nose` empty was found (or fell back to local +Z).
+  // One-shot sanity log.
   useEffect(() => {
     if (!data) return;
     console.log(
@@ -270,15 +228,14 @@ export default function FlightPath({
     );
   }, [data, config.objectName]);
 
-  // Register that this zone has flight variants so the cog panel shows the toggle.
+  // Surface the variant toggle in the cog panel when any flying obj has variants.
   useEffect(() => {
-    if (!data) return;
-    if (!data.hasVariants) return;
+    if (!data || !data.hasVariants) return;
     setHasFlightVariants(true);
     return () => setHasFlightVariants(false);
   }, [data, setHasFlightVariants]);
 
-  // Apply variant visibility whenever the toggle flips.
+  // Toggle ranged vs grounded subtrees.
   useEffect(() => {
     if (!data || !data.hasVariants) return;
     const setSubtreeVisible = (root: THREE.Object3D, visible: boolean) => {
@@ -292,13 +249,10 @@ export default function FlightPath({
 
   const tRef = useRef(0);
   const pairIndexRef = useRef(0);
-  const followerRef = useRef<THREE.Group>(null);
-  const hitboxRef = useRef<THREE.Mesh>(null);
-  const labelRef = useRef<HTMLDivElement>(null);
-  const [hovered, setHovered] = useState(false);
   const [debugNearTrigger, setDebugNearTrigger] = useState(false);
   const fwdArrowRef = useRef<THREE.ArrowHelper>(null);
   const pathArrowRef = useRef<THREE.ArrowHelper>(null);
+  const arrowGroupRef = useRef<THREE.Group>(null);
   const headingQuatRef = useRef(new THREE.Quaternion());
   const alignQuatRef = useRef(new THREE.Quaternion());
   const rollQuatRef = useRef(new THREE.Quaternion());
@@ -338,9 +292,6 @@ export default function FlightPath({
       data.obj.position.copy(targetWorldPos);
     }
 
-    // Auto-align: rotate the model so its authored "forward" axis maps to the
-    // current path direction. setFromUnitVectors handles yaw + pitch in one
-    // shot, so diagonal/climbing paths work for free.
     const authoredFwdWorld = tmpVecARef.current
       .copy(data.authoredForwardLocal)
       .applyQuaternion(data.baseQuaternion)
@@ -351,15 +302,11 @@ export default function FlightPath({
       .normalize();
     alignQuatRef.current.setFromUnitVectors(authoredFwdWorld, pathDir);
 
-    // Optional fine-tune: extra world-Y rotation on top of auto-alignment.
     headingQuatRef.current.setFromAxisAngle(
       WORLD_UP,
       config.headingOffset ?? 0,
     );
 
-    // Barrel roll spins the geometry around the model's nose-to-tail axis,
-    // which is `authoredForwardLocal` in local space. Applied innermost so
-    // it rotates the geometry before any orientation is composed on top.
     rollQuatRef.current.setFromAxisAngle(
       data.authoredForwardLocal,
       rollAngleRef.current,
@@ -372,29 +319,30 @@ export default function FlightPath({
       .premultiply(headingQuatRef.current);
   };
 
+  // Init / cleanup. tRef seeds with phaseOffset so squadrons stagger naturally.
   useEffect(() => {
     if (!data) return;
 
-    tRef.current = 0;
-    pairIndexRef.current = 0;
-    applyPose(0, 0, data.pairs[0].startPos);
-    data.obj.getWorldPosition(prevWorldPosRef.current);
+    const phase = THREE.MathUtils.euclideanModulo(config.phaseOffset ?? 0, 1);
+    const totalCycles = data.pairs.length;
+    const scaled = phase * totalCycles;
+    pairIndexRef.current = Math.floor(scaled) % totalCycles;
+    tRef.current = scaled - Math.floor(scaled);
 
-    if (followerRef.current) {
-      followerRef.current.position.copy(prevWorldPosRef.current);
-    }
-    if (hitboxRef.current) {
-      hitboxRef.current.visible = false;
-    }
-    if (labelRef.current) {
-      labelRef.current.style.opacity = "0";
-    }
+    const startPair = data.pairs[pairIndexRef.current];
+    const seedWorld = nextWorldPosRef.current.lerpVectors(
+      startPair.startPos,
+      startPair.endPos,
+      tRef.current,
+    );
+    applyPose(pairIndexRef.current, tRef.current, seedWorld);
+    data.obj.getWorldPosition(prevWorldPosRef.current);
 
     return () => {
       data.obj.position.copy(data.basePosition);
       data.obj.quaternion.copy(data.baseQuaternion);
     };
-  }, [data, config.headingOffset]);
+  }, [data, config.headingOffset, config.phaseOffset]);
 
   useFrame((_, delta) => {
     if (!data) return;
@@ -411,8 +359,6 @@ export default function FlightPath({
       t,
     );
 
-    // Barrel-roll proximity check — edge-triggered so the arwing rolls once
-    // per approach, not continuously while inside the trigger radius.
     const radius = config.rollTriggerRadius ?? 4;
     const nearTrigger = data.rollTriggers.some(
       (p) =>
@@ -453,9 +399,10 @@ export default function FlightPath({
       }
     }
 
-    if (followerRef.current) {
+    // Park the debug arrow group at the obj's current world position.
+    if (arrowGroupRef.current) {
       data.obj.getWorldPosition(currentWorldPosRef.current);
-      followerRef.current.position.copy(currentWorldPosRef.current);
+      arrowGroupRef.current.position.copy(currentWorldPosRef.current);
     }
     if (fwdArrowRef.current) {
       const fwd = new THREE.Vector3(0, 0, 1)
@@ -467,25 +414,14 @@ export default function FlightPath({
       const pdir = pair.endPos.clone().sub(pair.startPos).normalize();
       pathArrowRef.current.setDirection(pdir);
     }
-    if (hitboxRef.current) {
-      // Only clickable when mostly visible — avoids phantom clicks during fade.
-      hitboxRef.current.visible = opacity > 0.6;
-    }
-    if (labelRef.current) {
-      labelRef.current.style.opacity = String(opacity);
-    }
   });
 
   if (!data) return null;
-  const cfg = getZoneConfig(config.objectName);
+  if (!debugHitboxes) return null;
 
   return (
     <>
-      {/* Debug visualisation for barrel-roll trigger radii. Toggle Hitboxes to see
-          the red/green wireframe spheres at each `*_barrel_roll_trigger` empty
-          — handy for positioning triggers or diagnosing collision issues. */}
-      {debugHitboxes &&
-        SHOW_BARREL_ROLL_TRIGGERS_WITH_DEBUG_HITBOXES &&
+      {SHOW_BARREL_ROLL_TRIGGERS_WITH_DEBUG_HITBOXES &&
         data.rollTriggers.map((triggerPos, index) => (
           <mesh key={`roll-trigger-${index}`} position={triggerPos}>
             <sphereGeometry args={[config.rollTriggerRadius ?? 4, 16, 12]} />
@@ -498,121 +434,28 @@ export default function FlightPath({
             />
           </mesh>
         ))}
-      <group ref={followerRef}>
-        {debugHitboxes && (
-          <>
-            {/* Yellow arrow = model's local +Z transformed by current quaternion
-                (i.e. "where the FlightPath system thinks the nose is pointing").
-                Cyan arrow = path direction (start → end). When they don't align
-                on pair 0, the angle between them is the headingOffset to set. */}
-            <arrowHelper
-              ref={fwdArrowRef}
-              args={[
-                new THREE.Vector3(0, 0, 1),
-                new THREE.Vector3(0, 0, 0),
-                Math.max(data.hitSize.length() * 0.7, 3),
-                0xffff00,
-              ]}
-            />
-            <arrowHelper
-              ref={pathArrowRef}
-              args={[
-                new THREE.Vector3(0, 0, 1),
-                new THREE.Vector3(0, 0, 0),
-                Math.max(data.hitSize.length() * 0.7, 3),
-                0x00ffff,
-              ]}
-            />
-          </>
-        )}
-        <mesh
-          ref={hitboxRef}
-          onPointerOver={(e) => {
-            e.stopPropagation();
-            setHovered(true);
-            document.body.style.cursor = "pointer";
-          }}
-          onPointerOut={() => {
-            setHovered(false);
-            document.body.style.cursor = "auto";
-          }}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            const point = data.obj.position.clone();
-            // Flight-path targets move every frame, so point-distance focus
-            // matching fails after a few ms. Use the object name as a stable id.
-            const id = `flight:${config.objectName}`;
-            const node = findNodeByObjectName(config.objectName);
-            const focusOpts = {
-              distance: node?.focusDistance,
-              behavior: node?.focusBehavior,
-            };
-            if (!isFocused(point, id)) {
-              // hitSize is already padded 1.3x; use half the diagonal as radius.
-              const radius = data.hitSize.length() / 2;
-              onFocus(point, id, radius, focusOpts);
-              // For "instant" behavior, fire the action this same click.
-              if (focusOpts.behavior !== "instant") return;
-            }
-            if (cfg.url) onNavigate(cfg.url, cfg.internal);
-            else onComingSoon(cfg.label);
-          }}
-        >
-          <boxGeometry
-            args={[data.hitSize.x, data.hitSize.y, data.hitSize.z]}
-          />
-          {debugHitboxes ? (
-            <meshBasicMaterial
-              color={cfg.url ? "#ff7055" : "#8a6ac0"}
-              wireframe
-              transparent
-              opacity={0.6}
-            />
-          ) : (
-            <meshStandardMaterial visible={false} />
-          )}
-        </mesh>
-        <AdaptiveLabel
-          position={[0, data.hitSize.y / 2 + 0.4, 0]}
-          nearDistance={5}
-          farDistance={60}
-        >
-          <div
-            ref={labelRef}
-            style={{
-              background: hovered ? "rgba(0,0,0,0.9)" : "rgba(0,0,0,0.75)",
-              color: hovered
-                ? cfg.url
-                  ? "#ff8a6a"
-                  : "#7dd3fc"
-                : cfg.url
-                  ? "#e05a3a"
-                  : "#9ca3af",
-              padding: hovered ? "4px 14px" : "3px 10px",
-              borderRadius: "99px",
-              fontSize: hovered ? "14px" : "12px",
-              letterSpacing: "0.1em",
-              whiteSpace: "nowrap",
-              border: `1px solid ${
-                hovered
-                  ? cfg.url
-                    ? "rgba(224,90,58,0.8)"
-                    : "rgba(125,211,252,0.5)"
-                  : "rgba(255,255,255,0.1)"
-              }`,
-              boxShadow: hovered
-                ? `0 0 12px ${cfg.url ? "rgba(224,90,58,0.5)" : "rgba(125,211,252,0.3)"}`
-                : "none",
-              transition: "all 0.15s ease",
-              pointerEvents: "none",
-            }}
-          >
-            {cfg.label}
-          </div>
-        </AdaptiveLabel>
+      <group ref={arrowGroupRef}>
+        {/* Yellow = current model forward, cyan = current path direction.
+            With auto-alignment they should overlap. If they don't, drop a
+            `<obj>_nose` empty in Blender at the tip of the nose. */}
+        <arrowHelper
+          ref={fwdArrowRef}
+          args={[
+            new THREE.Vector3(0, 0, 1),
+            new THREE.Vector3(0, 0, 0),
+            3,
+            0xffff00,
+          ]}
+        />
+        <arrowHelper
+          ref={pathArrowRef}
+          args={[
+            new THREE.Vector3(0, 0, 1),
+            new THREE.Vector3(0, 0, 0),
+            3,
+            0x00ffff,
+          ]}
+        />
       </group>
     </>
   );

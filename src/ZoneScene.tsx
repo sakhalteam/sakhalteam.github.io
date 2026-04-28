@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { AdaptiveLabel } from "./AdaptiveLabel";
 import "./App.css";
@@ -27,12 +28,14 @@ import { useDebugHitboxes } from "./debugFlags";
 import { Atmosphere, AtmospherePanel, AtmosphereProvider } from "./environment";
 import FlightPath, { type FlightPathConfig } from "./FlightPath";
 import IdleAnimator from "./IdleAnimator";
+import IdleClipPlayer from "./IdleClipPlayer";
 import { collectMeshes } from "./meshUtils";
 import OutlineController from "./Outline";
 import { OUTLINE_STYLES, type OutlineKind } from "./outlineStyles";
 import { computeOwnBounds } from "./ownBounds";
 import {
   findNodeByObjectName,
+  getFlightNodes,
   getNode,
   getPortalConfig,
   getToyConfig,
@@ -92,6 +95,7 @@ const HotspotHitbox = memo(function HotspotHitbox({
   const [hovered, setHovered] = useState(false);
   const debugHitboxes = useDebugHitboxes();
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
+  const groupRef = useRef<THREE.Group>(null);
   const size = useMemo(() => {
     const s = new THREE.Vector3();
     hotspot.box.getSize(s);
@@ -107,8 +111,17 @@ const HotspotHitbox = memo(function HotspotHitbox({
     [hotspot.focusDistance, hotspot.focusBehavior],
   );
 
+  // Track the underlying obj's world position every frame so animated zones
+  // (e.g. an orbiting Great Fox parented to a rotating empty) stay clickable.
+  // For static zones this is a no-op — the value just doesn't change.
+  useFrame(() => {
+    if (groupRef.current && hotspot.sceneObj) {
+      hotspot.sceneObj.getWorldPosition(groupRef.current.position);
+    }
+  });
+
   return (
-    <group position={hotspot.center}>
+    <group ref={groupRef} position={hotspot.center}>
       <mesh
         onPointerOver={(e) => {
           e.stopPropagation();
@@ -137,8 +150,16 @@ const HotspotHitbox = memo(function HotspotHitbox({
             const dy = e.clientY - pointerDown.current.y;
             if (dx * dx + dy * dy > 25) return;
           }
-          if (!isFocused(hotspot.center, hotspot.key)) {
-            onFocus(hotspot.center, hotspot.key, focusRadius, focusOpts);
+          // Use live world position for animated zones (e.g. orbiting
+          // Great Fox); falls through to hotspot.center for static zones.
+          const liveCenter = new THREE.Vector3();
+          if (hotspot.sceneObj) {
+            hotspot.sceneObj.getWorldPosition(liveCenter);
+          } else {
+            liveCenter.copy(hotspot.center);
+          }
+          if (!isFocused(liveCenter, hotspot.key)) {
+            onFocus(liveCenter, hotspot.key, focusRadius, focusOpts);
             // For "instant" behavior, fire the action on this same click —
             // the focus call just marks the thing as focused without tweening.
             if (focusOpts.behavior !== "instant") return;
@@ -203,17 +224,31 @@ const HotspotHitbox = memo(function HotspotHitbox({
 });
 
 /**
- * Scan the scene for objects paired with `<name>_flight_start` empties.
- * These zones are animated by FlightPath and should not receive a static hotspot.
+ * Walk the scene and collect zone_/portal_ objects at any depth. Stops
+ * descending into a found zone/portal so nested decoration doesn't get
+ * picked up. Used by buildHotspots — supports nesting like
+ * `0_great_fox_orbit_idle > zone_starlight_zone` for animated zones.
  */
-function findFlightedZoneNames(scene: THREE.Object3D): Set<string> {
-  const names = new Set<string>();
-  const re = /^(.*)_flight_start(?:_\d+)?$/;
-  scene.traverse((obj) => {
-    const m = obj.name.toLowerCase().match(re);
-    if (m) names.add(m[1]);
-  });
-  return names;
+function findHotspotObjects(scene: THREE.Object3D): THREE.Object3D[] {
+  const result: THREE.Object3D[] = [];
+  const seen = new Set<string>();
+  const walk = (obj: THREE.Object3D) => {
+    const lower = obj.name?.toLowerCase() ?? "";
+    if (lower.endsWith("_hitbox")) return;
+    if (/_flight_(?:start|end|finish)(?:_\d+)?$/.test(lower)) return;
+    if (/_barrel_roll_trigger(?:_\d+)?$/.test(lower)) return;
+    if (lower.endsWith("_nose")) return;
+    if (lower.startsWith("zone_") || lower.startsWith("portal_")) {
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        result.push(obj);
+      }
+      return; // don't descend — children belong to this zone
+    }
+    for (const c of obj.children) walk(c);
+  };
+  for (const c of scene.children) walk(c);
+  return result;
 }
 
 /**
@@ -221,27 +256,8 @@ function findFlightedZoneNames(scene: THREE.Object3D): Set<string> {
  * grouping toys by sceneMap `parent`. `<zone_name>_hitbox` overrides bbox.
  */
 function buildHotspots(scene: THREE.Object3D): Hotspot[] {
-  // Pass 1: find zone_/portal_ objects at scene root + _hitbox colliders.
-  const hotspotObjects: THREE.Object3D[] = [];
+  const hotspotObjects = findHotspotObjects(scene);
   const hitboxMap = new Map<string, THREE.Object3D>();
-  const flighted = findFlightedZoneNames(scene);
-  const seen = new Set<string>();
-
-  for (const child of scene.children) {
-    const lower = child.name.toLowerCase();
-    if (lower.endsWith("_hitbox")) continue;
-    if (/_flight_(?:start|end|finish)(?:_\d+)?$/.test(lower)) continue;
-    if (/_barrel_roll_trigger(?:_\d+)?$/.test(lower)) continue;
-    if (lower.endsWith("_nose")) continue;
-    // FlightPath owns its own click hitbox (follows the moving mesh) — skip
-    // the static hotspot the normal scanner would add at the initial bbox.
-    if (flighted.has(lower)) continue;
-    if (lower.startsWith("zone_") || lower.startsWith("portal_")) {
-      if (seen.has(lower)) continue;
-      seen.add(lower);
-      hotspotObjects.push(child);
-    }
-  }
 
   scene.traverse((obj) => {
     const lower = obj.name.toLowerCase();
@@ -450,27 +466,25 @@ function ZoneMesh({
   }, [scene, allMeshesRef]);
 
   const flightConfigs = useMemo<FlightPathConfig[]>(() => {
-    const flightTweaks: Partial<Record<string, Partial<FlightPathConfig>>> = {
-      zone_starlight_zone: {
-        duration: 10,
-        rollTriggerRadius: 10,
-      },
-    };
-
-    return [...findFlightedZoneNames(scene)].map((objectName) => {
-      const tweak = flightTweaks[objectName] ?? {};
-      return {
-        objectName,
-        duration: tweak.duration ?? 18,
+    // Drive flight config off sceneMap, not name-scanning the GLB. Each toy
+    // (or zone/portal) with a `flight: { ... }` field gets a FlightPath
+    // mounted; multiple toys can share a `pathGroup` to fly the same empties
+    // staggered by `phase`.
+    const sceneNames = new Set<string>();
+    scene.traverse((o) => {
+      if (o.name) sceneNames.add(o.name.toLowerCase());
+    });
+    return getFlightNodes()
+      .filter((node) => sceneNames.has(node.key.toLowerCase()))
+      .map((node) => ({
+        objectName: node.key,
+        pathGroup: node.flight!.group,
+        phaseOffset: node.flight!.phase ?? 0,
+        duration: node.flight!.duration ?? 18,
+        rollTriggerRadius: node.flight!.rollTriggerRadius,
         fadeIn: 0.15,
         fadeOut: 0.15,
-        headingOffset: tweak.headingOffset,
-        pitchOffset: tweak.pitchOffset,
-        rollOffset: tweak.rollOffset,
-        rollDuration: tweak.rollDuration,
-        rollTriggerRadius: tweak.rollTriggerRadius,
-      };
-    });
+      }));
   }, [scene]);
 
   return (
@@ -499,12 +513,9 @@ function ZoneMesh({
           key={config.objectName}
           scene={scene}
           config={config}
-          onNavigate={onNavigate}
-          onComingSoon={onComingSoon}
-          onFocus={onFocus}
-          isFocused={isFocused}
         />
       ))}
+      <IdleClipPlayer scene={scene} animations={animations} />
       <Waterfall scene={scene} />
     </>
   );
