@@ -503,7 +503,7 @@ export default function IslandScene({
         intensity={0.3}
         color="#4488ff"
       />
-      <Environment preset="night" />
+      <Environment preset="forest" />
       <Water
         funnelCenter={whirlpoolCenterRef}
         size={80}
