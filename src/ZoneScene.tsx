@@ -8,6 +8,7 @@ import {
 } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { EffectComposer, ToneMapping } from "@react-three/postprocessing";
+import { useControls } from "leva";
 import { ToneMappingMode } from "postprocessing";
 import {
   memo,
@@ -352,6 +353,7 @@ function clipTargetsActionToy(clip: THREE.AnimationClip): boolean {
 function ZoneMesh({
   glbPath,
   zoneKey,
+  lightingMode,
   onNavigate,
   onComingSoon,
   onSceneReady,
@@ -363,6 +365,7 @@ function ZoneMesh({
 }: {
   glbPath: string;
   zoneKey: string;
+  lightingMode: ZoneLightingMode;
   onNavigate: (url: string, internal: boolean) => void;
   onComingSoon: (label: string) => void;
   onSceneReady: (scene: THREE.Object3D) => void;
@@ -414,8 +417,12 @@ function ZoneMesh({
         // Reset visibility explicitly — drei caches the scene graph across
         // navigations, so a prior run's hide flag can persist otherwise.
         mesh.visible = !hide;
-        mesh.castShadow = !hide;
-        mesh.receiveShadow = !hide;
+        // No global castShadow/receiveShadow here. Setting these on every
+        // mesh in every zone (added 2026-04-18 with the Cloud Town atmosphere
+        // PR) made non-atmosphere zones self-shadow themselves into looking
+        // like nighttime — every pagoda roof shadowing the level below,
+        // every reading-room wall shadowing the floor. Atmosphere zones get
+        // shadows via the `shadows` Canvas prop being gated below.
         if (hide) return;
         // Blender exports sometimes ship stale bounding info, making large or
         // oddly-pivoted meshes vanish mid-orbit. Disable culling scene-wide.
@@ -438,24 +445,6 @@ function ZoneMesh({
 
     onSceneReady(scene);
   }, [scene, onSceneReady, zoneKey]);
-
-  // Parent small warm point lights to clickable toys so they read well in
-  // legacy (no-HDRI) zones like bird_sanctuary.
-  useEffect(() => {
-    const lights: THREE.PointLight[] = [];
-    scene.traverse((obj) => {
-      const node = sceneMap.get(obj.name.toLowerCase());
-      if (!node || node.type !== "toy") return;
-      // if (node.interactive === false || node.showOutline === false) return;
-      const light = new THREE.PointLight("#ffd9a8", 8, 3, 1.5);
-      light.position.set(0, 0.7, 0);
-      obj.add(light);
-      lights.push(light);
-    });
-    return () => {
-      for (const l of lights) l.parent?.remove(l);
-    };
-  }, [scene]);
 
   const hotspots = useMemo(() => {
     const result = buildHotspots(scene);
@@ -490,6 +479,7 @@ function ZoneMesh({
   return (
     <>
       <primitive object={scene} />
+      <UnlitMaterialSwitch scene={scene} mode={lightingMode} />
       <IdleAnimator scene={scene} />
       <ToyInteractor
         scene={scene}
@@ -549,6 +539,62 @@ function BirdSanctuaryLighting() {
       />
     </>
   );
+}
+
+/**
+ * "Unlit" mode for zones: convert every MeshStandardMaterial in the loaded
+ * scene to MeshBasicMaterial (preserving texture map + base color + alpha).
+ * MeshBasicMaterial ignores all lighting — pure textures, no shading. This
+ * is the closest three.js gets to Blender's Solid-mode preview, and the
+ * thing Nic actually wants for "Animal Crossing-y" zones.
+ *
+ * Atmosphere zones (cloud_town) opt out and stay PBR so their sky/sun
+ * subsystems still affect materials properly.
+ */
+export type ZoneLightingMode = "lit" | "unlit";
+
+function UnlitMaterialSwitch({
+  scene,
+  mode,
+}: {
+  scene: THREE.Object3D;
+  mode: ZoneLightingMode;
+}) {
+  const originals = useRef(
+    new Map<THREE.Mesh, THREE.Material | THREE.Material[]>(),
+  );
+
+  useEffect(() => {
+    const map = originals.current;
+    const toBasic = (mat: THREE.Material): THREE.Material => {
+      const std = mat as THREE.MeshStandardMaterial;
+      return new THREE.MeshBasicMaterial({
+        map: std.map ?? null,
+        color: std.color ?? new THREE.Color("#ffffff"),
+        transparent: std.transparent,
+        opacity: std.opacity,
+        side: std.side,
+        alphaMap: std.alphaMap ?? null,
+        alphaTest: std.alphaTest,
+      });
+    };
+    scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (mode === "unlit") {
+        if (!map.has(mesh)) map.set(mesh, mesh.material);
+        const cur = mesh.material;
+        mesh.material = Array.isArray(cur)
+          ? cur.map(toBasic)
+          : toBasic(cur as THREE.Material);
+      } else {
+        const orig = map.get(mesh);
+        if (orig) mesh.material = orig;
+      }
+    });
+  }, [scene, mode]);
+
+  return null;
 }
 
 function LoadingFallback() {
@@ -707,6 +753,23 @@ export default function ZoneScene({
   // three-light setup so existing zones look identical.
   const useAtmosphere = !!atmosphereConfig;
 
+  // Per-zone lighting mode. Atmosphere zones default to "lit" (PBR + sky/sun
+  // is the whole point). Non-atmosphere zones default to "unlit" — the only
+  // way three.js gets close to Blender's Solid-mode preview, which is the
+  // look the rest of the site is going for. Toggle live in the leva panel.
+  const { lightingMode } = useControls(
+    `zone (${zoneKey})`,
+    {
+      lightingMode: {
+        value: useAtmosphere ? "lit" : "unlit",
+        options: ["lit", "unlit"],
+        label: "lighting",
+      },
+    },
+    [zoneKey, useAtmosphere],
+  );
+  const isLit = lightingMode === "lit";
+
   const sceneInner = (
     <div className={fullBleed ? "ocean ocean--full-bleed" : "ocean"}>
       <header className="site-header">
@@ -718,7 +781,7 @@ export default function ZoneScene({
       <div className="map-wrap" style={wrapStyle}>
         <Canvas
           camera={{ fov: 50 }}
-          shadows
+          shadows={useAtmosphere}
           style={{
             width: "100%",
             height: "100%",
@@ -731,16 +794,17 @@ export default function ZoneScene({
             }
           }}
         >
-          {useAtmosphere ? (
+          {/* Lights, Environment, Atmosphere — all skipped when unlit. In
+              unlit mode UnlitMaterialSwitch (inside ZoneMesh) replaces every
+              MeshStandardMaterial with MeshBasicMaterial, which doesn't
+              respond to lighting at all. */}
+          {isLit && useAtmosphere && (
             <Atmosphere enabled={atmosphereConfig!.enabled} />
-          ) : (
+          )}
+          {isLit && !useAtmosphere && (
             <>
               <ambientLight intensity={0.5} />
-              <directionalLight
-                position={[5, 8, 3]}
-                intensity={1.0}
-                castShadow
-              />
+              <directionalLight position={[5, 8, 3]} intensity={1.0} />
               <directionalLight
                 position={[-3, 2, -4]}
                 intensity={0.2}
@@ -748,16 +812,14 @@ export default function ZoneScene({
               />
             </>
           )}
-          {environmentPreset && (
-            <Environment
-              preset={environmentPreset}
-              background={!useAtmosphere}
-            />
+          {isLit && environmentPreset && (
+            <Environment preset={environmentPreset} />
           )}
           <Suspense fallback={<LoadingFallback />}>
             <ZoneMesh
               glbPath={glbPath}
               zoneKey={zoneKey}
+              lightingMode={lightingMode as ZoneLightingMode}
               onNavigate={navigateWithTransition}
               onComingSoon={showComingSoon}
               onSceneReady={setLoadedScene}

@@ -1,8 +1,9 @@
 // IslandScene.tsx
 
-import { Html, OrbitControls, useHelper } from "@react-three/drei";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Environment, Html, OrbitControls } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer } from "@react-three/postprocessing";
+import { useControls } from "leva";
 import {
   memo,
   Suspense,
@@ -15,7 +16,7 @@ import {
 import * as THREE from "three";
 import { AdaptiveLabel } from "./AdaptiveLabel";
 import { playCyclingSound } from "./audio";
-import { useDebugHitboxes, useDebugLights } from "./debugFlags";
+import { useDebugHitboxes } from "./debugFlags";
 import IdleAnimator from "./IdleAnimator";
 import { collectMeshes } from "./meshUtils";
 import OutlineController from "./Outline";
@@ -34,27 +35,120 @@ import Water from "./Water";
 import Whirlpool from "./Whirlpool";
 
 /**
- * Wireframe visualizers for the scene's lights so they can be physically
- * located, color-checked, and moved with intention. Mounted only when the
- * "lights" debug flag is on. Gets distinct shapes so each light type is
- * identifiable at a glance:
- *   - HemisphereLightHelper → octahedron (sky/ground colors split top/bottom)
- *   - DirectionalLightHelper → square frame + line toward target (sun color)
- *   - AmbientLight has no position; rendered as a small wireframe sphere
- *     at world origin by the parent.
+ * Disabler for Blender-imported lights. Blender Lighting addons (e.g.
+ * Tri-Lighting) can dump dozens of area/point lights into a GLB; if any
+ * slip into the export they cause whiteout. We log + zero them so the
+ * authoritative lighting comes purely from `<IslandLighting>` below.
  */
-function LightDebugHelpers({
-  hemiRef,
-  keyRef,
-}: {
-  hemiRef: React.RefObject<THREE.HemisphereLight | null>;
-  keyRef: React.RefObject<THREE.DirectionalLight | null>;
-}) {
-  // useHelper accepts a RefObject; drei attaches the helper to the scene as
-  // a child of the referenced light and updates it each frame.
-  useHelper(hemiRef as never, THREE.HemisphereLightHelper, 1.5);
-  useHelper(keyRef as never, THREE.DirectionalLightHelper, 3, "#ffaa00");
+function BlenderLightDisabler({ scene }: { scene: THREE.Object3D }) {
+  useEffect(() => {
+    const found: string[] = [];
+    scene.traverse((obj) => {
+      const l = obj as THREE.Light;
+      if (l.isLight) {
+        const type = obj.constructor.name;
+        const name = obj.name || "(unnamed)";
+        const intensity = (l as { intensity?: number }).intensity ?? 0;
+        found.push(`${type}: ${name} @ ${intensity.toFixed(2)}`);
+        (l as { intensity?: number }).intensity = 0;
+      }
+    });
+    if (found.length) {
+      console.log(
+        `[BlenderLights] disabled ${found.length} imported light(s) in island.glb:`,
+        found,
+      );
+    }
+  }, [scene]);
+
   return null;
+}
+
+/**
+
+/**
+ * IslandScene lighting. Defaults are the EXACT 4/22 baseline (commit
+ * e11adb9) — that's the last known-good "Animal Crossing-y" state, and the
+ * commit before everything went funky.
+ *
+ *   Environment preset = "night"   ← critical: night is a near-black HDRI,
+ *     so PBR materials get ~0 IBL contamination. They're lit purely by the
+ *     analytic lights below. Forest/park/etc. flood materials with green
+ *     and that's exactly what was making the water foam grey and the
+ *     island look "funky" since 4/28.
+ *   ambient 0.6 + sun 1.2 (warm-white) at [6, 10, 4] + cool blue fill 0.3
+ *     at [-4, 3, -6]. Three lights total, no shadows, no tone mapping.
+ *
+ * The leva panel is here for experimentation, but the defaults reproduce
+ * 4/22 byte-for-byte. Mode "unlit" stays for emergency Animal Crossing
+ * solid-mode fallback.
+ */
+function IslandLighting() {
+  const {
+    envPreset,
+    envIntensity,
+    sunIntensity,
+    sunColor,
+    sunX,
+    sunY,
+    sunZ,
+    fillIntensity,
+    fillColor,
+    ambientIntensity,
+  } = useControls("lighting", {
+    envPreset: {
+      value: "night",
+      options: [
+        "apartment",
+        "city",
+        "dawn",
+        "forest",
+        "lobby",
+        "night",
+        "park",
+        "studio",
+        "sunset",
+        "warehouse",
+      ],
+    },
+    envIntensity: { value: 1.0, min: 0, max: 3, step: 0.05 },
+    sunIntensity: { value: 1.2, min: 0, max: 5, step: 0.05 },
+    sunColor: "#ffffff",
+    sunX: { value: 6, min: -20, max: 20, step: 0.5 },
+    sunY: { value: 10, min: 0, max: 30, step: 0.5 },
+    sunZ: { value: 4, min: -20, max: 20, step: 0.5 },
+    fillIntensity: { value: 0.3, min: 0, max: 2, step: 0.05 },
+    fillColor: "#4488ff",
+    ambientIntensity: { value: 0.6, min: 0, max: 2, step: 0.05 },
+  });
+
+  const { gl } = useThree();
+  useEffect(() => {
+    gl.toneMapping = THREE.NoToneMapping;
+    gl.toneMappingExposure = 1.0;
+  }, [gl]);
+
+  return (
+    <>
+      <Environment
+        preset={envPreset as never}
+        environmentIntensity={envIntensity}
+        background={false}
+      />
+      <ambientLight intensity={ambientIntensity} />
+      <directionalLight
+        position={[sunX, sunY, sunZ]}
+        intensity={sunIntensity}
+        color={sunColor}
+        castShadow
+      />
+      <directionalLight
+        position={[-4, 3, -6]}
+        intensity={fillIntensity}
+        color={fillColor}
+      />
+    </>
+  );
 }
 
 interface ZoneMarker {
@@ -348,6 +442,7 @@ function IslandMesh({
   return (
     <>
       <primitive object={scene} />
+      <BlenderLightDisabler scene={scene} />
       <IdleAnimator scene={scene} />
       <ToyInteractor
         scene={scene}
@@ -514,76 +609,15 @@ export default function IslandScene({
 
   const outlineSettings = OUTLINE_STYLES[outlineKind];
 
-  // ─── Lighting (three orthogonal knobs) ───────────────────────────────
-  // BRIGHTNESS — overall scene exposure. Total energy scales with this.
-  // DIFFUSION  — how spread/soft the light is. 0..1.
-  //              0 = punchy sun + deep shadows. 1 = flat overcast.
-  // WARMTH     — color temperature of the sun. -1..1.
-  //              -1 = cool/blue moonlight. 0 = neutral. +1 = warm/amber.
-  //
-  // All three are orthogonal:
-  //   • BRIGHTNESS doesn't tint
-  //   • DIFFUSION doesn't tint (hemi/ambient are neutral white)
-  //   • WARMTH doesn't change brightness (just shifts the sun's hue)
-  // Tune one at a time and you stop fighting yourself.
-  const BRIGHTNESS = 1.3;
-  const DIFFUSION = 0.55; // values outside 0..1 zero out the sun — clamped below
-  const WARMTH = 0.2;
-  const _diffusion = THREE.MathUtils.clamp(DIFFUSION, 0, 1);
-  const keyLight = (1 - _diffusion) * 2 * BRIGHTNESS;
-  const fillLight = _diffusion * 2 * BRIGHTNESS;
-  const ambientFloor = 0.3 * BRIGHTNESS;
-  const showLights = useDebugLights();
-  const hemiRef = useRef<THREE.HemisphereLight>(null);
-  const keyLightRef = useRef<THREE.DirectionalLight>(null);
-  const sunColor = useMemo(() => {
-    const c = new THREE.Color("#ffffff");
-    const warmth = THREE.MathUtils.clamp(WARMTH, -1, 1);
-    if (warmth > 0) c.lerp(new THREE.Color("#ffd9a8"), warmth);
-    else if (warmth < 0) c.lerp(new THREE.Color("#a8c8ff"), -warmth);
-    return c;
-  }, []);
-
   return (
     <Canvas
       camera={{ position: [0, 8, 14], fov: 80 }}
       style={style}
       gl={{ antialias: true, alpha: true }}
     >
-      {/* Tune via BRIGHTNESS / DIFFUSION / WARMTH constants above the return.
-          No Environment HDRI here — pure analytic lighting only. PBR materials
-          on island.glb need to look "right" without IBL bouncing extra fill. */}
-      <ambientLight intensity={ambientFloor} />
-      <hemisphereLight
-        ref={hemiRef}
-        color="#ffffff"
-        groundColor="#404040"
-        intensity={fillLight}
-      />
-      <directionalLight
-        ref={keyLightRef}
-        position={[6, 10, 4]}
-        intensity={keyLight}
-        color={sunColor}
-        castShadow
-      />
-      {showLights && (
-        <>
-          <LightDebugHelpers hemiRef={hemiRef} keyRef={keyLightRef} />
-          {/* AmbientLight has no position/direction; show a small wireframe
-              icosphere at world origin so it's visually accounted for. */}
-          <mesh raycast={() => null} renderOrder={999}>
-            <icosahedronGeometry args={[0.7, 1]} />
-            <meshBasicMaterial
-              color="#dddddd"
-              wireframe
-              transparent
-              opacity={0.6}
-              depthTest={false}
-            />
-          </mesh>
-        </>
-      )}
+      {/* All scene lighting lives in IslandLighting — env preset, sun, ambient,
+          tone-map exposure. Tune via the leva panel in the top-right corner. */}
+      <IslandLighting />
       <Water
         funnelCenter={whirlpoolCenterRef}
         size={80}

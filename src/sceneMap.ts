@@ -472,11 +472,9 @@ const nodes: SceneNode[] = [
     parent: "cloud_town",
   }),
   zone("tower_of_knowledge", "Tower Of Knowledge", {
-    env: "apartment",
     children: ["reading_room", "dojo"],
   }),
   zone("reading_room", "Reading Room", {
-    env: "apartment",
     parent: "tower_of_knowledge",
     children: [
       "portal_japanese_articles",
@@ -487,11 +485,9 @@ const nodes: SceneNode[] = [
     ],
   }),
   zone("dojo", "Dojo", {
-    env: "night",
     parent: "tower_of_knowledge",
   }),
   zone("pokemon_island", "Pokemon Island", {
-    env: "park",
     children: [
       "portal_pokemon_park",
       "pi_toy_ekans",
@@ -524,7 +520,6 @@ const nodes: SceneNode[] = [
     ],
   }),
   zone("the_tunnels", "The Tunnels", {
-    env: "night",
     children: ["portal_jr_jingle_journey"],
   }),
   zone("beach_party", "Beach Party", {
