@@ -61,6 +61,9 @@ const fragmentShader = /* glsl */ `
   uniform float uFoamSpeed;
   uniform float uFoamDepth;
   uniform vec3 uColorFar;
+  uniform vec3 uShallowColor;
+  uniform float uSurfaceBoost;
+  uniform float uFoamBoost;
   uniform float uFoamScale;
   uniform float uWaveScale;
   uniform vec2 uFunnelCenter;
@@ -147,12 +150,14 @@ const fragmentShader = /* glsl */ `
     float edgeFade = smoothstep(0.6, 1.0, dist);
 
     // Far color blending (deeper = darker)
-    vec3 baseColor = mix(finalColor, uColorFar, smoothstep(0.1, 0.4, dist));
+    vec3 litWater = mix(finalColor, uShallowColor, uSurfaceBoost);
+    vec3 baseColor = mix(litWater, uColorFar, smoothstep(0.1, 0.4, dist));
 
     // Suppress foam/waves near edges
     combinedEffect = mix(combinedEffect, vec3(0.0), edgeFade);
 
-    finalColor = (1.0 - combinedEffect) * baseColor + combinedEffect;
+    vec3 foamColor = vec3(1.0 + uFoamBoost);
+    finalColor = (1.0 - combinedEffect) * baseColor + combinedEffect * foamColor;
 
     // Fade alpha at edges for soft boundary
     alpha *= (1.0 - edgeFade);
@@ -211,6 +216,10 @@ interface WaterProps {
   funnelDepth?: number;
   /** Base water color */
   color?: string;
+  shallowColor?: string;
+  deepColor?: string;
+  surfaceBoost?: number;
+  foamBoost?: number;
   /** Opacity of the water surface (0–1) */
   opacity?: number;
   /** Speed of the 3D surface bobbing (vertex ripples). Low visual impact top-down. */
@@ -240,6 +249,10 @@ export default function Water({
   funnelRadius = 3.8,
   funnelDepth = 0.85,
   color = "#00fccd",
+  shallowColor = "#6ee7d8",
+  deepColor = "#0b6fb8",
+  surfaceBoost = 0.35,
+  foamBoost = 0.35,
   opacity = 0.7,
   waveSpeed = 0.55,
   waveAmplitude = 0.04,
@@ -298,6 +311,9 @@ export default function Water({
       color,
       transparent: true,
       opacity,
+      roughness: 0.9,
+      metalness: 0,
+      depthWrite: false,
       side: THREE.DoubleSide,
       uniforms: {
         uTime: { value: 0 },
@@ -305,7 +321,10 @@ export default function Water({
         uWaveAmplitude: { value: waveAmplitude },
         uFoamSpeed: { value: foamSpeed },
         uFoamDepth: { value: foamDepth },
-        uColorFar: { value: new THREE.Color("#0b6fb8") },
+        uColorFar: { value: new THREE.Color(deepColor) },
+        uShallowColor: { value: new THREE.Color(shallowColor) },
+        uSurfaceBoost: { value: surfaceBoost },
+        uFoamBoost: { value: foamBoost },
         uFoamScale: { value: foamScale },
         uWaveScale: { value: waveScale },
         uFunnelCenter: { value: new THREE.Vector2(9999, 9999) },
@@ -329,6 +348,10 @@ export default function Water({
     funnelRadius,
     funnelDepth,
     color,
+    shallowColor,
+    deepColor,
+    surfaceBoost,
+    foamBoost,
     opacity,
     waveSpeed,
     waveAmplitude,

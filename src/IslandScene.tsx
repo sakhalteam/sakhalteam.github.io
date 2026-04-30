@@ -1,6 +1,6 @@
 // IslandScene.tsx
 
-import { Environment, Html, OrbitControls } from "@react-three/drei";
+import { Html, OrbitControls, useHelper } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { EffectComposer } from "@react-three/postprocessing";
 import {
@@ -15,7 +15,7 @@ import {
 import * as THREE from "three";
 import { AdaptiveLabel } from "./AdaptiveLabel";
 import { playCyclingSound } from "./audio";
-import { useDebugHitboxes } from "./debugFlags";
+import { useDebugHitboxes, useDebugLights } from "./debugFlags";
 import IdleAnimator from "./IdleAnimator";
 import { collectMeshes } from "./meshUtils";
 import OutlineController from "./Outline";
@@ -32,6 +32,30 @@ import { useOptimizedGLTF } from "./useOptimizedGLTF";
 import { useTurntable } from "./useTurntable";
 import Water from "./Water";
 import Whirlpool from "./Whirlpool";
+
+/**
+ * Wireframe visualizers for the scene's lights so they can be physically
+ * located, color-checked, and moved with intention. Mounted only when the
+ * "lights" debug flag is on. Gets distinct shapes so each light type is
+ * identifiable at a glance:
+ *   - HemisphereLightHelper → octahedron (sky/ground colors split top/bottom)
+ *   - DirectionalLightHelper → square frame + line toward target (sun color)
+ *   - AmbientLight has no position; rendered as a small wireframe sphere
+ *     at world origin by the parent.
+ */
+function LightDebugHelpers({
+  hemiRef,
+  keyRef,
+}: {
+  hemiRef: React.RefObject<THREE.HemisphereLight | null>;
+  keyRef: React.RefObject<THREE.DirectionalLight | null>;
+}) {
+  // useHelper accepts a RefObject; drei attaches the helper to the scene as
+  // a child of the referenced light and updates it each frame.
+  useHelper(hemiRef as never, THREE.HemisphereLightHelper, 1.5);
+  useHelper(keyRef as never, THREE.DirectionalLightHelper, 3, "#ffaa00");
+  return null;
+}
 
 interface ZoneMarker {
   name: string;
@@ -490,25 +514,85 @@ export default function IslandScene({
 
   const outlineSettings = OUTLINE_STYLES[outlineKind];
 
+  // ─── Lighting (three orthogonal knobs) ───────────────────────────────
+  // BRIGHTNESS — overall scene exposure. Total energy scales with this.
+  // DIFFUSION  — how spread/soft the light is. 0..1.
+  //              0 = punchy sun + deep shadows. 1 = flat overcast.
+  // WARMTH     — color temperature of the sun. -1..1.
+  //              -1 = cool/blue moonlight. 0 = neutral. +1 = warm/amber.
+  //
+  // All three are orthogonal:
+  //   • BRIGHTNESS doesn't tint
+  //   • DIFFUSION doesn't tint (hemi/ambient are neutral white)
+  //   • WARMTH doesn't change brightness (just shifts the sun's hue)
+  // Tune one at a time and you stop fighting yourself.
+  const BRIGHTNESS = 1.3;
+  const DIFFUSION = 0.55; // values outside 0..1 zero out the sun — clamped below
+  const WARMTH = 0.2;
+  const _diffusion = THREE.MathUtils.clamp(DIFFUSION, 0, 1);
+  const keyLight = (1 - _diffusion) * 2 * BRIGHTNESS;
+  const fillLight = _diffusion * 2 * BRIGHTNESS;
+  const ambientFloor = 0.3 * BRIGHTNESS;
+  const showLights = useDebugLights();
+  const hemiRef = useRef<THREE.HemisphereLight>(null);
+  const keyLightRef = useRef<THREE.DirectionalLight>(null);
+  const sunColor = useMemo(() => {
+    const c = new THREE.Color("#ffffff");
+    const warmth = THREE.MathUtils.clamp(WARMTH, -1, 1);
+    if (warmth > 0) c.lerp(new THREE.Color("#ffd9a8"), warmth);
+    else if (warmth < 0) c.lerp(new THREE.Color("#a8c8ff"), -warmth);
+    return c;
+  }, []);
+
   return (
     <Canvas
-      camera={{ position: [0, 8, 14], fov: 40 }}
+      camera={{ position: [0, 8, 14], fov: 80 }}
       style={style}
       gl={{ antialias: true, alpha: true }}
     >
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[6, 10, 4]} intensity={1.2} castShadow />
-      <directionalLight
-        position={[-4, 3, -6]}
-        intensity={0.3}
-        color="#4488ff"
+      {/* Tune via BRIGHTNESS / DIFFUSION / WARMTH constants above the return.
+          No Environment HDRI here — pure analytic lighting only. PBR materials
+          on island.glb need to look "right" without IBL bouncing extra fill. */}
+      <ambientLight intensity={ambientFloor} />
+      <hemisphereLight
+        ref={hemiRef}
+        color="#ffffff"
+        groundColor="#404040"
+        intensity={fillLight}
       />
-      <Environment preset="forest" />
+      <directionalLight
+        ref={keyLightRef}
+        position={[6, 10, 4]}
+        intensity={keyLight}
+        color={sunColor}
+        castShadow
+      />
+      {showLights && (
+        <>
+          <LightDebugHelpers hemiRef={hemiRef} keyRef={keyLightRef} />
+          {/* AmbientLight has no position/direction; show a small wireframe
+              icosphere at world origin so it's visually accounted for. */}
+          <mesh raycast={() => null} renderOrder={999}>
+            <icosahedronGeometry args={[0.7, 1]} />
+            <meshBasicMaterial
+              color="#dddddd"
+              wireframe
+              transparent
+              opacity={0.6}
+              depthTest={false}
+            />
+          </mesh>
+        </>
+      )}
       <Water
         funnelCenter={whirlpoolCenterRef}
         size={80}
         color="#00fccd"
-        opacity={0.5}
+        opacity={0.34}
+        shallowColor="#9cebd9"
+        deepColor="#1c93bd"
+        surfaceBoost={0.58}
+        foamBoost={0.75}
         waveSpeed={0.9}
         foamSpeed={0.1}
         foamScale={14}

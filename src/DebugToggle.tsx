@@ -1,12 +1,21 @@
 import { Frame } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { setDebugHitboxes, useDebugHitboxes } from "./debugFlags";
+import {
+  setDebugBarrelRollTriggers,
+  setDebugHitboxes,
+  setDebugLights,
+  useDebugBarrelRollTriggers,
+  useDebugHitboxes,
+  useDebugLights,
+} from "./debugFlags";
 import { triggerCameraReset } from "./useCameraReset";
 
 const CLOSE_DELAY_MS = 1800;
 
 export default function DebugToggle() {
   const hitboxes = useDebugHitboxes();
+  const barrelRollTriggers = useDebugBarrelRollTriggers();
+  const lights = useDebugLights();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<number | null>(null);
@@ -79,6 +88,24 @@ export default function DebugToggle() {
             onChange={(event) => setDebugHitboxes(event.currentTarget.checked)}
           />
           hitboxes
+        </label>
+        <label className="debug-toggle-option">
+          <input
+            type="checkbox"
+            checked={barrelRollTriggers}
+            onChange={(event) =>
+              setDebugBarrelRollTriggers(event.currentTarget.checked)
+            }
+          />
+          barrel roll triggers
+        </label>
+        <label className="debug-toggle-option">
+          <input
+            type="checkbox"
+            checked={lights}
+            onChange={(event) => setDebugLights(event.currentTarget.checked)}
+          />
+          lights
         </label>
       </div>
     </div>

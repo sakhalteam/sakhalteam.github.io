@@ -8,7 +8,7 @@ import CloudTransition from "./CloudTransition";
 import ComingSoonToast from "./ComingSoonToast";
 import DebugToggle from "./DebugToggle";
 import { useSceneTransition } from "./useSceneTransition";
-import { getActiveZones } from "./sceneMap";
+import { getActiveZones, getNode } from "./sceneMap";
 import { showComingSoon } from "./comingSoonStore";
 
 /** Zones that use ZoneScene (all active zones except the island root) */
@@ -19,6 +19,7 @@ function HomePage() {
   const [turntablePlaying, setTurntablePlaying] = useState(true);
   const [islandReady, setIslandReady] = useState(false);
   const { wrapStyle } = useSceneTransition(islandReady);
+  const islandFullBleed = getNode("island")?.fullBleed === true;
 
   const onTurntableChange = useCallback(
     (toggle: () => void, playing: boolean) => {
@@ -29,7 +30,7 @@ function HomePage() {
   );
 
   return (
-    <div className="ocean">
+    <div className={islandFullBleed ? "ocean ocean--full-bleed" : "ocean"}>
       <header className="site-header">
         <h1 className="site-title">SAKHALTEAM</h1>
         <p className="site-subtitle">an archipelago of small projects</p>

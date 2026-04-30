@@ -367,6 +367,7 @@ const nodes: SceneNode[] = [
     path: "/",
     url: null,
     glbPath: "/island.glb",
+    fullBleed: true,
     parent: null,
     children: [
       // Zones
@@ -400,6 +401,7 @@ const nodes: SceneNode[] = [
   },
 
   // ── Active zones (have GLBs + routes) ──────────────
+  // This is where you add idle animations to zones ON island.glb scene
   zone("bird_sanctuary", "Bird Sanctuary", {
     env: "forest",
     children: [
@@ -429,6 +431,7 @@ const nodes: SceneNode[] = [
     turntable: true,
     fullBleed: true,
     camera: { padding: 1, elevation: 0.45, azimuth: 0.3 },
+    idle: { kind: "undulate", amplitude: 0.07, period: 4 },
     atmosphere: {
       enabled: [
         "sky",
@@ -888,7 +891,12 @@ const nodes: SceneNode[] = [
       "/sounds/falco_jp_02.wav",
     ],
     animation: "none",
-    flight: { group: "arwing", phase: 0.25, duration: 18, rollTriggerRadius: 10 },
+    flight: {
+      group: "arwing",
+      phase: 0.25,
+      duration: 18,
+      rollTriggerRadius: 10,
+    },
     focusBehavior: "instant",
   }),
   toy("ct_toy_peppy_arwing", "Peppy's Arwing", "cloud_town", {
@@ -902,7 +910,12 @@ const nodes: SceneNode[] = [
       "/sounds/peppy_barrel_roll.wav",
     ],
     animation: "none",
-    flight: { group: "arwing", phase: 0.5, duration: 18, rollTriggerRadius: 10 },
+    flight: {
+      group: "arwing",
+      phase: 0.5,
+      duration: 18,
+      rollTriggerRadius: 10,
+    },
     focusBehavior: "instant",
   }),
   toy("ct_toy_slippy_arwing", "Slippy's Arwing", "cloud_town", {
@@ -918,7 +931,12 @@ const nodes: SceneNode[] = [
       "/sounds/slippy_daijoubu.wav",
     ],
     animation: "none",
-    flight: { group: "arwing", phase: 0.75, duration: 18, rollTriggerRadius: 10 },
+    flight: {
+      group: "arwing",
+      phase: 0.75,
+      duration: 18,
+      rollTriggerRadius: 10,
+    },
     focusBehavior: "instant",
   }),
   toy("ct_toy_metal_gear_rex", "Metal Gear Rex", "cloud_town", {

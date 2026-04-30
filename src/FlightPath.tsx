@@ -35,10 +35,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useSceneOptions } from "./SceneOptionsContext";
-import { useDebugHitboxes } from "./debugFlags";
+import {
+  useDebugBarrelRollTriggers,
+  useDebugHitboxes,
+} from "./debugFlags";
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
-const SHOW_BARREL_ROLL_TRIGGERS_WITH_DEBUG_HITBOXES = true;
 
 function distanceToSegment(
   point: THREE.Vector3,
@@ -105,6 +107,7 @@ export default function FlightPath({
   config: FlightPathConfig;
 }) {
   const debugHitboxes = useDebugHitboxes();
+  const debugBarrelRollTriggers = useDebugBarrelRollTriggers();
   const data = useMemo(() => {
     const objLower = config.objectName.toLowerCase();
     const groupLower = (config.pathGroup ?? config.objectName).toLowerCase();
@@ -417,11 +420,11 @@ export default function FlightPath({
   });
 
   if (!data) return null;
-  if (!debugHitboxes) return null;
+  if (!debugHitboxes && !debugBarrelRollTriggers) return null;
 
   return (
     <>
-      {SHOW_BARREL_ROLL_TRIGGERS_WITH_DEBUG_HITBOXES &&
+      {debugBarrelRollTriggers &&
         data.rollTriggers.map((triggerPos, index) => (
           <mesh key={`roll-trigger-${index}`} position={triggerPos}>
             <sphereGeometry args={[config.rollTriggerRadius ?? 4, 16, 12]} />
@@ -434,29 +437,31 @@ export default function FlightPath({
             />
           </mesh>
         ))}
-      <group ref={arrowGroupRef}>
-        {/* Yellow = current model forward, cyan = current path direction.
-            With auto-alignment they should overlap. If they don't, drop a
-            `<obj>_nose` empty in Blender at the tip of the nose. */}
-        <arrowHelper
-          ref={fwdArrowRef}
-          args={[
-            new THREE.Vector3(0, 0, 1),
-            new THREE.Vector3(0, 0, 0),
-            3,
-            0xffff00,
-          ]}
-        />
-        <arrowHelper
-          ref={pathArrowRef}
-          args={[
-            new THREE.Vector3(0, 0, 1),
-            new THREE.Vector3(0, 0, 0),
-            3,
-            0x00ffff,
-          ]}
-        />
-      </group>
+      {debugHitboxes && (
+        <group ref={arrowGroupRef}>
+          {/* Yellow = current model forward, cyan = current path direction.
+              With auto-alignment they should overlap. If they don't, drop a
+              `<obj>_nose` empty in Blender at the tip of the nose. */}
+          <arrowHelper
+            ref={fwdArrowRef}
+            args={[
+              new THREE.Vector3(0, 0, 1),
+              new THREE.Vector3(0, 0, 0),
+              3,
+              0xffff00,
+            ]}
+          />
+          <arrowHelper
+            ref={pathArrowRef}
+            args={[
+              new THREE.Vector3(0, 0, 1),
+              new THREE.Vector3(0, 0, 0),
+              3,
+              0x00ffff,
+            ]}
+          />
+        </group>
+      )}
     </>
   );
 }
