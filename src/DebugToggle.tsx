@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import {
   setDebugBarrelRollTriggers,
   setDebugHitboxes,
+  setDebugLightingControls,
   useDebugBarrelRollTriggers,
   useDebugHitboxes,
+  useDebugLightingControls,
 } from "./debugFlags";
 import { triggerCameraReset } from "./useCameraReset";
 
@@ -13,6 +15,7 @@ const CLOSE_DELAY_MS = 1800;
 export default function DebugToggle() {
   const hitboxes = useDebugHitboxes();
   const barrelRollTriggers = useDebugBarrelRollTriggers();
+  const lightingControls = useDebugLightingControls();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<number | null>(null);
@@ -95,6 +98,16 @@ export default function DebugToggle() {
             }
           />
           barrel roll triggers
+        </label>
+        <label className="debug-toggle-option">
+          <input
+            type="checkbox"
+            checked={lightingControls}
+            onChange={(event) =>
+              setDebugLightingControls(event.currentTarget.checked)
+            }
+          />
+          lighting controls
         </label>
       </div>
     </div>

@@ -3,7 +3,6 @@
 import { Environment, Html, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer } from "@react-three/postprocessing";
-import { useControls } from "leva";
 import {
   memo,
   Suspense,
@@ -29,6 +28,7 @@ import { startTransition } from "./transitionStore";
 import { useCameraReset } from "./useCameraReset";
 import { useFocusOrbit } from "./useFocusOrbit";
 import { useKeyboardControls } from "./useKeyboardControls";
+import { useLightingControls } from "./useLightingControls";
 import { useOptimizedGLTF } from "./useOptimizedGLTF";
 import { useTurntable } from "./useTurntable";
 import Water from "./Water";
@@ -65,23 +65,10 @@ function BlenderLightDisabler({ scene }: { scene: THREE.Object3D }) {
 }
 
 /**
-
-/**
- * IslandScene lighting. Defaults are the EXACT 4/22 baseline (commit
- * e11adb9) — that's the last known-good "Animal Crossing-y" state, and the
- * commit before everything went funky.
- *
- *   Environment preset = "night"   ← critical: night is a near-black HDRI,
- *     so PBR materials get ~0 IBL contamination. They're lit purely by the
- *     analytic lights below. Forest/park/etc. flood materials with green
- *     and that's exactly what was making the water foam grey and the
- *     island look "funky" since 4/28.
- *   ambient 0.6 + sun 1.2 (warm-white) at [6, 10, 4] + cool blue fill 0.3
- *     at [-4, 3, -6]. Three lights total, no shadows, no tone mapping.
- *
- * The leva panel is here for experimentation, but the defaults reproduce
- * 4/22 byte-for-byte. Mode "unlit" stays for emergency Animal Crossing
- * solid-mode fallback.
+ * IslandScene lighting. Schema and defaults live in useLightingControls —
+ * shared with every non-atmosphere zone so each scene gets the same
+ * panel and per-scope persistence. The hook's LIGHTING_DEFAULTS is the
+ * 4/22 baseline (the last known-good Animal-Crossing-y state).
  */
 function IslandLighting() {
   const {
@@ -95,32 +82,7 @@ function IslandLighting() {
     fillIntensity,
     fillColor,
     ambientIntensity,
-  } = useControls("lighting", {
-    envPreset: {
-      value: "night",
-      options: [
-        "apartment",
-        "city",
-        "dawn",
-        "forest",
-        "lobby",
-        "night",
-        "park",
-        "studio",
-        "sunset",
-        "warehouse",
-      ],
-    },
-    envIntensity: { value: 1.0, min: 0, max: 3, step: 0.05 },
-    sunIntensity: { value: 1.2, min: 0, max: 5, step: 0.05 },
-    sunColor: "#ffffff",
-    sunX: { value: 6, min: -20, max: 20, step: 0.5 },
-    sunY: { value: 10, min: 0, max: 30, step: 0.5 },
-    sunZ: { value: 4, min: -20, max: 20, step: 0.5 },
-    fillIntensity: { value: 0.3, min: 0, max: 2, step: 0.05 },
-    fillColor: "#4488ff",
-    ambientIntensity: { value: 0.6, min: 0, max: 2, step: 0.05 },
-  });
+  } = useLightingControls("island", "src/IslandScene.tsx → IslandLighting()");
 
   const { gl } = useThree();
   useEffect(() => {

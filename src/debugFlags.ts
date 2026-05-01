@@ -7,14 +7,13 @@
 //
 //   hitboxes              — wireframe boxes around clickable hotspots/toys
 //   barrel-roll-triggers  — wireframe spheres at FlightPath roll triggers
-//
-// Lighting is tuned through the leva panel (top-right of the canvas), not
-// a debug toggle.
+//   lighting-controls     — visibility of the leva lighting panel (per-scene)
 
 import { useSyncExternalStore } from "react";
 
 const STORAGE_HITBOXES = "sakhalteam.debug.hitboxes";
 const STORAGE_BARREL = "sakhalteam.debug.barrelRollTriggers";
+const STORAGE_LIGHTING_CONTROLS = "sakhalteam.debug.lightingControls";
 
 type Listener = () => void;
 
@@ -43,6 +42,8 @@ function writeStored(key: string, value: boolean) {
 let debugHitboxes = queryEnables("hitboxes") || readStored(STORAGE_HITBOXES);
 let debugBarrelRollTriggers =
   queryEnables("barrel-roll-triggers") || readStored(STORAGE_BARREL);
+let debugLightingControls =
+  queryEnables("lighting-controls") || readStored(STORAGE_LIGHTING_CONTROLS);
 
 const listeners = new Set<Listener>();
 
@@ -72,6 +73,17 @@ export function setDebugBarrelRollTriggers(next: boolean) {
   emit();
 }
 
+export function getDebugLightingControls() {
+  return debugLightingControls;
+}
+
+export function setDebugLightingControls(next: boolean) {
+  if (debugLightingControls === next) return;
+  debugLightingControls = next;
+  writeStored(STORAGE_LIGHTING_CONTROLS, next);
+  emit();
+}
+
 export function subscribeDebugFlags(listener: Listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -89,6 +101,14 @@ export function useDebugBarrelRollTriggers() {
   return useSyncExternalStore(
     subscribeDebugFlags,
     getDebugBarrelRollTriggers,
+    () => false,
+  );
+}
+
+export function useDebugLightingControls() {
+  return useSyncExternalStore(
+    subscribeDebugFlags,
+    getDebugLightingControls,
     () => false,
   );
 }

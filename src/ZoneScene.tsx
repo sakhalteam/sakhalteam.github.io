@@ -51,6 +51,7 @@ import { useAutoFitCamera } from "./useAutoFitCamera";
 import { useCameraReset } from "./useCameraReset";
 import { useFocusOrbit } from "./useFocusOrbit";
 import { useKeyboardControls } from "./useKeyboardControls";
+import { useLightingControls } from "./useLightingControls";
 import { useOptimizedGLTF } from "./useOptimizedGLTF";
 import { useSceneTransition } from "./useSceneTransition";
 import { useTurntable } from "./useTurntable";
@@ -749,26 +750,35 @@ export default function ZoneScene({
     OUTLINE_STYLES[hasToyOutline ? "toy" : hotspotOutlineKind];
 
   // When a zone declares an atmosphere config, the listed subsystems own the
-  // lighting (sun + ambient). Otherwise fall back to the legacy hardcoded
-  // three-light setup so existing zones look identical.
+  // lighting (sun + ambient). Otherwise fall back to the leva-driven
+  // analytic lighting (same setup as IslandScene).
   const useAtmosphere = !!atmosphereConfig;
 
-  // Per-zone lighting mode. Atmosphere zones default to "lit" (PBR + sky/sun
-  // is the whole point). Non-atmosphere zones default to "unlit" — the only
-  // way three.js gets close to Blender's Solid-mode preview, which is the
-  // look the rest of the site is going for. Toggle live in the leva panel.
+  // Per-zone lighting mode (lit/unlit). Kept on every zone so we can fall
+  // back to MeshBasicMaterial if the lit pipeline ever looks wrong again.
   const { lightingMode } = useControls(
-    `zone (${zoneKey})`,
+    `zone · ${zoneKey}`,
     {
       lightingMode: {
-        value: useAtmosphere ? "lit" : "unlit",
+        value: "lit",
         options: ["lit", "unlit"],
-        label: "lighting",
+        label: "mode",
       },
     },
-    [zoneKey, useAtmosphere],
+    [zoneKey],
   );
   const isLit = lightingMode === "lit";
+
+  // Mount the shared lighting panel for every zone — atmosphere zones
+  // included, since Nic should be able to inspect/tune anywhere. We only
+  // *use* the values for non-atmosphere zones; atmosphere zones rely on
+  // their <Atmosphere /> subsystems instead. Each zone gets its own
+  // persistence bucket via the scope key.
+  const lighting = useLightingControls(
+    `zone:${zoneKey}`,
+    `src/ZoneScene.tsx → zone "${zoneKey}"`,
+    environmentPreset ? { envPreset: environmentPreset } : undefined,
+  );
 
   const sceneInner = (
     <div className={fullBleed ? "ocean ocean--full-bleed" : "ocean"}>
@@ -803,17 +813,28 @@ export default function ZoneScene({
           )}
           {isLit && !useAtmosphere && (
             <>
-              <ambientLight intensity={0.5} />
-              <directionalLight position={[5, 8, 3]} intensity={1.0} />
+              <ambientLight intensity={lighting.ambientIntensity} />
+              <directionalLight
+                position={[lighting.sunX, lighting.sunY, lighting.sunZ]}
+                intensity={lighting.sunIntensity}
+                color={lighting.sunColor}
+              />
               <directionalLight
                 position={[-3, 2, -4]}
-                intensity={0.2}
-                color="#88aaff"
+                intensity={lighting.fillIntensity}
+                color={lighting.fillColor}
+              />
+              <Environment
+                preset={lighting.envPreset as never}
+                environmentIntensity={lighting.envIntensity}
+                background={false}
               />
             </>
           )}
-          {isLit && environmentPreset && (
-            <Environment preset={environmentPreset} />
+          {/* Atmosphere zones still rely on the legacy environmentPreset
+              prop for their HDRI fill (kept for cloud_town's "city" preset). */}
+          {isLit && useAtmosphere && environmentPreset && (
+            <Environment preset={environmentPreset} background={false} />
           )}
           <Suspense fallback={<LoadingFallback />}>
             <ZoneMesh

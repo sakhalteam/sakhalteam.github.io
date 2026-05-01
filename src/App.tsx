@@ -1,3 +1,4 @@
+import { Leva } from "leva";
 import { useState, useRef, useCallback } from "react";
 import { Routes, Route } from "react-router-dom";
 import "./App.css";
@@ -7,6 +8,8 @@ import QuickNav from "./QuickNav";
 import CloudTransition from "./CloudTransition";
 import ComingSoonToast from "./ComingSoonToast";
 import DebugToggle from "./DebugToggle";
+import Toast from "./Toast";
+import { useDebugLightingControls } from "./debugFlags";
 import { useSceneTransition } from "./useSceneTransition";
 import { getActiveZones, getNode } from "./sceneMap";
 import { showComingSoon } from "./comingSoonStore";
@@ -66,8 +69,14 @@ function HomePage() {
 }
 
 export default function App() {
+  // Single global leva panel; visibility driven by the speed-dial checkbox
+  // ("lighting controls"). Mounting it explicitly here overrides leva's
+  // default auto-injection so we can control the `hidden` prop.
+  const showLighting = useDebugLightingControls();
   return (
     <>
+      <Leva hidden={!showLighting} collapsed={false} />
+      <Toast />
       <QuickNav />
       <CloudTransition />
       <ComingSoonToast />
