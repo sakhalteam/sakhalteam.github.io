@@ -1,4 +1,5 @@
 import { Leva } from "leva";
+import { Pause, Play } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import { Routes, Route } from "react-router-dom";
 import "./App.css";
@@ -33,7 +34,10 @@ function HomePage() {
   );
 
   return (
-    <div className={islandFullBleed ? "ocean ocean--full-bleed" : "ocean"}>
+    <div
+      className={`ocean ocean--island ${islandFullBleed ? "ocean--full-bleed" : ""}`}
+      data-zone="island"
+    >
       <header className="site-header">
         <h1 className="site-title">SAKHALTEAM</h1>
         <p className="site-subtitle">an archipelago of small projects</p>
@@ -60,8 +64,9 @@ function HomePage() {
           className="turntable-toggle"
           onClick={() => turntableToggleRef.current?.()}
           title={turntablePlaying ? "Pause rotation" : "Resume rotation"}
+          aria-label={turntablePlaying ? "Pause rotation" : "Resume rotation"}
         >
-          {turntablePlaying ? "\u23F8" : "\u23F5"}
+          {turntablePlaying ? <Pause size={14} /> : <Play size={14} />}
         </button>
       </footer>
     </div>

@@ -26,10 +26,10 @@ interface Options {
    */
   focusedThreshold?: number;
   /**
-   * How close (in world units) the camera has to be to the ideal distance
-   * for `isFocused` to still return true. If the user has manually zoomed
-   * out past this, the next click re-fits instead of firing the action —
-   * so you can't get stuck at a far-out vantage. Default: 3.
+   * How far past the ideal distance the camera can be before `isFocused`
+   * returns false. Being closer than the ideal still counts as focused; if
+   * the user has manually zoomed out past this, the next click re-fits
+   * instead of firing the action. Default: 3.
    */
   distanceTolerance?: number;
   /**
@@ -45,11 +45,11 @@ interface Options {
 export function useFocusOrbit(
   orbitRef: React.RefObject<any>,
   {
-    duration = 350,
+    duration = 1050,
     focusedThreshold = 1.5,
     distanceTolerance = 3,
-    distanceMultiplier = 4,
-    minDistance = 4,
+    distanceMultiplier = 4.5,
+    minDistance = 2,
   }: Options = {},
 ) {
   const tweenRef = useRef<number | null>(null);
@@ -60,7 +60,9 @@ export function useFocusOrbit(
   //             like flight-pathed zones whose position changes every frame.
   //   - idealDistance: the camera-to-target distance we tweened toward. If
   //             the user zooms out past it, isFocused goes false so the
-  //             next click re-fits instead of firing the action.
+  //             next click re-fits instead of firing the action. Being
+  //             closer still counts as focused, so dragging from a focused
+  //             object doesn't snap the camera back out.
   const lastFocusedRef = useRef<{
     point: THREE.Vector3;
     id: string | null;
@@ -115,7 +117,7 @@ export function useFocusOrbit(
             : currentDist;
 
       // Short-circuit: already focused on this thing AND at roughly the
-      // right distance — don't restart the tween. Prevents camera jitter on
+      // right/further-in distance — don't restart the tween. Prevents camera jitter on
       // rapid re-clicks of the same object (which was causing the click-
       // phase raycast to miss small toys). If the user has zoomed out
       // past tolerance, we DO re-tween, so they're never stuck far away.
@@ -126,8 +128,9 @@ export function useFocusOrbit(
           ? last.id === id
           : last.point.distanceTo(point) < focusedThreshold);
       if (identityMatch) {
-        const distDelta = Math.abs(currentDist - last!.idealDistance);
-        if (distDelta <= distanceTolerance) return;
+        const zoomedOutPastTolerance =
+          currentDist - last!.idealDistance > distanceTolerance;
+        if (!zoomedOutPastTolerance) return;
       }
 
       if (tweenRef.current !== null) {
@@ -195,10 +198,12 @@ export function useFocusOrbit(
           : last.point.distanceTo(point) < focusedThreshold;
       if (!identityMatch) return false;
 
-      // Also require we're still at roughly the focused distance; zooming
-      // out past tolerance forces the next click to re-fit.
+      // Also require we're not too far beyond the focused distance; zooming
+      // out past tolerance forces the next click to re-fit. Being closer
+      // than ideal still counts as focused, which lets users start an orbit
+      // drag on the focused object without triggering a zoom-back-out tween.
       const currentDist = camera.position.distanceTo(controls.target);
-      return Math.abs(currentDist - last.idealDistance) <= distanceTolerance;
+      return currentDist - last.idealDistance <= distanceTolerance;
     },
     [focusedThreshold, distanceTolerance],
   );

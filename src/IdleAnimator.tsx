@@ -10,6 +10,7 @@
 //
 //   idle: "undulate"                                  // use defaults
 //   idle: { kind: "undulate", amplitude: 0.3, period: 6 }   // tune it
+//   idleOffset: 0.25                                  // shift phase by 1/4 cycle
 //
 // Note: idle motion (always-on, here) is deliberately separate from
 // `animation` (click-triggered, in ToyInteractor). Some value names overlap
@@ -119,7 +120,10 @@ export default function IdleAnimator({ scene }: { scene: THREE.Object3D }) {
         amplitude,
         freq: TAU / period,
         axis,
-        phase: hashPhase(obj.name),
+        phase:
+          node.idleOffset === undefined
+            ? hashPhase(obj.name)
+            : THREE.MathUtils.euclideanModulo(node.idleOffset, 1) * TAU,
       });
     });
     return list;

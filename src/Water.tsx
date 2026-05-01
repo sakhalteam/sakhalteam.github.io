@@ -20,6 +20,9 @@ const vertexShader = /* glsl */ `
   uniform vec2 uFunnelCenter;
   uniform float uFunnelRadius;
   uniform float uFunnelDepth;
+  uniform vec2 uBeachSafetyCenter;
+  uniform vec2 uBeachSafetyRadius;
+  uniform float uBeachSafetyDepth;
 
   void main() {
     csm_vUv = uv;
@@ -36,17 +39,21 @@ const vertexShader = /* glsl */ `
     float funnel = smoothstep(uFunnelRadius, 0.0, funnelDist);
     float funnelDepression = funnel * funnel * uFunnelDepth;
 
+    vec2 beachDelta = (vertexWorldXZ - uBeachSafetyCenter) / max(uBeachSafetyRadius, vec2(0.001));
+    float beachSafety = 1.0 - smoothstep(0.65, 1.0, length(beachDelta));
+
     // Two overlapping sine waves for organic motion
     float wave1 = sin(position.x * 0.8 + uTime * uWaveSpeed) * uWaveAmplitude;
     float wave2 = sin(position.y * 0.6 + uTime * uWaveSpeed * 0.7 + 1.5) * uWaveAmplitude * 0.6;
 
-    // Dampen waves near shoreline AND inside the funnel so the crater stays clean
-    float waveScale = smoothstep(4.0, 8.0, shoreDist) * (1.0 - funnel);
+    // Dampen waves near shoreline, inside the funnel, and inside any hand-tuned beach-safe cove.
+    float waveScale = smoothstep(4.0, 8.0, shoreDist) * (1.0 - funnel) * (1.0 - beachSafety);
     modifiedPosition.z += (wave1 + wave2) * waveScale;
 
     // Push water surface down near the island to prevent beach submersion
     float shoreDepression = smoothstep(7.0, 3.0, shoreDist) * 0.12;
     modifiedPosition.z -= shoreDepression;
+    modifiedPosition.z -= beachSafety * uBeachSafetyDepth;
 
     modifiedPosition.z -= funnelDepression;
 
@@ -203,6 +210,9 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
+const DEFAULT_BEACH_SAFETY_CENTER: [number, number] = [9999, 9999];
+const DEFAULT_BEACH_SAFETY_RADIUS: [number, number] = [1, 1];
+
 interface WaterProps {
   /** Y position of the water plane */
   waterLevel?: number;
@@ -214,6 +224,12 @@ interface WaterProps {
   funnelRadius?: number;
   /** Max depth of the funnel in world units */
   funnelDepth?: number;
+  /** Optional world XZ center of a cove/beach area that should stay calmer and lower than the open water. */
+  beachSafetyCenter?: [number, number];
+  /** Ellipse radius in world XZ units for the beach-safety depression. */
+  beachSafetyRadius?: [number, number];
+  /** Extra water depression inside the beach-safety ellipse, in world units. */
+  beachSafetyDepth?: number;
   /** Base water color */
   color?: string;
   shallowColor?: string;
@@ -248,6 +264,9 @@ export default function Water({
   funnelCenter,
   funnelRadius = 3.8,
   funnelDepth = 0.85,
+  beachSafetyCenter = DEFAULT_BEACH_SAFETY_CENTER,
+  beachSafetyRadius = DEFAULT_BEACH_SAFETY_RADIUS,
+  beachSafetyDepth = 0,
   color = "#00fccd",
   shallowColor = "#6ee7d8",
   deepColor = "#0b6fb8",
@@ -330,6 +349,13 @@ export default function Water({
         uFunnelCenter: { value: new THREE.Vector2(9999, 9999) },
         uFunnelRadius: { value: funnelRadius },
         uFunnelDepth: { value: funnelDepth },
+        uBeachSafetyCenter: {
+          value: new THREE.Vector2(beachSafetyCenter[0], beachSafetyCenter[1]),
+        },
+        uBeachSafetyRadius: {
+          value: new THREE.Vector2(beachSafetyRadius[0], beachSafetyRadius[1]),
+        },
+        uBeachSafetyDepth: { value: beachSafetyDepth },
         uHoleRadius: { value: funnelRadius * 0.35 },
         uHoleFeather: { value: 0.9 },
         uPlaneSize: { value: size },
@@ -347,6 +373,11 @@ export default function Water({
     size,
     funnelRadius,
     funnelDepth,
+    beachSafetyCenter[0],
+    beachSafetyCenter[1],
+    beachSafetyRadius[0],
+    beachSafetyRadius[1],
+    beachSafetyDepth,
     color,
     shallowColor,
     deepColor,

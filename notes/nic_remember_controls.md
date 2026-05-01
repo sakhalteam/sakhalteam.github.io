@@ -14,6 +14,59 @@ The whole sad saga, the diagnosis, and the rule are saved in memory: `feedback_o
 
 ---
 
+### toys that activate on the first click
+
+Toy click behavior is wired through:
+
+- `src/sceneMap.ts` - where each toy gets `sounds`, `animation`, `focusDistance`, and `focusBehavior`
+- `src/ToyInteractor.tsx` - raycasts toys, focuses the camera on pointerdown, then triggers sound/animation on click
+- `src/useFocusOrbit.ts` - owns the focus tween and the special `"instant"` behavior
+
+To make a toy do its sound/animation immediately without doing the focus tween first, add:
+
+```ts
+focusBehavior: "instant",
+```
+
+Example:
+
+```ts
+toy("ct_toy_fox_arwing", "Fox's Arwing", "cloud_town", {
+  sounds: ["/sounds/fox_snes.wav"],
+  animation: "none",
+  focusBehavior: "instant",
+})
+```
+
+This is useful for moving targets, tiny fiddly targets, or toys where the click should feel like a button press instead of a "focus, then activate" interaction.
+
+Normal toys use the default `focusBehavior: "fit"`, which means clicking them starts a camera focus. The activation still happens on that same click in `ToyInteractor`, but the code remembers the pointerdown toy so the camera tween does not make the click-phase raycast miss nearby toys.
+
+---
+
+### toy hitboxes and BVH raycasting
+
+Toy picking lives in `src/ToyInteractor.tsx`.
+
+Default behavior:
+
+- If Blender exports `<toy_name>_hitbox`, ToyInteractor uses that invisible helper mesh for clicks.
+- If there is no `_hitbox`, ToyInteractor raycasts against the toy's own visible meshes.
+
+For finicky animated/skinned toys, opt into BVH picking in `src/sceneMap.ts`:
+
+```ts
+toy("ssb_toy_shark", "Shark", "ss_brainfog", {
+  raycast: "bvh",
+})
+```
+
+`raycast: "bvh"` tells ToyInteractor to snapshot the toy's current deformed geometry with `three-mesh-bvh`'s `StaticGeometryGenerator`, refit the BVH, and click-test the actual current geometry. This intentionally overrides a Blender `_hitbox` for that toy.
+
+Use it sparingly. Normal buildings/props should keep default raycasting or Blender `_hitbox` helpers.
+
+---
+
 ### camera zoom speed and distance stuff
 
 Yep. The zoom stuff is mainly in three places:

@@ -16,11 +16,13 @@
     "leva": "^0.10.1",
     "lucide-react": "^1.11.0",
     "postprocessing": "^6.39.0",
+    "r3f-perf": "^7.2.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1",
     "three": "^0.183.1",
-    "three-custom-shader-material": "^6.4.0"
+    "three-custom-shader-material": "^6.4.0",
+    "three-mesh-bvh": "^0.8.3"
   },
   "devDependencies": {
     "@gltf-transform/cli": "^4.3.0",

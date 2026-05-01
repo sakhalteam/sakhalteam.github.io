@@ -5,6 +5,11 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { getToyConfig, type ToyAnimation } from "./sceneMap";
 import { playCyclingSound } from "./audio";
+import {
+  MeshBVH,
+  MeshBVHHelper,
+  StaticGeometryGenerator,
+} from "three-mesh-bvh";
 import * as THREE from "three";
 
 /** Screen-space radius (px) within which the cursor reveals a toy label */
@@ -29,6 +34,16 @@ interface ToyData {
   labelOffsetY: number;
   focusDistance?: number;
   focusBehavior?: "fit" | "instant";
+  raycastMode: "default" | "bvh";
+  bvh?: ToyBvhRaycast;
+}
+
+type BvhGeometry = THREE.BufferGeometry & { boundsTree?: MeshBVH };
+
+interface ToyBvhRaycast {
+  generator: StaticGeometryGenerator;
+  geometry: BvhGeometry;
+  mesh: THREE.Mesh;
 }
 
 interface ToyState {
@@ -56,6 +71,42 @@ function collectMeshesExcludingHitboxes(obj: THREE.Object3D): THREE.Mesh[] {
   };
   walk(obj);
   return meshes;
+}
+
+function refreshToyBvh(toy: ToyData) {
+  if (!toy.bvh) return;
+  const { generator, geometry } = toy.bvh;
+  generator.generate(geometry);
+  geometry.boundsTree?.refit();
+}
+
+function ToyBvhDebugHelper({ toy }: { toy: ToyData }) {
+  const helper = useMemo(() => {
+    if (!toy.bvh) return null;
+    const h = new MeshBVHHelper(toy.bvh.mesh, 10);
+    h.color.set("#00ff88");
+    h.opacity = 0.45;
+    h.displayParents = false;
+    h.displayEdges = true;
+    h.update();
+    return h;
+  }, [toy]);
+
+  useFrame(() => {
+    if (!helper || !toy.bvh) return;
+    try {
+      refreshToyBvh(toy);
+      helper.update();
+    } catch (error) {
+      console.warn(
+        `[ToyInteractor] BVH debug helper failed for ${toy.obj.name}.`,
+        error,
+      );
+    }
+  });
+
+  if (!helper) return null;
+  return <primitive object={helper} raycast={() => null} />;
 }
 
 import { setToyUnderPointer } from "./toyClickFlag";
@@ -113,7 +164,9 @@ export default function ToyInteractor({
     const m = new THREE.AnimationMixer(scene);
     return m;
   }, [scene, animations]);
-  const pointerDown = useRef<{ x: number; y: number } | null>(null);
+  const pointerDown = useRef<{ x: number; y: number; toy: ToyData | null } | null>(
+    null,
+  );
   const mouseScreen = useRef<{ x: number; y: number }>({ x: -9999, y: -9999 });
   const { camera, gl } = useThree();
   const debugHitboxes = useDebugHitboxes();
@@ -218,9 +271,32 @@ export default function ToyInteractor({
           labelOffsetY: config.labelOffsetY,
           focusDistance: config.focusDistance,
           focusBehavior: config.focusBehavior,
-        }) satisfies ToyData,
+          raycastMode: config.raycast,
+        }) as ToyData,
     );
   }, [scene, debugHitboxes]);
+
+  useMemo(() => {
+    for (const toy of toys) {
+      if (toy.raycastMode !== "bvh") continue;
+      try {
+        const generator = new StaticGeometryGenerator(toy.obj);
+        generator.useGroups = false;
+        generator.applyWorldTransforms = true;
+        const geometry = generator.generate() as BvhGeometry;
+        geometry.boundsTree = new MeshBVH(geometry);
+        const mesh = new THREE.Mesh(geometry);
+        mesh.matrixAutoUpdate = false;
+        toy.bvh = { generator, geometry, mesh };
+      } catch (error) {
+        console.warn(
+          `[ToyInteractor] BVH raycast setup failed for ${toy.obj.name}; falling back to default raycast.`,
+          error,
+        );
+        toy.raycastMode = "default";
+      }
+    }
+  }, [toys]);
 
   // Categorize Blender animations: shorter clips = click actions cycled per
   // click. Named idle/loop/cycle clips are handled by IdleClipPlayer (own
@@ -292,8 +368,19 @@ export default function ToyInteractor({
     }
   }, [toys]);
 
-  // All toy meshes for raycasting (hitbox if present, else own meshes)
-  const allMeshes = useMemo(() => toys.flatMap((t) => t.raycastMeshes), [toys]);
+  // All default toy meshes for raycasting (hitbox if present, else own meshes).
+  // BVH opt-in toys are checked separately against a deformed geometry snapshot.
+  const allMeshes = useMemo(
+    () =>
+      toys
+        .filter((t) => t.raycastMode !== "bvh")
+        .flatMap((t) => t.raycastMeshes),
+    [toys],
+  );
+  const bvhToys = useMemo(
+    () => toys.filter((t) => t.raycastMode === "bvh" && t.bvh),
+    [toys],
+  );
   const meshToToy = useMemo(() => {
     const map = new Map<THREE.Mesh, ToyData>();
     for (const toy of toys) {
@@ -308,13 +395,44 @@ export default function ToyInteractor({
       pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
+
+      let bestToy: ToyData | null = null;
+      let bestDistance = Infinity;
+
       const hits = raycaster.intersectObjects(allMeshes, false);
       if (hits.length > 0) {
-        return meshToToy.get(hits[0].object as THREE.Mesh) ?? null;
+        bestToy = meshToToy.get(hits[0].object as THREE.Mesh) ?? null;
+        bestDistance = hits[0].distance;
       }
-      return null;
+
+      for (const toy of bvhToys) {
+        if (!toy.bvh) continue;
+        const { geometry } = toy.bvh;
+        try {
+          refreshToyBvh(toy);
+          const hit = geometry.boundsTree?.raycastFirst(
+            raycaster.ray,
+            THREE.DoubleSide,
+            raycaster.near,
+            raycaster.far,
+          );
+          if (!hit) continue;
+          const distance = hit.point.distanceTo(raycaster.ray.origin);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestToy = toy;
+          }
+        } catch (error) {
+          console.warn(
+            `[ToyInteractor] BVH raycast failed for ${toy.obj.name}; ignoring this BVH hit.`,
+            error,
+          );
+        }
+      }
+
+      return bestToy;
     },
-    [gl, camera, raycaster, pointer, allMeshes, meshToToy],
+    [gl, camera, raycaster, pointer, allMeshes, meshToToy, bvhToys],
   );
 
   const triggerAnimation = useCallback((toy: ToyData) => {
@@ -362,6 +480,22 @@ export default function ToyInteractor({
     }
   }, []);
 
+  const focusToy = useCallback(
+    (toy: ToyData) => {
+      if (!onFocus) return;
+      tmpBox.setFromObject(toy.obj);
+      tmpBox.getCenter(tmpVec3);
+      const size = new THREE.Vector3();
+      tmpBox.getSize(size);
+      const radius = size.length() / 2;
+      onFocus(tmpVec3.clone(), `toy:${toy.obj.name}`, radius, {
+        distance: toy.focusDistance,
+        behavior: toy.focusBehavior,
+      });
+    },
+    [onFocus, tmpBox, tmpVec3],
+  );
+
   // Canvas event listeners for hover + click + mouse tracking
   useEffect(() => {
     const canvas = gl.domElement;
@@ -395,19 +529,8 @@ export default function ToyInteractor({
     };
 
     const onPointerDown = (e: PointerEvent) => {
-      pointerDown.current = { x: e.clientX, y: e.clientY };
       const toy = hitTest(e);
-      if (toy) {
-        tmpBox.setFromObject(toy.obj);
-        tmpBox.getCenter(tmpVec3);
-        const size = new THREE.Vector3();
-        tmpBox.getSize(size);
-        const radius = size.length() / 2;
-        onFocus?.(tmpVec3.clone(), `toy:${toy.obj.name}`, radius, {
-          distance: toy.focusDistance,
-          behavior: toy.focusBehavior,
-        });
-      }
+      pointerDown.current = { x: e.clientX, y: e.clientY, toy };
       // Flag for ZoneHitbox: a toy is under the cursor, don't navigate
       setToyUnderPointer(!!toy);
     };
@@ -420,9 +543,10 @@ export default function ToyInteractor({
         const dy = e.clientY - pointerDown.current.y;
         if (dx * dx + dy * dy > 25) return;
       }
-      const toy = hitTest(e);
+      const toy = pointerDown.current?.toy ?? hitTest(e);
       if (toy) {
         e.stopPropagation(); // block zone/portal click handlers
+        focusToy(toy);
         triggerAnimation(toy);
       }
     };
@@ -440,7 +564,7 @@ export default function ToyInteractor({
         lastHoveredToy.current = null;
       }
     };
-  }, [gl, hitTest, triggerAnimation, onHoverChange, onFocus, tmpBox, tmpVec3]);
+  }, [gl, hitTest, triggerAnimation, focusToy, onHoverChange]);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
@@ -600,6 +724,15 @@ export default function ToyInteractor({
     <>
       {debugHitboxes &&
         toys.map((toy) => {
+          if (toy.raycastMode === "bvh" && toy.bvh) {
+            return (
+              <ToyBvhDebugHelper
+                key={`dbg-bvh-${toy.obj.name}`}
+                toy={toy}
+              />
+            );
+          }
+
           const box = new THREE.Box3().setFromObject(toy.obj);
           const size = new THREE.Vector3();
           const center = new THREE.Vector3();

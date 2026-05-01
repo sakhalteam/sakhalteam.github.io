@@ -9,7 +9,26 @@
   justify-content: center;
   height: 100vh;
   gap: 0.75rem;
+  padding: 0.75rem 0 1rem;
   user-select: none;
+  --footer-bg: rgba(18, 22, 28, 0.35);
+  --footer-border: transparent;
+  --footer-color: var(--muted);
+  --footer-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  --footer-blur: 6px;
+}
+
+.ocean--island {
+  --footer-bg: rgba(4, 10, 14, 0.74);
+  --footer-border: rgba(255, 255, 255, 0.14);
+  --footer-color: #e6f4f2;
+  --footer-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 12px rgba(0, 0, 0, 0.55);
+  --footer-blur: 10px;
+}
+
+.ocean--cloud-town {
+  --footer-bg: rgba(12, 20, 34, 0.28);
+  --footer-color: var(--muted);
 }
 
 /* Full-bleed zones: canvas covers the viewport, header/footer float over it.
@@ -50,9 +69,12 @@
   bottom: 0.75rem;
   padding: 0.35rem 0.9rem;
   border-radius: 99px;
-  background: rgba(18, 22, 28, 0.35);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  color: var(--footer-color);
+  background: var(--footer-bg);
+  border: 1px solid var(--footer-border);
+  text-shadow: var(--footer-shadow);
+  backdrop-filter: blur(var(--footer-blur));
+  -webkit-backdrop-filter: blur(var(--footer-blur));
 }
 
 /* Interactive bits inside overlays still need to receive clicks. */
@@ -66,6 +88,7 @@
 
 .site-header {
   text-align: center;
+  padding: 0 1rem;
 }
 
 .site-title {
@@ -498,13 +521,13 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  padding: 0 1rem;
 }
 
 .turntable-toggle {
   background: none;
   border: 1px solid var(--card-border);
   color: var(--muted);
-  font-size: 0.85rem;
   width: 1.6rem;
   height: 1.6rem;
   display: flex;
@@ -516,6 +539,18 @@
     color 0.15s,
     border-color 0.15s;
   flex-shrink: 0;
+}
+
+.turntable-toggle svg {
+  display: block;
+  width: 0.875rem;
+  height: 0.875rem;
+  stroke-width: 2.4;
+}
+
+.ocean--full-bleed .turntable-toggle {
+  color: inherit;
+  border-color: var(--footer-border);
 }
 
 .turntable-toggle:hover {
@@ -850,4 +885,16 @@
   color: var(--accent);
   border-color: rgba(224, 90, 58, 0.6);
   background: rgba(224, 90, 58, 0.1);
+}
+
+.perf-monitor {
+  left: 1.5rem !important;
+  bottom: 3.25rem !important;
+  z-index: 2147483647 !important;
+  pointer-events: auto;
+}
+
+.perf-monitor *,
+.perf-monitor .__perf_toggle {
+  z-index: 2147483647 !important;
 }

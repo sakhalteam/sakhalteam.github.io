@@ -39,16 +39,19 @@ import type { AtmosphereSubsystem, Weather } from "./environment/presets";
  *     turntable      boolean             auto-rotate camera; default true
  *     camera         { padding, elevation, azimuth, min/maxZoomMultiplier }
  *     idle           IdleConfig          always-on motion (see below)
+ *     idleOffset     number              optional 0..1 cycle phase offset
  *     labelOffsetY   number              extra world-units to lift hover label
  *     fullBleed      boolean             canvas edge-to-edge; UI floats
  *     focusDistance  number              click-to-focus override (world-units)
  *     focusBehavior  "fit" | "instant"   "instant" = no tween, fire immediately
+ *     raycast        "default" | "bvh"    opt into animated/deformed geometry picking on island
  *
  *   portal(key, label, url, parent, opts):
- *     idle, labelOffsetY, focusDistance, focusBehavior  (subset of above)
+ *     idle, idleOffset, labelOffsetY, focusDistance, focusBehavior, raycast  (subset of above)
  *
  *   toy(key, label, parent, opts):
- *     sounds, animation, idle, focusDistance, focusBehavior
+ *     sounds, animation, idle, idleOffset, focusDistance, focusBehavior
+ *     raycast        "default" | "bvh"    opt into deformed-geometry BVH picking
  *     interactive    boolean             clickable? default true
  *     showLabel      boolean             proximity label on hover; default true
  *     showOutline    boolean             toy-level outline on hover; default true
@@ -171,6 +174,8 @@ export interface SceneNode {
   sounds?: string[];
   animation?: ToyAnimation;
   idle?: IdleConfig;
+  /** Optional cycle offset for IdleAnimator. 0.25 = start a quarter-cycle later. */
+  idleOffset?: number;
   flight?: FlightConfig;
   /** If false, toy is not clickable and has no animation/sound — pure outline-group member. */
   interactive?: boolean;
@@ -192,6 +197,8 @@ export interface SceneNode {
    *     immediately. Use for moving targets (e.g. flight zones) where
    *     chasing the focus point makes the object fly off-screen anyway. */
   focusBehavior?: "fit" | "instant";
+  /** Raycast mode. Toys use this everywhere; zones/portals currently use it on the main island. */
+  raycast?: "default" | "bvh";
   /** Zones: auto-turntable rotation. Default true. Set false to keep the camera still. */
   turntable?: boolean;
   /** Zones: optional camera override for useAutoFitCamera. */
@@ -220,10 +227,12 @@ function zone(
     turntable?: boolean;
     camera?: SceneNode["camera"];
     idle?: IdleConfig;
+    idleOffset?: number;
     labelOffsetY?: number;
     fullBleed?: boolean;
     focusDistance?: number;
     focusBehavior?: "fit" | "instant";
+    raycast?: SceneNode["raycast"];
   } = {},
 ): SceneNode {
   return {
@@ -245,6 +254,7 @@ function zone(
     ...(opts.turntable === false && { turntable: false }),
     ...(opts.camera && { camera: opts.camera }),
     ...(opts.idle !== undefined && { idle: opts.idle }),
+    ...(opts.idleOffset !== undefined && { idleOffset: opts.idleOffset }),
     ...(opts.labelOffsetY !== undefined && { labelOffsetY: opts.labelOffsetY }),
     ...(opts.fullBleed !== undefined && { fullBleed: opts.fullBleed }),
     ...(opts.focusDistance !== undefined && {
@@ -253,6 +263,7 @@ function zone(
     ...(opts.focusBehavior !== undefined && {
       focusBehavior: opts.focusBehavior,
     }),
+    ...(opts.raycast !== undefined && { raycast: opts.raycast }),
   };
 }
 
@@ -263,9 +274,11 @@ function portal(
   parent: string,
   opts: {
     idle?: IdleConfig;
+    idleOffset?: number;
     labelOffsetY?: number;
     focusDistance?: number;
     focusBehavior?: "fit" | "instant";
+    raycast?: SceneNode["raycast"];
   } = {},
 ): SceneNode {
   return {
@@ -278,6 +291,7 @@ function portal(
     parent,
     children: [],
     ...(opts.idle !== undefined && { idle: opts.idle }),
+    ...(opts.idleOffset !== undefined && { idleOffset: opts.idleOffset }),
     ...(opts.labelOffsetY !== undefined && { labelOffsetY: opts.labelOffsetY }),
     ...(opts.focusDistance !== undefined && {
       focusDistance: opts.focusDistance,
@@ -285,6 +299,7 @@ function portal(
     ...(opts.focusBehavior !== undefined && {
       focusBehavior: opts.focusBehavior,
     }),
+    ...(opts.raycast !== undefined && { raycast: opts.raycast }),
   };
 }
 
@@ -296,6 +311,7 @@ function toy(
     sounds?: string[];
     animation?: ToyAnimation;
     idle?: IdleConfig;
+    idleOffset?: number;
     flight?: FlightConfig;
     interactive?: boolean;
     showLabel?: boolean;
@@ -303,6 +319,7 @@ function toy(
     labelOffsetY?: number;
     focusDistance?: number;
     focusBehavior?: "fit" | "instant";
+    raycast?: SceneNode["raycast"];
   } = {},
 ): SceneNode {
   return {
@@ -317,6 +334,7 @@ function toy(
     ...(opts.sounds && { sounds: opts.sounds }),
     ...(opts.animation && { animation: opts.animation }),
     ...(opts.idle && { idle: opts.idle }),
+    ...(opts.idleOffset !== undefined && { idleOffset: opts.idleOffset }),
     ...(opts.flight && { flight: opts.flight }),
     ...(opts.interactive === false && { interactive: false }),
     ...(opts.showLabel === false && { showLabel: false }),
@@ -328,6 +346,7 @@ function toy(
     ...(opts.focusBehavior !== undefined && {
       focusBehavior: opts.focusBehavior,
     }),
+    ...(opts.raycast !== undefined && { raycast: opts.raycast }),
   };
 }
 
@@ -432,6 +451,7 @@ const nodes: SceneNode[] = [
     fullBleed: true,
     camera: { padding: 1, elevation: 0.45, azimuth: 0.3 },
     idle: { kind: "undulate", amplitude: 0.07, period: 4 },
+    raycast: "bvh",
     atmosphere: {
       enabled: [
         "sky",
@@ -626,6 +646,7 @@ const nodes: SceneNode[] = [
   portal("weather_report", "Weather Report", "/weather-report/", "cloud_town", {
     idle: "undulate",
     labelOffsetY: 5,
+    raycast: "bvh",
   }),
   portal("famima", "Family Mart", "/famima/", "island"),
   portal(
@@ -749,11 +770,10 @@ const nodes: SceneNode[] = [
   }),
   toy("i_pi_toy_lapras", "Lapras", "pokemon_island", {
     sounds: ["/sounds/lapras.ogg"],
-    idle: "float",
+    idle: "undulate",
   }),
   toy("i_pi_toy_pollywag", "Poliwag", "pokemon_island", {
     sounds: ["/sounds/poliwag.ogg"],
-    idle: "float",
   }),
   structural("i_pi_toy_bridge", "Bridge", "pokemon_island"),
 
@@ -951,6 +971,7 @@ const nodes: SceneNode[] = [
       "/sounds/ct_toy_weather_report_04.wav",
     ],
     animation: "none",
+    raycast: "bvh",
   }),
   toy("ct_toy_keyboard", "Keyboard", "cloud_town", {
     showLabel: false,
@@ -959,26 +980,38 @@ const nodes: SceneNode[] = [
   toy("ct_toy_cloud_01", "Cloud", "cloud_town", {
     showLabel: false,
     showOutline: false,
+    idle: "undulate",
+    idleOffset: 0.25,
   }),
   toy("ct_toy_cloud_02", "Cloud", "cloud_town", {
     showLabel: false,
     showOutline: false,
+    idle: "undulate",
+    idleOffset: 0.35,
   }),
   toy("ct_toy_cloud_03", "Cloud", "cloud_town", {
     showLabel: false,
     showOutline: false,
+    idle: "undulate",
+    idleOffset: 0.45,
   }),
   toy("ct_toy_cloud_04", "Cloud", "cloud_town", {
     showLabel: false,
     showOutline: false,
+    idle: "undulate",
+    idleOffset: 0.55,
   }),
   toy("ct_toy_cloud_05", "Cloud", "cloud_town", {
     showLabel: false,
     showOutline: false,
+    idle: "undulate",
+    idleOffset: 0.65,
   }),
 
   // ── Toys inside zone_ss_brainfog.glb (parent: ss_brainfog) ──
-  toy("ssb_toy_shark", "Shark", "ss_brainfog"),
+  toy("ssb_toy_shark", "Shark", "ss_brainfog", {
+    raycast: "bvh",
+  }),
   toy("ssb_toy_ss_aqua", "S.S. Aqua", "ss_brainfog", {
     sounds: ["/sounds/ssb_toy_ss_aqua.mp3"],
     animation: "hop",
@@ -1252,6 +1285,7 @@ export function getToyConfig(objName: string):
       labelOffsetY: number;
       focusDistance?: number;
       focusBehavior?: "fit" | "instant";
+      raycast: "default" | "bvh";
     }
   | undefined {
   const node = sceneMap.get(objName.toLowerCase());
@@ -1267,6 +1301,7 @@ export function getToyConfig(objName: string):
     labelOffsetY: node.labelOffsetY ?? 0,
     focusDistance: node.focusDistance,
     focusBehavior: node.focusBehavior,
+    raycast: node.raycast ?? "default",
   };
 }
 

@@ -8,8 +8,10 @@ import {
 } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { EffectComposer, ToneMapping } from "@react-three/postprocessing";
+import { Pause, Play } from "lucide-react";
 import { useControls } from "leva";
 import { ToneMappingMode } from "postprocessing";
+import { Perf } from "r3f-perf";
 import {
   memo,
   Suspense,
@@ -21,11 +23,17 @@ import {
 } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import {
+  acceleratedRaycast,
+  MeshBVH,
+  MeshBVHHelper,
+  StaticGeometryGenerator,
+} from "three-mesh-bvh";
 import { AdaptiveLabel } from "./AdaptiveLabel";
 import "./App.css";
 import Breadcrumbs from "./Breadcrumbs";
 import { showComingSoon } from "./comingSoonStore";
-import { useDebugHitboxes } from "./debugFlags";
+import { useDebugHitboxes, useDebugPerformanceMonitor } from "./debugFlags";
 import { Atmosphere, AtmospherePanel, AtmosphereProvider } from "./environment";
 import FlightPath, { type FlightPathConfig } from "./FlightPath";
 import IdleAnimator from "./IdleAnimator";
@@ -72,6 +80,43 @@ interface Hotspot {
   labelOffsetY: number;
   focusDistance?: number;
   focusBehavior?: "fit" | "instant";
+  raycastMode: "default" | "bvh";
+}
+
+type HotspotBvhGeometry = THREE.BufferGeometry & { boundsTree?: MeshBVH };
+
+interface HotspotBvhRaycast {
+  generator: StaticGeometryGenerator;
+  geometry: HotspotBvhGeometry;
+  mesh: THREE.Mesh;
+}
+
+function refreshHotspotBvh(bvh: HotspotBvhRaycast) {
+  bvh.generator.generate(bvh.geometry);
+  bvh.geometry.boundsTree?.refit();
+}
+
+function HotspotBvhDebugHelper({ bvh }: { bvh: HotspotBvhRaycast }) {
+  const helper = useMemo(() => {
+    const h = new MeshBVHHelper(bvh.mesh, 10);
+    h.color.set("#ff7055");
+    h.opacity = 0.45;
+    h.displayParents = false;
+    h.displayEdges = true;
+    h.update();
+    return h;
+  }, [bvh]);
+
+  useFrame(() => {
+    try {
+      refreshHotspotBvh(bvh);
+      helper.update();
+    } catch (error) {
+      console.warn("[ZoneScene] BVH hotspot debug helper failed.", error);
+    }
+  });
+
+  return <primitive object={helper} raycast={() => null} />;
 }
 
 const HotspotHitbox = memo(function HotspotHitbox({
@@ -113,66 +158,161 @@ const HotspotHitbox = memo(function HotspotHitbox({
     [hotspot.focusDistance, hotspot.focusBehavior],
   );
 
+  const bvh = useMemo<HotspotBvhRaycast | null>(() => {
+    if (hotspot.raycastMode !== "bvh") return null;
+    try {
+      const generator = new StaticGeometryGenerator(hotspot.sceneObj);
+      generator.useGroups = false;
+      generator.applyWorldTransforms = true;
+      const geometry = generator.generate() as HotspotBvhGeometry;
+      geometry.boundsTree = new MeshBVH(geometry);
+      const mesh = new THREE.Mesh(
+        geometry,
+        new THREE.MeshBasicMaterial({
+          visible: false,
+          depthWrite: false,
+          colorWrite: false,
+        }),
+      );
+      mesh.name = `${hotspot.name}_bvh_hit`;
+      mesh.raycast = acceleratedRaycast;
+      mesh.matrixAutoUpdate = false;
+      return { generator, geometry, mesh };
+    } catch (error) {
+      console.warn(
+        `[ZoneScene] BVH raycast setup failed for ${hotspot.name}; falling back to box hitbox.`,
+        error,
+      );
+      return null;
+    }
+  }, [hotspot]);
+
   // Track the underlying obj's world position every frame so animated zones
   // (e.g. an orbiting Great Fox parented to a rotating empty) stay clickable.
   // For static zones this is a no-op — the value just doesn't change.
+  // Also refresh BVH snapshots for deformed/animated geometry.
   useFrame(() => {
     if (groupRef.current && hotspot.sceneObj) {
       hotspot.sceneObj.getWorldPosition(groupRef.current.position);
     }
+    if (bvh) {
+      try {
+        refreshHotspotBvh(bvh);
+      } catch (error) {
+        console.warn(
+          `[ZoneScene] BVH raycast refresh failed for ${hotspot.name}.`,
+          error,
+        );
+      }
+    }
   });
+
+  const pointerHandlers = {
+    onPointerOver: (e: { stopPropagation: () => void }) => {
+      e.stopPropagation();
+      setHovered(true);
+      onHoverChange(hotspot, true);
+      document.body.style.cursor = "pointer";
+    },
+    onPointerOut: () => {
+      setHovered(false);
+      onHoverChange(hotspot, false);
+      document.body.style.cursor = "auto";
+    },
+    onPointerDown: (e: { clientX: number; clientY: number }) => {
+      pointerDown.current = { x: e.clientX, y: e.clientY };
+    },
+    onClick: (e: {
+      stopPropagation: () => void;
+      clientX: number;
+      clientY: number;
+    }) => {
+      e.stopPropagation();
+      // If ToyInteractor detected a toy under the cursor on pointerdown,
+      // bail — let the toy's capture-phase handler own this click.
+      // Matches IslandScene's ZoneHitbox guard; without it, clicking a
+      // toy parented atop a portal (e.g. weather_dance on weather_report)
+      // triggers the portal's navigate on the second click.
+      if (isToyUnderPointer()) return;
+      if (pointerDown.current) {
+        const dx = e.clientX - pointerDown.current.x;
+        const dy = e.clientY - pointerDown.current.y;
+        if (dx * dx + dy * dy > 25) return;
+      }
+      // Use live world position for animated zones (e.g. orbiting
+      // Great Fox); falls through to hotspot.center for static zones.
+      const liveCenter = new THREE.Vector3();
+      if (hotspot.sceneObj) {
+        hotspot.sceneObj.getWorldPosition(liveCenter);
+      } else {
+        liveCenter.copy(hotspot.center);
+      }
+      if (!isFocused(liveCenter, hotspot.key)) {
+        onFocus(liveCenter, hotspot.key, focusRadius, focusOpts);
+        // For "instant" behavior, fire the action on this same click —
+        // the focus call just marks the thing as focused without tweening.
+        if (focusOpts.behavior !== "instant") return;
+      }
+      if (hotspot.url) {
+        onNavigate(hotspot.url, hotspot.internal);
+      } else {
+        onComingSoon(hotspot.label);
+      }
+    },
+  };
+
+  const label = (
+    <AdaptiveLabel
+      position={[0, size.y / 2 + 0.2 + hotspot.labelOffsetY, 0]}
+      nearDistance={5}
+      farDistance={20}
+    >
+      <div
+        style={{
+          background: hovered ? "rgba(0,0,0,0.9)" : "rgba(0,0,0,0.75)",
+          color: hovered
+            ? hotspot.url
+              ? "#ff8a6a"
+              : "#7dd3fc"
+            : hotspot.url
+              ? "#e05a3a"
+              : "#9ca3af",
+          padding: hovered ? "4px 14px" : "3px 10px",
+          borderRadius: "99px",
+          fontSize: hovered ? "14px" : "12px",
+          letterSpacing: "0.1em",
+          whiteSpace: "nowrap",
+          border: `1px solid ${
+            hovered
+              ? hotspot.url
+                ? "rgba(224,90,58,0.8)"
+                : "rgba(125,211,252,0.5)"
+              : "rgba(255,255,255,0.1)"
+          }`,
+          boxShadow: hovered
+            ? `0 0 12px ${hotspot.url ? "rgba(224,90,58,0.5)" : "rgba(125,211,252,0.3)"}`
+            : "none",
+          transition: "all 0.15s ease",
+        }}
+      >
+        {hotspot.label}
+      </div>
+    </AdaptiveLabel>
+  );
+
+  if (bvh) {
+    return (
+      <group ref={groupRef} position={hotspot.center}>
+        <primitive object={bvh.mesh} {...pointerHandlers} />
+        {debugHitboxes && <HotspotBvhDebugHelper bvh={bvh} />}
+        {label}
+      </group>
+    );
+  }
 
   return (
     <group ref={groupRef} position={hotspot.center}>
-      <mesh
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          setHovered(true);
-          onHoverChange(hotspot, true);
-          document.body.style.cursor = "pointer";
-        }}
-        onPointerOut={() => {
-          setHovered(false);
-          onHoverChange(hotspot, false);
-          document.body.style.cursor = "auto";
-        }}
-        onPointerDown={(e) => {
-          pointerDown.current = { x: e.clientX, y: e.clientY };
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          // If ToyInteractor detected a toy under the cursor on pointerdown,
-          // bail — let the toy's capture-phase handler own this click.
-          // Matches IslandScene's ZoneHitbox guard; without it, clicking a
-          // toy parented atop a portal (e.g. weather_dance on weather_report)
-          // triggers the portal's navigate on the second click.
-          if (isToyUnderPointer()) return;
-          if (pointerDown.current) {
-            const dx = e.clientX - pointerDown.current.x;
-            const dy = e.clientY - pointerDown.current.y;
-            if (dx * dx + dy * dy > 25) return;
-          }
-          // Use live world position for animated zones (e.g. orbiting
-          // Great Fox); falls through to hotspot.center for static zones.
-          const liveCenter = new THREE.Vector3();
-          if (hotspot.sceneObj) {
-            hotspot.sceneObj.getWorldPosition(liveCenter);
-          } else {
-            liveCenter.copy(hotspot.center);
-          }
-          if (!isFocused(liveCenter, hotspot.key)) {
-            onFocus(liveCenter, hotspot.key, focusRadius, focusOpts);
-            // For "instant" behavior, fire the action on this same click —
-            // the focus call just marks the thing as focused without tweening.
-            if (focusOpts.behavior !== "instant") return;
-          }
-          if (hotspot.url) {
-            onNavigate(hotspot.url, hotspot.internal);
-          } else {
-            onComingSoon(hotspot.label);
-          }
-        }}
-      >
+      <mesh {...pointerHandlers}>
         <boxGeometry args={[size.x, size.y, size.z]} />
         {debugHitboxes ? (
           <meshBasicMaterial
@@ -185,42 +325,7 @@ const HotspotHitbox = memo(function HotspotHitbox({
           <meshStandardMaterial visible={false} />
         )}
       </mesh>
-      <AdaptiveLabel
-        position={[0, size.y / 2 + 0.2 + hotspot.labelOffsetY, 0]}
-        nearDistance={5}
-        farDistance={20}
-      >
-        <div
-          style={{
-            background: hovered ? "rgba(0,0,0,0.9)" : "rgba(0,0,0,0.75)",
-            color: hovered
-              ? hotspot.url
-                ? "#ff8a6a"
-                : "#7dd3fc"
-              : hotspot.url
-                ? "#e05a3a"
-                : "#9ca3af",
-            padding: hovered ? "4px 14px" : "3px 10px",
-            borderRadius: "99px",
-            fontSize: hovered ? "14px" : "12px",
-            letterSpacing: "0.1em",
-            whiteSpace: "nowrap",
-            border: `1px solid ${
-              hovered
-                ? hotspot.url
-                  ? "rgba(224,90,58,0.8)"
-                  : "rgba(125,211,252,0.5)"
-                : "rgba(255,255,255,0.1)"
-            }`,
-            boxShadow: hovered
-              ? `0 0 12px ${hotspot.url ? "rgba(224,90,58,0.5)" : "rgba(125,211,252,0.3)"}`
-              : "none",
-            transition: "all 0.15s ease",
-          }}
-        >
-          {hotspot.label}
-        </div>
-      </AdaptiveLabel>
+      {label}
     </group>
   );
 });
@@ -333,6 +438,7 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
       labelOffsetY: node?.labelOffsetY ?? 0,
       focusDistance: node?.focusDistance,
       focusBehavior: node?.focusBehavior,
+      raycastMode: node?.raycast ?? "default",
     });
   }
 
@@ -705,6 +811,7 @@ export default function ZoneScene({
 }: ZoneSceneProps) {
   const atmosphereConfig = getNode(zoneKey)?.atmosphere;
   const fullBleed = getNode(zoneKey)?.fullBleed === true;
+  const showPerformanceMonitor = useDebugPerformanceMonitor();
   const orbitRef = useRef<any>(null);
   const turntableToggleRef = useRef<(() => void) | null>(null);
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map());
@@ -754,19 +861,39 @@ export default function ZoneScene({
   // analytic lighting (same setup as IslandScene).
   const useAtmosphere = !!atmosphereConfig;
 
-  // Per-zone lighting mode (lit/unlit). Kept on every zone so we can fall
-  // back to MeshBasicMaterial if the lit pipeline ever looks wrong again.
+  // Per-zone lighting mode (lit/unlit). Persisted to localStorage per zone
+  // so the setting survives refreshes. Default is "unlit" for all zones.
+  const lightingModeKey = `sakhalteam.lightingMode.${zoneKey}`;
+  const storedLightingMode = useMemo(() => {
+    try {
+      return (
+        (window.localStorage.getItem(lightingModeKey) as
+          | "lit"
+          | "unlit"
+          | null) ?? "unlit"
+      );
+    } catch {
+      return "unlit";
+    }
+  }, [lightingModeKey]);
   const { lightingMode } = useControls(
     `zone · ${zoneKey}`,
     {
       lightingMode: {
-        value: "lit",
+        value: storedLightingMode,
         options: ["lit", "unlit"],
         label: "mode",
       },
     },
     [zoneKey],
   );
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(lightingModeKey, lightingMode);
+    } catch {
+      // quota / privacy-mode: drop silently
+    }
+  }, [lightingModeKey, lightingMode]);
   const isLit = lightingMode === "lit";
 
   // Mount the shared lighting panel for every zone — atmosphere zones
@@ -780,8 +907,12 @@ export default function ZoneScene({
     environmentPreset ? { envPreset: environmentPreset } : undefined,
   );
 
+  const zoneClassName = `ocean ocean--${zoneKey.replace(/_/g, "-")} ${
+    fullBleed ? "ocean--full-bleed" : ""
+  }`;
+
   const sceneInner = (
-    <div className={fullBleed ? "ocean ocean--full-bleed" : "ocean"}>
+    <div className={zoneClassName} data-zone={zoneKey}>
       <header className="site-header">
         <Breadcrumbs zoneKey={zoneKey} />
         <h1 className="site-title">{title}</h1>
@@ -808,6 +939,14 @@ export default function ZoneScene({
               unlit mode UnlitMaterialSwitch (inside ZoneMesh) replaces every
               MeshStandardMaterial with MeshBasicMaterial, which doesn't
               respond to lighting at all. */}
+          {showPerformanceMonitor && (
+            <Perf
+              className="perf-monitor"
+              position="bottom-left"
+              minimal={false}
+              matrixUpdate
+            />
+          )}
           {isLit && useAtmosphere && (
             <Atmosphere enabled={atmosphereConfig!.enabled} />
           )}
@@ -902,8 +1041,9 @@ export default function ZoneScene({
           className="turntable-toggle"
           onClick={() => turntableToggleRef.current?.()}
           title={turntablePlaying ? "Pause rotation" : "Resume rotation"}
+          aria-label={turntablePlaying ? "Pause rotation" : "Resume rotation"}
         >
-          {turntablePlaying ? "\u23F8" : "\u23F5"}
+          {turntablePlaying ? <Pause size={14} /> : <Play size={14} />}
         </button>
       </footer>
 

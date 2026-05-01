@@ -3,6 +3,14 @@
 import { Environment, Html, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer } from "@react-three/postprocessing";
+import { useControls } from "leva";
+import { Perf } from "r3f-perf";
+import {
+  acceleratedRaycast,
+  MeshBVH,
+  MeshBVHHelper,
+  StaticGeometryGenerator,
+} from "three-mesh-bvh";
 import {
   memo,
   Suspense,
@@ -15,7 +23,7 @@ import {
 import * as THREE from "three";
 import { AdaptiveLabel } from "./AdaptiveLabel";
 import { playCyclingSound } from "./audio";
-import { useDebugHitboxes } from "./debugFlags";
+import { useDebugHitboxes, useDebugPerformanceMonitor } from "./debugFlags";
 import IdleAnimator from "./IdleAnimator";
 import { collectMeshes } from "./meshUtils";
 import OutlineController from "./Outline";
@@ -113,6 +121,52 @@ function IslandLighting() {
   );
 }
 
+type IslandLightingMode = "lit" | "unlit";
+
+function IslandUnlitMaterialSwitch({
+  scene,
+  mode,
+}: {
+  scene: THREE.Object3D;
+  mode: IslandLightingMode;
+}) {
+  const originals = useRef(
+    new Map<THREE.Mesh, THREE.Material | THREE.Material[]>(),
+  );
+
+  useEffect(() => {
+    const map = originals.current;
+    const toBasic = (mat: THREE.Material): THREE.Material => {
+      const std = mat as THREE.MeshStandardMaterial;
+      return new THREE.MeshBasicMaterial({
+        map: std.map ?? null,
+        color: std.color ?? new THREE.Color("#ffffff"),
+        transparent: std.transparent,
+        opacity: std.opacity,
+        side: std.side,
+        alphaMap: std.alphaMap ?? null,
+        alphaTest: std.alphaTest,
+      });
+    };
+    scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (mode === "unlit") {
+        if (!map.has(mesh)) map.set(mesh, mesh.material);
+        const cur = mesh.material;
+        mesh.material = Array.isArray(cur)
+          ? cur.map(toBasic)
+          : toBasic(cur as THREE.Material);
+      } else {
+        const orig = map.get(mesh);
+        if (orig) mesh.material = orig;
+      }
+    });
+  }, [scene, mode]);
+
+  return null;
+}
+
 interface ZoneMarker {
   name: string;
   key: string;
@@ -128,6 +182,43 @@ interface ZoneMarker {
   labelOffsetY: number;
   focusDistance?: number;
   focusBehavior?: "fit" | "instant";
+  raycastMode: "default" | "bvh";
+}
+
+type BvhGeometry = THREE.BufferGeometry & { boundsTree?: MeshBVH };
+
+interface ZoneBvhRaycast {
+  generator: StaticGeometryGenerator;
+  geometry: BvhGeometry;
+  mesh: THREE.Mesh;
+}
+
+function refreshZoneBvh(bvh: ZoneBvhRaycast) {
+  bvh.generator.generate(bvh.geometry);
+  bvh.geometry.boundsTree?.refit();
+}
+
+function ZoneBvhDebugHelper({ bvh }: { bvh: ZoneBvhRaycast }) {
+  const helper = useMemo(() => {
+    const h = new MeshBVHHelper(bvh.mesh, 10);
+    h.color.set("#ff7055");
+    h.opacity = 0.45;
+    h.displayParents = false;
+    h.displayEdges = true;
+    h.update();
+    return h;
+  }, [bvh]);
+
+  useFrame(() => {
+    try {
+      refreshZoneBvh(bvh);
+      helper.update();
+    } catch (error) {
+      console.warn("[IslandScene] BVH zone debug helper failed.", error);
+    }
+  });
+
+  return <primitive object={helper} raycast={() => null} />;
 }
 
 /**
@@ -216,6 +307,7 @@ function buildZoneMarkers(scene: THREE.Object3D): ZoneMarker[] {
       labelOffsetY: node?.labelOffsetY ?? 0,
       focusDistance: node?.focusDistance,
       focusBehavior: node?.focusBehavior,
+      raycastMode: node?.raycast ?? "default",
       ...config,
     });
   }
@@ -251,6 +343,34 @@ const ZoneHitbox = memo(function ZoneHitbox({
   const [hovered, setHovered] = useState(false);
   const debugHitboxes = useDebugHitboxes();
   const pointerDown = useRef<{ x: number; y: number } | null>(null);
+  const bvh = useMemo<ZoneBvhRaycast | null>(() => {
+    if (marker.raycastMode !== "bvh") return null;
+    try {
+      const generator = new StaticGeometryGenerator(marker.sceneObj);
+      generator.useGroups = false;
+      generator.applyWorldTransforms = true;
+      const geometry = generator.generate() as BvhGeometry;
+      geometry.boundsTree = new MeshBVH(geometry);
+      const mesh = new THREE.Mesh(
+        geometry,
+        new THREE.MeshBasicMaterial({
+          visible: false,
+          depthWrite: false,
+          colorWrite: false,
+        }),
+      );
+      mesh.name = `${marker.name}_bvh_hit`;
+      mesh.raycast = acceleratedRaycast;
+      mesh.matrixAutoUpdate = false;
+      return { generator, geometry, mesh };
+    } catch (error) {
+      console.warn(
+        `[IslandScene] BVH raycast setup failed for ${marker.name}; falling back to box hitbox.`,
+        error,
+      );
+      return null;
+    }
+  }, [marker]);
   const { size, center, focusRadius } = useMemo(() => {
     const s = new THREE.Vector3();
     marker.box.getSize(s);
@@ -267,6 +387,108 @@ const ZoneHitbox = memo(function ZoneHitbox({
     }),
     [marker.focusDistance, marker.focusBehavior],
   );
+
+  useFrame(() => {
+    if (!bvh) return;
+    try {
+      refreshZoneBvh(bvh);
+    } catch (error) {
+      console.warn(
+        `[IslandScene] BVH raycast refresh failed for ${marker.name}.`,
+        error,
+      );
+    }
+  });
+
+  if (bvh) {
+    return (
+      <>
+        <primitive
+          object={bvh.mesh}
+          onPointerOver={(e: { stopPropagation: () => void }) => {
+            e.stopPropagation();
+            setHovered(true);
+            onHoverChange(marker, true);
+            document.body.style.cursor = "pointer";
+          }}
+          onPointerOut={() => {
+            setHovered(false);
+            onHoverChange(marker, false);
+            document.body.style.cursor = "auto";
+          }}
+          onPointerDown={(e: { clientX: number; clientY: number }) => {
+            pointerDown.current = { x: e.clientX, y: e.clientY };
+          }}
+          onClick={(e: {
+            stopPropagation: () => void;
+            clientX: number;
+            clientY: number;
+          }) => {
+            e.stopPropagation();
+            if (isToyUnderPointer()) return;
+            if (pointerDown.current) {
+              const dx = e.clientX - pointerDown.current.x;
+              const dy = e.clientY - pointerDown.current.y;
+              if (dx * dx + dy * dy > 25) return;
+            }
+            if (!isFocused(marker.center, marker.key)) {
+              onFocus(marker.center, marker.key, focusRadius, focusOpts);
+              if (focusOpts.behavior !== "instant") return;
+            }
+            if (marker.url) {
+              onNavigate(marker.url, marker.internal, marker.center);
+            } else {
+              playZoneSound(marker);
+              onComingSoon(marker.label);
+            }
+          }}
+        />
+        {debugHitboxes && <ZoneBvhDebugHelper bvh={bvh} />}
+        <AdaptiveLabel
+          position={[
+            marker.center.x,
+            marker.box.max.y + 0.3 + marker.labelOffsetY,
+            marker.center.z,
+          ]}
+          nearDistance={8}
+          farDistance={25}
+        >
+          <div
+            style={{
+              background: hovered ? "rgba(0,0,0,0.9)" : "rgba(0,0,0,0.75)",
+              color: hovered
+                ? marker.type === "active"
+                  ? "#ff8a6a"
+                  : "#d1d5db"
+                : marker.type === "active"
+                  ? "#e05a3a"
+                  : "#9ca3af",
+              padding: hovered ? "3px 12px" : "2px 8px",
+              borderRadius: "99px",
+              fontSize: hovered ? "12px" : "10px",
+              letterSpacing: "0.1em",
+              whiteSpace: "nowrap",
+              border: `1px solid ${
+                hovered
+                  ? marker.type === "active"
+                    ? "rgba(224,90,58,0.8)"
+                    : "rgba(255,255,255,0.3)"
+                  : marker.type === "active"
+                    ? "rgba(224,90,58,0.4)"
+                    : "rgba(255,255,255,0.1)"
+              }`,
+              boxShadow: hovered
+                ? `0 0 12px ${marker.type === "active" ? "rgba(224,90,58,0.5)" : "rgba(150,150,150,0.3)"}`
+                : "none",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {marker.label}
+          </div>
+        </AdaptiveLabel>
+      </>
+    );
+  }
 
   return (
     <group position={center}>
@@ -372,6 +594,7 @@ function IslandMesh({
   isFocused,
   allMeshesRef,
   onReady,
+  lightingMode,
 }: {
   onComingSoon: (label: string) => void;
   onNavigate: (url: string, internal: boolean, center: THREE.Vector3) => void;
@@ -386,6 +609,7 @@ function IslandMesh({
   isFocused: (point: THREE.Vector3, id?: string) => boolean;
   allMeshesRef: React.RefObject<Map<string, THREE.Mesh[]>>;
   onReady?: () => void;
+  lightingMode: IslandLightingMode;
 }) {
   const { scene, animations } = useOptimizedGLTF("/island.glb");
 
@@ -404,6 +628,7 @@ function IslandMesh({
   return (
     <>
       <primitive object={scene} />
+      <IslandUnlitMaterialSwitch scene={scene} mode={lightingMode} />
       <BlenderLightDisabler scene={scene} />
       <IdleAnimator scene={scene} />
       <ToyInteractor
@@ -525,12 +750,24 @@ export default function IslandScene({
   onReady,
 }: Props) {
   const allMeshesRef = useRef<Map<string, THREE.Mesh[]>>(new Map());
+  const showPerformanceMonitor = useDebugPerformanceMonitor();
   const orbitRef = useRef<any>(null);
   const turntableToggleRef = useRef<(() => void) | null>(null);
   const [outlinedObjects, setOutlinedObjects] = useState<THREE.Object3D[]>([]);
   const [outlineKind, setOutlineKind] = useState<OutlineKind>("active");
   const [dollyTarget, setDollyTarget] = useState<THREE.Vector3 | null>(null);
   const { focus: focusOrbitTarget, isFocused } = useFocusOrbit(orbitRef);
+  const { lightingMode } = useControls(
+    "island",
+    {
+      lightingMode: {
+        value: "lit",
+        options: ["lit", "unlit"],
+        label: "mode",
+      },
+    },
+    [],
+  );
 
   // Shared world position for the whirlpool so Water can carve a funnel underneath it.
   const whirlpoolCenterRef = useRef<THREE.Vector3>(
@@ -578,11 +815,20 @@ export default function IslandScene({
       gl={{ antialias: true, alpha: true }}
     >
       {/* All scene lighting lives in IslandLighting — env preset, sun, ambient,
-          tone-map exposure. Tune via the leva panel in the top-right corner. */}
+      tone-map exposure. Tune via the leva panel in the top-right corner. */}
+      {showPerformanceMonitor && (
+        <Perf
+          className="perf-monitor"
+          position="bottom-left"
+          minimal={false}
+          matrixUpdate
+        />
+      )}
       <IslandLighting />
       <Water
         funnelCenter={whirlpoolCenterRef}
         size={80}
+        waterLevel={-0.06}
         color="#00fccd"
         opacity={0.34}
         shallowColor="#9cebd9"
@@ -590,12 +836,16 @@ export default function IslandScene({
         surfaceBoost={0.58}
         foamBoost={0.75}
         waveSpeed={0.9}
+        waveAmplitude={0.025}
         foamSpeed={0.1}
         foamScale={14}
         waveScale={5}
-        rimWidth={0.6}
+        rimWidth={0.42}
         rimColor="#ffffff"
         rimStrength={0.95}
+        beachSafetyCenter={[0, 6.2]}
+        beachSafetyRadius={[8.8, 3.8]}
+        beachSafetyDepth={0.22}
       />
       <Whirlpool centerRef={whirlpoolCenterRef} />
       <Suspense fallback={<LoadingFallback />}>
@@ -608,6 +858,7 @@ export default function IslandScene({
           isFocused={isFocused}
           allMeshesRef={allMeshesRef}
           onReady={onReady}
+          lightingMode={lightingMode as IslandLightingMode}
         />
       </Suspense>
       <OrbitControls

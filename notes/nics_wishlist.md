@@ -177,10 +177,20 @@ Future tightening option: change the regex from `idle|loop|cycle` → just `idle
 
 ### debug stuff
 
-- separate out "hitboxes" and "barrel roll triggers" as separate checkboxes in ? icon speed dial. then add future debug stuff (like the arwing facing-arrows)
-
 - make it so zones can have sounds effects too, like when you click to focus the camera on them, have that play the zones' sounds. then second click obviously does the transition to their target zone.
 
-### add texture paint underneath some stuff (like guardian lion statues) to make them simulataneously more noticeable AND blend into the scene better.
+### add texture paint underneath some stuff (like guardian lion statues)
 
-### 4.30.2026 - Nice to have: do an audit and see what things can be extracted and component-ified, so there's less manual hunting for differences between zones/island/etc.
+to make them simulataneously more noticeable AND blend into the scene better.
+
+### 4.30.2026 - Nice to have:
+
+do an audit and see what things can be extracted and component-ified, so there's less manual hunting for differences between zones/island/etc.
+
+### bugs
+
+# specifically notice this in zone_ss_brainfog: when "lit", parts of the ss_aqua go missing (like z-fighting, only I knows it's not "z-fighting"...it's...like when)
+
+# poliwag floats above lapras on island scene, probably because she is 'bigger' so her undulation is heavier/smaller, and poliwags is more noticable because she's tiny?
+
+# fix the white-foam-goes-up-onto-the-beach problem

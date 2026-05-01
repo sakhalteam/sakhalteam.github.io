@@ -4,6 +4,7 @@
 // seed (comma-separated for multiple) and its own localStorage key. Toggling
 // from the in-app speed-dial UI updates both. All flags share one listener
 // pool so any change re-renders any subscriber.
+// Includes: hitboxes, barrel-roll-triggers, lighting-controls, performance-monitor.
 //
 //   hitboxes              — wireframe boxes around clickable hotspots/toys
 //   barrel-roll-triggers  — wireframe spheres at FlightPath roll triggers
@@ -14,6 +15,7 @@ import { useSyncExternalStore } from "react";
 const STORAGE_HITBOXES = "sakhalteam.debug.hitboxes";
 const STORAGE_BARREL = "sakhalteam.debug.barrelRollTriggers";
 const STORAGE_LIGHTING_CONTROLS = "sakhalteam.debug.lightingControls";
+const STORAGE_PERFORMANCE_MONITOR = "sakhalteam.debug.performanceMonitor";
 
 type Listener = () => void;
 
@@ -44,6 +46,8 @@ let debugBarrelRollTriggers =
   queryEnables("barrel-roll-triggers") || readStored(STORAGE_BARREL);
 let debugLightingControls =
   queryEnables("lighting-controls") || readStored(STORAGE_LIGHTING_CONTROLS);
+let debugPerformanceMonitor =
+  queryEnables("performance-monitor") || readStored(STORAGE_PERFORMANCE_MONITOR);
 
 const listeners = new Set<Listener>();
 
@@ -84,6 +88,17 @@ export function setDebugLightingControls(next: boolean) {
   emit();
 }
 
+export function getDebugPerformanceMonitor() {
+  return debugPerformanceMonitor;
+}
+
+export function setDebugPerformanceMonitor(next: boolean) {
+  if (debugPerformanceMonitor === next) return;
+  debugPerformanceMonitor = next;
+  writeStored(STORAGE_PERFORMANCE_MONITOR, next);
+  emit();
+}
+
 export function subscribeDebugFlags(listener: Listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -109,6 +124,14 @@ export function useDebugLightingControls() {
   return useSyncExternalStore(
     subscribeDebugFlags,
     getDebugLightingControls,
+    () => false,
+  );
+}
+
+export function useDebugPerformanceMonitor() {
+  return useSyncExternalStore(
+    subscribeDebugFlags,
+    getDebugPerformanceMonitor,
     () => false,
   );
 }

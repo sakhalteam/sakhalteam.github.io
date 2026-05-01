@@ -4,9 +4,11 @@ import {
   setDebugBarrelRollTriggers,
   setDebugHitboxes,
   setDebugLightingControls,
+  setDebugPerformanceMonitor,
   useDebugBarrelRollTriggers,
   useDebugHitboxes,
   useDebugLightingControls,
+  useDebugPerformanceMonitor,
 } from "./debugFlags";
 import { triggerCameraReset } from "./useCameraReset";
 
@@ -16,6 +18,7 @@ export default function DebugToggle() {
   const hitboxes = useDebugHitboxes();
   const barrelRollTriggers = useDebugBarrelRollTriggers();
   const lightingControls = useDebugLightingControls();
+  const performanceMonitor = useDebugPerformanceMonitor();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<number | null>(null);
@@ -108,6 +111,16 @@ export default function DebugToggle() {
             }
           />
           lighting controls
+        </label>
+        <label className="debug-toggle-option">
+          <input
+            type="checkbox"
+            checked={performanceMonitor}
+            onChange={(event) =>
+              setDebugPerformanceMonitor(event.currentTarget.checked)
+            }
+          />
+          performance monitor
         </label>
       </div>
     </div>
