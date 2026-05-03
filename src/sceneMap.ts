@@ -481,6 +481,7 @@ const nodes: SceneNode[] = [
       "ct_toy_falco_arwing",
       "ct_toy_peppy_arwing",
       "ct_toy_slippy_arwing",
+      "ct_toy_jotaro_hat",
       "dream_zone",
       "pool_time",
       "starlight_zone",
@@ -762,7 +763,7 @@ const nodes: SceneNode[] = [
   // ── Pokemon Island group on island (parent: pokemon_island) ──
   toy("i_pi_toy_diglett", "Diglett", "pokemon_island", {
     sounds: ["/sounds/diglett.ogg"],
-    idle: "float",
+    animation: "hop",
   }),
   toy("i_pi_toy_staryu", "Staryu", "pokemon_island", {
     sounds: ["/sounds/staryu.ogg"],
@@ -770,10 +771,13 @@ const nodes: SceneNode[] = [
   }),
   toy("i_pi_toy_lapras", "Lapras", "pokemon_island", {
     sounds: ["/sounds/lapras.ogg"],
-    idle: "undulate",
+    idle: "float",
+    raycast: "bvh",
+    animation: "bob",
   }),
-  toy("i_pi_toy_pollywag", "Poliwag", "pokemon_island", {
+  toy("i_pi_toy_poliwag", "Poliwag", "pokemon_island", {
     sounds: ["/sounds/poliwag.ogg"],
+    animation: "hop",
   }),
   structural("i_pi_toy_bridge", "Bridge", "pokemon_island"),
 
@@ -1006,6 +1010,11 @@ const nodes: SceneNode[] = [
     showOutline: false,
     idle: "undulate",
     idleOffset: 0.65,
+  }),
+  toy("ct_toy_jotaro_hat", "Jotaro's Hat", "cloud_town", {
+    showLabel: false,
+    showOutline: false,
+    sounds: ["/sounds/ct_toy_jotaro_hat_01.wav"],
   }),
 
   // ── Toys inside zone_ss_brainfog.glb (parent: ss_brainfog) ──

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build && cp dist/index.html dist/404.html",
     "preview": "vite preview",
-    "optimize": "bash scripts/optimize-glb.sh"
+    "optimize": "node scripts/optimize-glb.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

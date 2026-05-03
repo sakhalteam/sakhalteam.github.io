@@ -194,3 +194,9 @@ do an audit and see what things can be extracted and component-ified, so there's
 # poliwag floats above lapras on island scene, probably because she is 'bigger' so her undulation is heavier/smaller, and poliwags is more noticable because she's tiny?
 
 # fix the white-foam-goes-up-onto-the-beach problem
+
+### easter egg idea:
+
+### work on cloud transitions a bit: right now a white cloud comes from top and white cloud comes from bottom, they close towards each other, scene silently loads in background, then clouds part. But it needs to look more like a paper mario sort of scene where you can see multiple layers of clouds, almost like paper cutout clouds congregating towards the middle of the screen, then separating from each other to reveal the newly-loaded scene that user had navigated to.
+
+# add jotaro hat as toy

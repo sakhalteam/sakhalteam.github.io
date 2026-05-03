@@ -302,11 +302,13 @@ const HotspotHitbox = memo(function HotspotHitbox({
 
   if (bvh) {
     return (
-      <group ref={groupRef} position={hotspot.center}>
+      <>
         <primitive object={bvh.mesh} {...pointerHandlers} />
         {debugHitboxes && <HotspotBvhDebugHelper bvh={bvh} />}
-        {label}
-      </group>
+        <group ref={groupRef} position={hotspot.center}>
+          {label}
+        </group>
+      </>
     );
   }
 
@@ -606,11 +608,7 @@ function ZoneMesh({
         />
       ))}
       {flightConfigs.map((config) => (
-        <FlightPath
-          key={config.objectName}
-          scene={scene}
-          config={config}
-        />
+        <FlightPath key={config.objectName} scene={scene} config={config} />
       ))}
       <IdleClipPlayer scene={scene} animations={animations} />
       <Waterfall scene={scene} />
@@ -650,13 +648,12 @@ function BirdSanctuaryLighting() {
 
 /**
  * "Unlit" mode for zones: convert every MeshStandardMaterial in the loaded
- * scene to MeshBasicMaterial (preserving texture map + base color + alpha).
- * MeshBasicMaterial ignores all lighting — pure textures, no shading. This
- * is the closest three.js gets to Blender's Solid-mode preview, and the
- * thing Nic actually wants for "Animal Crossing-y" zones.
+ * GLB scene to MeshBasicMaterial (preserving texture map + base color +
+ * alpha). MeshBasicMaterial ignores lighting — pure textures, no shading.
  *
- * Atmosphere zones (cloud_town) opt out and stay PBR so their sky/sun
- * subsystems still affect materials properly.
+ * This intentionally affects only the zone model passed into ZoneMesh. Sky,
+ * weather, stars, fog, and other atmosphere subsystems are separate Canvas
+ * children and keep running in unlit mode.
  */
 export type ZoneLightingMode = "lit" | "unlit";
 
@@ -935,10 +932,9 @@ export default function ZoneScene({
             }
           }}
         >
-          {/* Lights, Environment, Atmosphere — all skipped when unlit. In
-              unlit mode UnlitMaterialSwitch (inside ZoneMesh) replaces every
-              MeshStandardMaterial with MeshBasicMaterial, which doesn't
-              respond to lighting at all. */}
+          {/* In unlit mode, UnlitMaterialSwitch (inside ZoneMesh) replaces the
+              loaded GLB's MeshStandardMaterials with MeshBasicMaterials.
+              Atmosphere stays mounted so sky/weather/time-of-day remain live. */}
           {showPerformanceMonitor && (
             <Perf
               className="perf-monitor"
@@ -947,9 +943,7 @@ export default function ZoneScene({
               matrixUpdate
             />
           )}
-          {isLit && useAtmosphere && (
-            <Atmosphere enabled={atmosphereConfig!.enabled} />
-          )}
+          {useAtmosphere && <Atmosphere enabled={atmosphereConfig!.enabled} />}
           {isLit && !useAtmosphere && (
             <>
               <ambientLight intensity={lighting.ambientIntensity} />
@@ -972,7 +966,7 @@ export default function ZoneScene({
           )}
           {/* Atmosphere zones still rely on the legacy environmentPreset
               prop for their HDRI fill (kept for cloud_town's "city" preset). */}
-          {isLit && useAtmosphere && environmentPreset && (
+          {useAtmosphere && environmentPreset && (
             <Environment preset={environmentPreset} background={false} />
           )}
           <Suspense fallback={<LoadingFallback />}>
