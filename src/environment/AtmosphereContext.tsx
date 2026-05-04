@@ -144,3 +144,10 @@ export function useAtmosphere() {
   }
   return ctx;
 }
+
+/** Like useAtmosphere, but returns null instead of throwing when no provider
+ *  is mounted. For subsystems that want to optionally adapt to atmosphere
+ *  (tinting, opacity) while staying usable in non-atmosphere zones. */
+export function useAtmosphereOptional() {
+  return useContext(AtmosphereContext);
+}

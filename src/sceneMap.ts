@@ -457,7 +457,7 @@ const nodes: SceneNode[] = [
         "sky",
         "sun",
         "ambient",
-        "clouds",
+        // "clouds", // retired in favor of sprite_clouds — re-add to A/B
         "sprite_clouds",
         "sky_clouds",
         "celestials",
