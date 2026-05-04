@@ -11,6 +11,7 @@ import GradientSky from "./subsystems/GradientSky";
 import SunLight from "./subsystems/SunLight";
 import AmbientFill from "./subsystems/AmbientFill";
 import DriftClouds from "./subsystems/DriftClouds";
+import SpriteClouds from "./subsystems/SpriteClouds";
 import SkyClouds from "./subsystems/SkyClouds";
 import Celestials from "./subsystems/Celestials";
 import Stars from "./subsystems/Stars";
@@ -27,6 +28,7 @@ const REGISTRY: Record<AtmosphereSubsystem, ComponentType> = {
   sun: SunLight,
   ambient: AmbientFill,
   clouds: DriftClouds,
+  sprite_clouds: SpriteClouds,
   sky_clouds: SkyClouds,
   celestials: Celestials,
   stars: Stars,

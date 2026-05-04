@@ -458,6 +458,7 @@ const nodes: SceneNode[] = [
         "sun",
         "ambient",
         "clouds",
+        "sprite_clouds",
         "sky_clouds",
         "celestials",
         "stars",
@@ -614,6 +615,7 @@ const nodes: SceneNode[] = [
     glbPath: null,
     path: null,
     parent: "cloud_town",
+    raycast: "bvh",
     idle: { kind: "undulate", amplitude: 0.15, period: 5 }, // ← override here
   }),
   zone("pool_time", "Pool Time", {
@@ -897,8 +899,9 @@ const nodes: SceneNode[] = [
       "/sounds/fox_uh_oh_spotted.wav",
     ],
     animation: "none",
-    flight: { group: "arwing", phase: 0, duration: 18, rollTriggerRadius: 10 },
+    flight: { group: "arwing", phase: 0, duration: 12, rollTriggerRadius: 10 },
     focusBehavior: "instant",
+    raycast: "bvh",
   }),
   toy("ct_toy_falco_arwing", "Falco's Arwing", "cloud_town", {
     sounds: [
@@ -913,10 +916,11 @@ const nodes: SceneNode[] = [
     flight: {
       group: "arwing",
       phase: 0.25,
-      duration: 18,
+      duration: 12,
       rollTriggerRadius: 10,
     },
     focusBehavior: "instant",
+    raycast: "bvh",
   }),
   toy("ct_toy_peppy_arwing", "Peppy's Arwing", "cloud_town", {
     sounds: [
@@ -932,10 +936,11 @@ const nodes: SceneNode[] = [
     flight: {
       group: "arwing",
       phase: 0.5,
-      duration: 18,
+      duration: 12,
       rollTriggerRadius: 10,
     },
     focusBehavior: "instant",
+    raycast: "bvh",
   }),
   toy("ct_toy_slippy_arwing", "Slippy's Arwing", "cloud_town", {
     sounds: [
@@ -953,10 +958,11 @@ const nodes: SceneNode[] = [
     flight: {
       group: "arwing",
       phase: 0.75,
-      duration: 18,
+      duration: 12,
       rollTriggerRadius: 10,
     },
     focusBehavior: "instant",
+    raycast: "bvh",
   }),
   toy("ct_toy_metal_gear_rex", "Metal Gear Rex", "cloud_town", {
     showLabel: false,
@@ -986,6 +992,7 @@ const nodes: SceneNode[] = [
     showOutline: false,
     idle: "undulate",
     idleOffset: 0.25,
+    animation: "none",
   }),
   toy("ct_toy_cloud_02", "Cloud", "cloud_town", {
     showLabel: false,
@@ -1014,7 +1021,9 @@ const nodes: SceneNode[] = [
   toy("ct_toy_jotaro_hat", "Jotaro's Hat", "cloud_town", {
     showLabel: false,
     showOutline: false,
+    animation: "none",
     sounds: ["/sounds/ct_toy_jotaro_hat_01.wav"],
+    raycast: "bvh",
   }),
 
   // ── Toys inside zone_ss_brainfog.glb (parent: ss_brainfog) ──
@@ -1023,7 +1032,8 @@ const nodes: SceneNode[] = [
   }),
   toy("ssb_toy_ss_aqua", "S.S. Aqua", "ss_brainfog", {
     sounds: ["/sounds/ssb_toy_ss_aqua.mp3"],
-    animation: "hop",
+    idle: "undulate",
+    raycast: "bvh",
   }),
 
   // ── Toys inside zone_reading_room.glb (parent: reading_room) ──
