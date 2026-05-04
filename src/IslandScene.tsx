@@ -29,6 +29,7 @@ import { collectMeshes } from "./meshUtils";
 import OutlineController from "./Outline";
 import { OUTLINE_STYLES, type OutlineKind } from "./outlineStyles";
 import { computeOwnBounds } from "./ownBounds";
+import SceneAuditor from "./SceneAuditor";
 import { findNodeByObjectName, getZoneConfig, sceneMap } from "./sceneMap";
 import { isToyUnderPointer } from "./toyClickFlag";
 import ToyInteractor from "./ToyInteractor";
@@ -630,6 +631,7 @@ function IslandMesh({
       <primitive object={scene} />
       <IslandUnlitMaterialSwitch scene={scene} mode={lightingMode} />
       <BlenderLightDisabler scene={scene} />
+      <SceneAuditor scene={scene} label="island.glb" />
       <IdleAnimator scene={scene} />
       <ToyInteractor
         scene={scene}

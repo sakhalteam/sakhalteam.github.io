@@ -37,6 +37,7 @@ import { useDebugHitboxes, useDebugPerformanceMonitor } from "./debugFlags";
 import { Atmosphere, AtmospherePanel, AtmosphereProvider } from "./environment";
 import FlightPath, { type FlightPathConfig } from "./FlightPath";
 import IdleAnimator from "./IdleAnimator";
+import SceneAuditor from "./SceneAuditor";
 import IdleClipPlayer from "./IdleClipPlayer";
 import { collectMeshes } from "./meshUtils";
 import OutlineController from "./Outline";
@@ -589,6 +590,7 @@ function ZoneMesh({
     <>
       <primitive object={scene} />
       <UnlitMaterialSwitch scene={scene} mode={lightingMode} />
+      <SceneAuditor scene={scene} label={glbPath} />
       <IdleAnimator scene={scene} />
       <ToyInteractor
         scene={scene}
