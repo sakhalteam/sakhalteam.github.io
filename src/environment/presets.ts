@@ -24,7 +24,7 @@ export type AtmosphereSubsystem =
   | "sun"
   | "ambient"
   | "clouds"
-  | "sprite_clouds"
+  | "sprite_drift"
   | "sky_clouds"
   | "celestials"
   | "stars"

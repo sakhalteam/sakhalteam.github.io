@@ -1,6 +1,17 @@
 // sceneMap.ts
 
+import type { ComponentProps } from "react";
 import type { AtmosphereSubsystem, Weather } from "./environment/presets";
+import type SpriteDrift from "./environment/subsystems/SpriteDrift";
+
+/**
+ * Per-subsystem option overrides for AtmosphereConfig. Strongly-typed
+ * against each subsystem's own props — autocompletes in your editor.
+ * Add a new entry here when introducing a configurable subsystem.
+ */
+export interface SubsystemOptions {
+  sprite_drift?: Partial<ComponentProps<typeof SpriteDrift>>;
+}
 
 /**
  * sceneMap.ts — single source of truth for the entire site navigation tree.
@@ -99,6 +110,8 @@ export interface AtmosphereConfig {
     /** Game-minutes per real-second. 0 = frozen (default). Try ~60 for a visible sun arc. */
     timescale?: number;
   };
+  /** Per-subsystem prop overrides. e.g. options.sprite_drift = { count: 500, ... } */
+  options?: SubsystemOptions;
   /** Show the ⚙ settings panel? Default false. */
   controls?: boolean;
 }
@@ -423,6 +436,40 @@ const nodes: SceneNode[] = [
   // This is where you add idle animations to zones ON island.glb scene
   zone("bird_sanctuary", "Bird Sanctuary", {
     env: "forest",
+    // EXAMPLE: sprite_drift in another zone (birds flying through the trees).
+    // To activate:
+    //   1. Drop 2-3 transparent bird PNGs in public/birds/ (gull, swallow, hawk)
+    //   2. Update the URLs below to match your filenames
+    //   3. Uncomment the `atmosphere` block
+    //   4. Note: enabling atmosphere replaces this zone's legacy lighting,
+    //      so include "sky", "sun", "ambient" alongside "sprite_drift" or
+    //      tune light/sky values to your taste.
+    //
+    // atmosphere: {
+    //   enabled: ["sky", "sun", "ambient", "sprite_drift"],
+    //   options: {
+    //     sprite_drift: {
+    //       count: 25,
+    //       speed: 5,                    // birds move faster than clouds
+    //       speedRange: [0.7, 1.5],
+    //       scaleRange: [0.8, 2.5],      // small
+    //       opacityRange: [0.85, 1.0],
+    //       minX: -60, maxX: 60,
+    //       minY: 8,   maxY: 30,
+    //       minZ: -50, maxZ: -10,
+    //       bobAmplitude: 0.4,           // gentle wing-bob
+    //       bobSpeed: 3,
+    //       followAtmosphere: false,     // don't peach-tint birds at sunrise
+    //       textures: [
+    //         { url: `${import.meta.env.BASE_URL}birds/gull.png`,    weight: 3, flipChance: 0.5 },
+    //         { url: `${import.meta.env.BASE_URL}birds/swallow.png`, weight: 2, flipChance: 0.5 },
+    //         { url: `${import.meta.env.BASE_URL}birds/hawk.png`,    weight: 1, flipChance: 0.5 },
+    //       ],
+    //     },
+    //   },
+    //   defaults: { hour: 10, weather: "clear" },
+    //   controls: false,
+    // },
     children: [
       "portal_bird_bingo",
       "bs_toy_chocobo",
@@ -457,13 +504,45 @@ const nodes: SceneNode[] = [
         "sky",
         "sun",
         "ambient",
-        // "clouds", // retired in favor of sprite_clouds — re-add to A/B
-        "sprite_clouds",
+        // "clouds", // retired in favor of sprite_drift — re-add to A/B
+        "sprite_drift",
         "sky_clouds",
         "celestials",
         "stars",
         "fog",
       ],
+      options: {
+        sprite_drift: {
+          count: 500,
+          minX: -200,
+          maxX: 200,
+          minY: -50,
+          maxY: 30,
+          minZ: -300,
+          maxZ: 140,
+          scaleRange: [2, 32],
+          opacityRange: [0.3, 1.0],
+          textures: [
+            {
+              url: `${import.meta.env.BASE_URL}clouds/m07_cloud01.png`,
+              weight: 6,
+              flipChance: 0.2,
+            },
+            {
+              url: `${import.meta.env.BASE_URL}clouds/m07_cloud02.png`,
+              weight: 3,
+            },
+            {
+              url: `${import.meta.env.BASE_URL}clouds/smile_cloud_bright.png`,
+              weight: 0.05,
+            },
+            {
+              url: `${import.meta.env.BASE_URL}clouds/smile_cloud.png`,
+              weight: 0.05,
+            },
+          ],
+        },
+      },
       defaults: { hour: 4, minute: 27, weather: "clear", timescale: 0 },
       controls: true,
     },

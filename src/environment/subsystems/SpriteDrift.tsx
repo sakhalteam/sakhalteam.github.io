@@ -1,12 +1,20 @@
-// environment/subsystems/SpriteClouds.tsx
+// environment/subsystems/SpriteDrift.tsx
 //
-// 2D billboard cloud sprites drifting across a layer behind the scene.
-// Inspired by Super Mario RPG's Nimbus Land — a cheap, cheesy way to
-// add cloudiness without volumetric geometry. Loads N transparent PNGs,
-// scatters M billboards across them, and drifts everything sideways.
+// Generic 2D billboard sprite drift system. Loads N transparent PNGs,
+// scatters M billboards across a configurable layer, and drifts them
+// sideways. Inspired by SMRPG Nimbus Land's animated cloud band, but
+// the component is texture-agnostic — clouds, birds, fish, dust, ash,
+// bubbles, fairies, snowflakes are all the same machine with different
+// PNGs and tuning.
+//
+// Per-zone configuration: pass props directly when used as a child, or
+// via AtmosphereConfig.options.sprite_drift when mounted as a registered
+// atmosphere subsystem.
 //
 // Optional: when mounted inside an AtmosphereProvider, sprite tint follows
 // the atmosphere's cloudColor (time-of-day + weather) automatically.
+// Disable via `followAtmosphere={false}` for non-cloud sprites that
+// shouldn't go peachy at sunrise.
 
 import { useFrame, useLoader } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
@@ -41,25 +49,18 @@ export type SpriteTexture =
 // destructured props, every parent re-render (e.g. hovering a toy) would
 // allocate a new array, busting the `states` useMemo and rerolling all
 // the random positions/scales — the "parallel-timeline" jump bug.
+//
+// These defaults are intentionally modest. They give a "sane fallback"
+// look for any zone that enables sprite_drift without options. Zones that
+// want a specific aesthetic (Cloud Town's wall-of-clouds, Bird Sanctuary's
+// flock, etc.) should override via AtmosphereConfig.options.sprite_drift.
 const DEFAULT_SPEED_RANGE: [number, number] = [0.6, 1.4];
-const DEFAULT_SCALE_RANGE: [number, number] = [2, 32];
-const DEFAULT_OPACITY_RANGE: [number, number] = [0.3, 1.0];
+const DEFAULT_SCALE_RANGE: [number, number] = [4, 14];
+const DEFAULT_OPACITY_RANGE: [number, number] = [0.4, 1.0];
 
 const DEFAULT_TEXTURES: SpriteTexture[] = [
-  {
-    url: `${import.meta.env.BASE_URL}clouds/m07_cloud01.png`,
-    weight: 6,
-    flipChance: 0.2,
-  },
-  { url: `${import.meta.env.BASE_URL}clouds/m07_cloud02.png`, weight: 3 },
-  {
-    url: `${import.meta.env.BASE_URL}clouds/smile_cloud_bright.png`,
-    weight: 0.05,
-  },
-  {
-    url: `${import.meta.env.BASE_URL}clouds/smile_cloud.png`,
-    weight: 0.05,
-  },
+  { url: `${import.meta.env.BASE_URL}clouds/m07_cloud01.png`, weight: 1 },
+  { url: `${import.meta.env.BASE_URL}clouds/m07_cloud02.png`, weight: 1 },
 ];
 
 function normalizeTextures(input: SpriteTexture[]): {
@@ -96,11 +97,11 @@ function weightedPick(weights: number[]): number {
   return weights.length - 1;
 }
 
-interface Props {
+export interface SpriteDriftProps {
   /**
-   * Cloud PNG urls. Pass plain strings for equal weight, or
-   * { url, weight } objects to dial individual textures up/down.
-   * Example: [{ url: smile, weight: 1 }, { url: wispy, weight: 5 }]
+   * Sprite PNG urls (clouds, birds, whatever). Plain strings for equal
+   * weight, or { url, weight, flipChance } for finer control.
+   * Example: [{ url: gull, weight: 1 }, { url: gull, weight: 5 }]
    */
   textures?: SpriteTexture[];
   /** Total billboard count distributed across the layer. */
@@ -141,17 +142,17 @@ interface Props {
   renderOrder?: number;
 }
 
-export default function SpriteClouds({
+export default function SpriteDrift({
   textures = DEFAULT_TEXTURES,
-  count = 500,
+  count = 80,
   speed = 2,
   speedRange = DEFAULT_SPEED_RANGE,
-  minX = -200,
-  maxX = 200,
-  minY = -50,
+  minX = -100,
+  maxX = 100,
+  minY = 0,
   maxY = 30,
-  minZ = -300,
-  maxZ = 140,
+  minZ = -100,
+  maxZ = -30,
   scaleRange = DEFAULT_SCALE_RANGE,
   opacityRange = DEFAULT_OPACITY_RANGE,
   opacity = 1,
@@ -161,7 +162,7 @@ export default function SpriteClouds({
   tint = "#ffffff",
   followAtmosphere = true,
   renderOrder = -10,
-}: Props) {
+}: SpriteDriftProps) {
   const atmosphere = useAtmosphereOptional();
   const { urls, weights, flipChances } = useMemo(
     () => normalizeTextures(textures),

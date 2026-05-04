@@ -945,7 +945,12 @@ export default function ZoneScene({
               matrixUpdate
             />
           )}
-          {useAtmosphere && <Atmosphere enabled={atmosphereConfig!.enabled} />}
+          {useAtmosphere && (
+            <Atmosphere
+              enabled={atmosphereConfig!.enabled}
+              options={atmosphereConfig!.options}
+            />
+          )}
           {isLit && !useAtmosphere && (
             <>
               <ambientLight intensity={lighting.ambientIntensity} />
