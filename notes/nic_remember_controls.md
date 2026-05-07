@@ -35,7 +35,7 @@ toy("ct_toy_fox_arwing", "Fox's Arwing", "cloud_town", {
   sounds: ["/sounds/fox_snes.wav"],
   animation: "none",
   focusBehavior: "instant",
-})
+});
 ```
 
 This is useful for moving targets, tiny fiddly targets, or toys where the click should feel like a button press instead of a "focus, then activate" interaction.
@@ -58,7 +58,7 @@ For finicky animated/skinned toys, opt into BVH picking in `src/sceneMap.ts`:
 ```ts
 toy("ssb_toy_shark", "Shark", "ss_brainfog", {
   raycast: "bvh",
-})
+});
 ```
 
 `raycast: "bvh"` tells ToyInteractor to snapshot the toy's current deformed geometry with `three-mesh-bvh`'s `StaticGeometryGenerator`, refit the BVH, and click-test the actual current geometry. This intentionally overrides a Blender `_hitbox` for that toy.
@@ -130,3 +130,7 @@ Yep. The zoom stuff is mainly in three places:
    ...
    const minDistance = Math.max(radius * minZoomMultiplier, 0.25);
    ```
+
+//// z-fighting/transparency/alpha/depth/etc stuff:
+
+Caveat to know about so future-you isn't confused: if you ever add genuinely soft-alpha content to a zone GLB (smoke puffs, frosted glass, soft fog volume), it'll z-fight against itself with this on. When that happens, either name those materials with a convention like \*\_softalpha and skip them in the loop, or fix just those in Blender. Your atmospheric clouds (SpriteDrift, SkyClouds) are not in the zone GLB, so they're untouched by this — they keep their proper soft alpha.

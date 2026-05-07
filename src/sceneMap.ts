@@ -545,7 +545,7 @@ const nodes: SceneNode[] = [
           ],
         },
       },
-      defaults: { hour: 4, minute: 27, weather: "clear", timescale: 0 },
+      defaults: { hour: 10, minute: 27, weather: "clear", timescale: 0 },
       controls: true,
     },
     children: [
@@ -622,7 +622,7 @@ const nodes: SceneNode[] = [
           ],
         },
       },
-      defaults: { hour: 4, minute: 27, weather: "clear", timescale: 0 },
+      defaults: { hour: 10, minute: 27, weather: "clear", timescale: 0 },
       controls: true,
     },
     children: [

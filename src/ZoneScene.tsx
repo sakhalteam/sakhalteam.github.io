@@ -585,6 +585,17 @@ function ZoneMesh({
       (m as any).polygonOffsetUnits = -2;
     }
 
+    // TEMP DEBUG: force depthWrite on every material to test sort-flicker hypothesis
+    scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (!m) return;
+      const mats = Array.isArray(m) ? m : [m];
+      for (const mat of mats) {
+        (mat as any).depthWrite = true;
+        (mat as any).needsUpdate = true;
+      }
+    });
+
     onSceneReady(scene);
   }, [scene, onSceneReady, zoneKey]);
 
