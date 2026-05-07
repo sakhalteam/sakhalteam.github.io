@@ -26,7 +26,7 @@ export interface SubsystemOptions {
  *
  * Zone abbreviations (used only in toy prefixes — sceneMap keys for zones
  * themselves stay spelled out). See CLAUDE.md for the full table.
- *   i, bs, ssb, ct, sz, tok, rr, dojo, pi, tun, bp, mz, ns, flwr, ware,
+ *   i, bs, ssb, ct, nl, sz, tok, rr, dojo, pi, tun, bp, mz, ns, flwr, ware,
  *   crys, epi, meso, bathy, abyss, hadal, drmz, pool, famima
  *
  * Keys stored here:
@@ -123,7 +123,8 @@ export type ToyAnimation =
   | "grow"
   | "bob"
   | "none"
-  | "action";
+  | "action"
+  | "toggle";
 
 /**
  * Idle animations — always-on, driven by IdleAnimator. Applied to the object's
@@ -485,6 +486,7 @@ const nodes: SceneNode[] = [
   }),
   zone("ss_brainfog", "S.S. Brainfog", {
     turntable: true,
+    sounds: ["/sounds/ss_brainfog_horn.mp3"],
     children: [
       "portal_adhdo",
       "portal_karasu_drop",
@@ -565,6 +567,74 @@ const nodes: SceneNode[] = [
       "dream_zone",
       "pool_time",
       "starlight_zone",
+      "nimbus_land",
+    ],
+  }),
+  zone("nimbus_land", "Nimbus Land", {
+    parent: "cloud_town",
+    env: "city",
+    turntable: true,
+    fullBleed: true,
+    camera: { padding: 1, elevation: 0.45, azimuth: 0.3 },
+    idle: { kind: "undulate", amplitude: 0.07, period: 4 },
+    labelOffsetY: 5,
+    raycast: "bvh",
+    atmosphere: {
+      enabled: [
+        "sky",
+        "sun",
+        "ambient",
+        "sprite_drift",
+        "sky_clouds",
+        "celestials",
+        "stars",
+        "fog",
+      ],
+      options: {
+        sprite_drift: {
+          count: 500,
+          minX: -200,
+          maxX: 200,
+          minY: -50,
+          maxY: 30,
+          minZ: -300,
+          maxZ: 140,
+          scaleRange: [2, 32],
+          opacityRange: [0.3, 1.0],
+          textures: [
+            {
+              url: `${import.meta.env.BASE_URL}clouds/m07_cloud01.png`,
+              weight: 6,
+              flipChance: 0.2,
+            },
+            {
+              url: `${import.meta.env.BASE_URL}clouds/m07_cloud02.png`,
+              weight: 3,
+            },
+            {
+              url: `${import.meta.env.BASE_URL}clouds/smile_cloud_bright.png`,
+              weight: 0.05,
+            },
+            {
+              url: `${import.meta.env.BASE_URL}clouds/smile_cloud.png`,
+              weight: 0.05,
+            },
+          ],
+        },
+      },
+      defaults: { hour: 4, minute: 27, weather: "clear", timescale: 0 },
+      controls: true,
+    },
+    children: [
+      "nl_toy_mushroom_sign",
+      "nl_toy_star_sign",
+      "nl_toy_hut_door_01",
+      "nl_toy_hut_door_02",
+      "nl_toy_hut_door_03",
+      "nl_toy_hut_door_04",
+      "nl_toy_hut_door_05",
+      "nl_toy_yoshi_doll",
+      "nl_toy_nimbus_castle_doors",
     ],
   }),
   zone("starlight_zone", "Starlight Zone", {
@@ -727,7 +797,7 @@ const nodes: SceneNode[] = [
   portal("pokemon_park", "Pokemon Park", "/pokemon-park/", "pokemon_island"),
   portal("weather_report", "Weather Report", "/weather-report/", "cloud_town", {
     idle: "undulate",
-    labelOffsetY: 5,
+    labelOffsetY: -7,
     raycast: "bvh",
   }),
   portal("famima", "Family Mart", "/famima/", "island"),
@@ -1103,6 +1173,22 @@ const nodes: SceneNode[] = [
     animation: "none",
     sounds: ["/sounds/ct_toy_jotaro_hat_01.wav"],
     raycast: "bvh",
+  }),
+
+  // ── Toys inside zone_nimbus_land.glb (parent: nimbus_land) ──
+  toy("nl_toy_mushroom_sign", "Mushroom Sign", "nimbus_land"),
+  toy("nl_toy_star_sign", "Star Sign", "nimbus_land"),
+  toy("nl_toy_hut_door_01", "Hut Door", "nimbus_land", { animation: "toggle" }),
+  toy("nl_toy_hut_door_02", "Hut Door", "nimbus_land", { animation: "toggle" }),
+  toy("nl_toy_hut_door_03", "Hut Door", "nimbus_land", { animation: "toggle" }),
+  toy("nl_toy_hut_door_04", "Hut Door", "nimbus_land", { animation: "toggle" }),
+  toy("nl_toy_hut_door_05", "Hut Door", "nimbus_land", { animation: "toggle" }),
+  toy("nl_toy_yoshi_doll", "Yoshi Doll", "nimbus_land", {
+    animation: "wobble",
+  }),
+  toy("nl_toy_nimbus_castle_doors", "Castle Doors", "nimbus_land", {
+    animation: "toggle",
+    showLabel: false,
   }),
 
   // ── Toys inside zone_ss_brainfog.glb (parent: ss_brainfog) ──

@@ -55,6 +55,7 @@ Object name conventions in GLB files:
 | bird_sanctuary       | bs      | `bs_toy_*`, `i_bs_toy_*`               |
 | ss_brainfog          | ssb     | `ssb_toy_*`, `i_ssb_toy_*`             |
 | cloud_town           | ct      | `ct_toy_*`                             |
+| nimbus_land          | nl      | `nl_toy_*`                             |
 | starlight_zone       | sz      | `sz_toy_*` (not yet used)              |
 | tower_of_knowledge   | tok     | `tok_toy_*`, `i_tok_toy_*`             |
 | reading_room         | rr      | `rr_toy_*`                             |

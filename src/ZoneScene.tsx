@@ -30,6 +30,7 @@ import {
   StaticGeometryGenerator,
 } from "three-mesh-bvh";
 import { AdaptiveLabel } from "./AdaptiveLabel";
+import { playCyclingSound } from "./audio";
 import "./App.css";
 import Breadcrumbs from "./Breadcrumbs";
 import { showComingSoon } from "./comingSoonStore";
@@ -82,6 +83,7 @@ interface Hotspot {
   focusDistance?: number;
   focusBehavior?: "fit" | "instant";
   raycastMode: "default" | "bvh";
+  sounds?: string[];
 }
 
 type HotspotBvhGeometry = THREE.BufferGeometry & { boundsTree?: MeshBVH };
@@ -253,6 +255,9 @@ const HotspotHitbox = memo(function HotspotHitbox({
         // For "instant" behavior, fire the action on this same click —
         // the focus call just marks the thing as focused without tweening.
         if (focusOpts.behavior !== "instant") return;
+      }
+      if (hotspot.sounds?.length) {
+        playCyclingSound(hotspot.name, hotspot.sounds, 0.5);
       }
       if (hotspot.url) {
         onNavigate(hotspot.url, hotspot.internal);
@@ -442,21 +447,48 @@ function buildHotspots(scene: THREE.Object3D): Hotspot[] {
       focusDistance: node?.focusDistance,
       focusBehavior: node?.focusBehavior,
       raycastMode: node?.raycast ?? "default",
+      sounds: node?.sounds,
     });
   }
 
   return result;
 }
 
-function clipTargetsActionToy(clip: THREE.AnimationClip): boolean {
+/**
+ * Returns true if any of the clip's tracks animate something that belongs
+ * to a click-controlled toy (animation: "action" or "toggle"). Such clips
+ * must be skipped by the auto-play loop so ToyInteractor can drive them.
+ *
+ * Walks up the scene graph from each targeted node so descendant meshes
+ * (e.g. nl_toy_hut_door_curtain_04 nested under toggle toy
+ * nl_toy_hut_door_04) are correctly attributed to their toy ancestor.
+ */
+function clipTargetsClickToy(
+  clip: THREE.AnimationClip,
+  scene: THREE.Object3D,
+): boolean {
+  const nodeByName = new Map<string, THREE.Object3D>();
+  scene.traverse((obj) => {
+    if (obj.name) nodeByName.set(obj.name, obj);
+  });
+  const isClickToy = (name: string): boolean => {
+    const base = name.toLowerCase().replace(/\.\d+$/, "");
+    const anim = getToyConfig(base)?.animation;
+    return anim === "action" || anim === "toggle";
+  };
   return clip.tracks.some((track) => {
     const dotIdx = track.name.indexOf(".");
     if (dotIdx < 0) return false;
     const nodePath = track.name.slice(0, dotIdx);
-    return nodePath.split("/").some((part) => {
-      const base = part.toLowerCase().replace(/\.\d+$/, "");
-      return getToyConfig(base)?.animation === "action";
-    });
+    for (const part of nodePath.split("/")) {
+      if (isClickToy(part)) return true;
+      let cur: THREE.Object3D | null | undefined = nodeByName.get(part);
+      while (cur) {
+        if (cur.name && isClickToy(cur.name)) return true;
+        cur = cur.parent;
+      }
+    }
+    return false;
   });
 }
 
@@ -496,7 +528,7 @@ function ZoneMesh({
   useEffect(() => {
     Object.entries(actions).forEach(([name, action]) => {
       const clip = animations.find((candidate) => candidate.name === name);
-      if (!clip || !clipTargetsActionToy(clip)) action?.play();
+      if (!clip || !clipTargetsClickToy(clip, scene)) action?.play();
     });
   }, [actions, animations]);
 

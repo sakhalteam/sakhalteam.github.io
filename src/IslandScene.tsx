@@ -436,10 +436,10 @@ const ZoneHitbox = memo(function ZoneHitbox({
               onFocus(marker.center, marker.key, focusRadius, focusOpts);
               if (focusOpts.behavior !== "instant") return;
             }
+            playZoneSound(marker);
             if (marker.url) {
               onNavigate(marker.url, marker.internal, marker.center);
             } else {
-              playZoneSound(marker);
               onComingSoon(marker.label);
             }
           }}

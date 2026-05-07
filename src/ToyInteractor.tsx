@@ -159,6 +159,13 @@ export default function ToyInteractor({
   // Per-toy cycle index for click actions, mirrors playCyclingSound's behavior:
   // each click advances to the next clip and wraps. One clip = always plays it.
   const actionCycleRef = useRef<Map<string, number>>(new Map());
+  // Toggle animation: pairs of NLA clips ending in _open / _close on the
+  // toy's descendants. Each click flips state and plays the matching set,
+  // so e.g. castle doors L+R open or close together in one click.
+  const toggleClipsRef = useRef<
+    Map<string, { open: THREE.AnimationAction[]; close: THREE.AnimationAction[] }>
+  >(new Map());
+  const toggleStateRef = useRef<Map<string, boolean>>(new Map());
   const mixer = useMemo(() => {
     if (animations.length === 0) return null;
     const m = new THREE.AnimationMixer(scene);
@@ -305,6 +312,53 @@ export default function ToyInteractor({
   useMemo(() => {
     if (!mixer || animations.length === 0) return;
     actionClipsRef.current.clear();
+    toggleClipsRef.current.clear();
+
+    // Toggle toys: scan for paired _open/_close clips on descendants. Two
+    // clicks = open + close. Both halves of e.g. castle doors fire together
+    // because all matching clips are batched per state.
+    const toggleToys = toys.filter((t) => t.animation === "toggle");
+    for (const toy of toggleToys) {
+      const descendants = new Set<string>();
+      toy.obj.traverse((d) => {
+        if (d.name) descendants.add(d.name);
+      });
+      const openActions: THREE.AnimationAction[] = [];
+      const closeActions: THREE.AnimationAction[] = [];
+      for (const clip of animations) {
+        if (clip.duration <= 0) continue;
+        const hasMatch = clip.tracks.some((track) => {
+          const dotIdx = track.name.indexOf(".");
+          if (dotIdx < 0) return false;
+          const nodePath = track.name.slice(0, dotIdx);
+          return nodePath.split("/").some((part) => descendants.has(part));
+        });
+        if (!hasMatch) continue;
+        const action = mixer.clipAction(clip);
+        action.setLoop(THREE.LoopOnce, 1);
+        action.clampWhenFinished = true;
+        if (/_open$/i.test(clip.name)) openActions.push(action);
+        else if (/_close$/i.test(clip.name)) closeActions.push(action);
+      }
+      if (openActions.length || closeActions.length) {
+        toggleClipsRef.current.set(toy.obj.name, {
+          open: openActions,
+          close: closeActions,
+        });
+        toggleStateRef.current.set(toy.obj.name, false);
+        // The GLB rest pose may already show the toy in its open state
+        // (Blender NLA "Hold Forward" extrapolation). Park the close
+        // clips at their final frame so the visible pose matches our
+        // initial state of "closed" — otherwise the first click→open
+        // would snap-close before animating open.
+        for (const a of closeActions) {
+          a.reset();
+          a.play();
+          a.time = a.getClip().duration;
+          a.paused = true;
+        }
+      }
+    }
 
     const actionToys = toys.filter((t) => t.animation === "action");
     for (const toy of actionToys) {
@@ -455,6 +509,16 @@ export default function ToyInteractor({
     } else if (toy.animation === "bob") {
       if (bobState.current.has(name)) return;
       bobState.current.set(name, { startTime: -1 });
+    } else if (toy.animation === "toggle") {
+      const pair = toggleClipsRef.current.get(name);
+      if (pair) {
+        const isOpen = toggleStateRef.current.get(name) ?? false;
+        const next = isOpen ? pair.close : pair.open;
+        const other = isOpen ? pair.open : pair.close;
+        for (const a of other) a.stop();
+        for (const a of next) a.reset().play();
+        toggleStateRef.current.set(name, !isOpen);
+      }
     } else if (toy.animation === "action") {
       // Play Blender-authored click actions one at a time, cycling through
       // them on repeat clicks (mirrors how `sounds: [...]` cycles audio).
