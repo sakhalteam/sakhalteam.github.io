@@ -13,6 +13,13 @@ export interface SubsystemOptions {
   sprite_drift?: Partial<ComponentProps<typeof SpriteDrift>>;
 }
 
+/** A single SpriteDrift layer mounted directly in a zone, atmosphere-agnostic.
+ *  Use this for decorative sprite layers (birds in bird sanctuary, fish in
+ *  ocean zones) that should not pull in cloud_town's sky/sun/weather wiring.
+ *  For atmosphere-tinted sprites (like cloud_town's clouds), use the
+ *  AtmosphereConfig.options.sprite_drift path instead. */
+export type SpriteLayer = Partial<ComponentProps<typeof SpriteDrift>>;
+
 /**
  * sceneMap.ts — single source of truth for the entire site navigation tree.
  *
@@ -183,6 +190,10 @@ export interface SceneNode {
   glbPath: string | null;
   environmentPreset?: string;
   atmosphere?: AtmosphereConfig;
+  /** Zones: standalone SpriteDrift layers, mounted directly in the zone's
+   *  Canvas. Use for decorative sprites that should NOT inherit atmosphere
+   *  lighting/tinting. Each entry becomes one <SpriteDrift> instance. */
+  sprites?: SpriteLayer[];
   parent: string | null;
   children: string[];
   sounds?: string[];
@@ -235,6 +246,7 @@ function zone(
     glbPath?: string | null;
     env?: string;
     atmosphere?: AtmosphereConfig;
+    sprites?: SpriteLayer[];
     parent?: string;
     children?: string[];
     sounds?: string[];
@@ -264,6 +276,7 @@ function zone(
     children: opts.children ?? [],
     ...(opts.env !== undefined && { environmentPreset: opts.env }),
     ...(opts.atmosphere && { atmosphere: opts.atmosphere }),
+    ...(opts.sprites && { sprites: opts.sprites }),
     ...(opts.sounds && { sounds: opts.sounds }),
     ...(opts.turntable === false && { turntable: false }),
     ...(opts.camera && { camera: opts.camera }),
@@ -437,40 +450,49 @@ const nodes: SceneNode[] = [
   // This is where you add idle animations to zones ON island.glb scene
   zone("bird_sanctuary", "Bird Sanctuary", {
     env: "forest",
-    // EXAMPLE: sprite_drift in another zone (birds flying through the trees).
-    // To activate:
-    //   1. Drop 2-3 transparent bird PNGs in public/birds/ (gull, swallow, hawk)
-    //   2. Update the URLs below to match your filenames
-    //   3. Uncomment the `atmosphere` block
-    //   4. Note: enabling atmosphere replaces this zone's legacy lighting,
-    //      so include "sky", "sun", "ambient" alongside "sprite_drift" or
-    //      tune light/sky values to your taste.
-    //
-    // atmosphere: {
-    //   enabled: ["sky", "sun", "ambient", "sprite_drift"],
-    //   options: {
-    //     sprite_drift: {
-    //       count: 25,
-    //       speed: 5,                    // birds move faster than clouds
-    //       speedRange: [0.7, 1.5],
-    //       scaleRange: [0.8, 2.5],      // small
-    //       opacityRange: [0.85, 1.0],
-    //       minX: -60, maxX: 60,
-    //       minY: 8,   maxY: 30,
-    //       minZ: -50, maxZ: -10,
-    //       bobAmplitude: 0.4,           // gentle wing-bob
-    //       bobSpeed: 3,
-    //       followAtmosphere: false,     // don't peach-tint birds at sunrise
-    //       textures: [
-    //         { url: `${import.meta.env.BASE_URL}birds/gull.png`,    weight: 3, flipChance: 0.5 },
-    //         { url: `${import.meta.env.BASE_URL}birds/swallow.png`, weight: 2, flipChance: 0.5 },
-    //         { url: `${import.meta.env.BASE_URL}birds/hawk.png`,    weight: 1, flipChance: 0.5 },
-    //       ],
-    //     },
-    //   },
-    //   defaults: { hour: 10, weather: "clear" },
-    //   controls: false,
-    // },
+    // Standalone bird flock — atmosphere-agnostic. SpriteDrift mounts
+    // directly inside the Canvas via the zone's `sprites` field, so the
+    // zone's custom lighting (BirdSanctuaryLighting + SunRays) stays untouched.
+    sprites: [
+      {
+        count: 25,
+        speed: 5,
+        speedRange: [0.7, 1.5],
+        scaleRange: [1.5, 3.5],
+        opacityRange: [0.9, 1.0],
+        minX: -60,
+        maxX: 60,
+        minY: 8,
+        maxY: 30,
+        minZ: -50,
+        maxZ: -10,
+        bobAmplitude: 0.3,
+        bobSpeed: 2,
+        followAtmosphere: false,
+        flipReversesDrift: true,
+        baseFacing: -1, // your bird PNGs face left in their unflipped state
+        textures: [
+          {
+            frames: Array.from(
+              { length: 6 },
+              (_, i) => `${import.meta.env.BASE_URL}birds/parrot_0${i + 1}.png`,
+            ),
+            fps: 8,
+            weight: 1,
+            flipChance: 0.5,
+          },
+          {
+            frames: Array.from(
+              { length: 6 },
+              (_, i) => `${import.meta.env.BASE_URL}birds/hawk_0${i + 1}.png`,
+            ),
+            fps: 6,
+            weight: 1,
+            flipChance: 0.5,
+          },
+        ],
+      },
+    ],
     children: [
       "portal_bird_bingo",
       "bs_toy_chocobo",

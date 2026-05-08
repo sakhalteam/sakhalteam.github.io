@@ -22,7 +22,7 @@ import * as THREE from "three";
 import { useAtmosphereOptional } from "../AtmosphereContext";
 
 interface SpriteState {
-  textureIndex: number;
+  speciesIndex: number;
   x: number;
   y: number;
   z: number;
@@ -30,20 +30,42 @@ interface SpriteState {
   flipX: 1 | -1;
   speed: number;
   baseOpacity: number;
+  /** 0..1 — used as both bob phase and animation frame offset. */
   phase: number;
 }
 
+/** Resolved animation metadata per species after normalization. */
+interface Species {
+  /** Index into the global maps[] array where this species' frames start. */
+  frameStart: number;
+  /** Number of frames (1 = static, 2+ = animated). */
+  frameCount: number;
+  /** Playback speed in frames per second. Ignored when frameCount === 1. */
+  fps: number;
+}
+
 /**
- * Texture entry: a url string for uniform-weight clouds, or an object
- * with explicit weight to control how often that texture is picked.
- * Weights are relative — [{w:1},{w:5}] means the second is 5x as common.
+ * Texture entry. Three forms:
+ *  - string                                 → single static frame, weight 1
+ *  - { url, weight?, flipChance? }          → single static frame, configurable
+ *  - { frames, fps?, weight?, flipChance? } → multi-frame animation (e.g. flapping bird)
  *
- * `flipChance` (0–1) randomly mirrors the sprite horizontally on spawn —
- * useful for adding visual variety from a small texture set.
+ * `frames` is an ordered list of frame URLs. At runtime each sprite cycles
+ * through them at the species' fps, with a per-sprite phase offset so the
+ * flock isn't flapping in lockstep.
+ *
+ * `weight` is relative — [{w:1},{w:5}] means the second is 5x as common.
+ * `flipChance` (0–1) horizontally mirrors a fraction of spawned sprites.
  */
 export type SpriteTexture =
   | string
-  | { url: string; weight?: number; flipChance?: number };
+  | { url: string; weight?: number; flipChance?: number }
+  | {
+      frames: string[];
+      fps?: number;
+      weight?: number;
+      flipChance?: number;
+    };
 
 // Module-level stable references. If these were inline defaults on the
 // destructured props, every parent re-render (e.g. hovering a toy) would
@@ -63,26 +85,42 @@ const DEFAULT_TEXTURES: SpriteTexture[] = [
   { url: `${import.meta.env.BASE_URL}clouds/m07_cloud02.png`, weight: 1 },
 ];
 
+const DEFAULT_FPS = 6;
+
 function normalizeTextures(input: SpriteTexture[]): {
   urls: string[];
   weights: number[];
   flipChances: number[];
+  species: Species[];
 } {
   const urls: string[] = [];
   const weights: number[] = [];
   const flipChances: number[] = [];
+  const species: Species[] = [];
   for (const t of input) {
+    let frames: string[];
+    let fps = DEFAULT_FPS;
+    let weight = 1;
+    let flipChance = 0;
     if (typeof t === "string") {
-      urls.push(t);
-      weights.push(1);
-      flipChances.push(0);
+      frames = [t];
+    } else if ("frames" in t) {
+      frames = t.frames;
+      fps = t.fps ?? DEFAULT_FPS;
+      weight = t.weight ?? 1;
+      flipChance = t.flipChance ?? 0;
     } else {
-      urls.push(t.url);
-      weights.push(t.weight ?? 1);
-      flipChances.push(t.flipChance ?? 0);
+      frames = [t.url];
+      weight = t.weight ?? 1;
+      flipChance = t.flipChance ?? 0;
     }
+    const frameStart = urls.length;
+    for (const url of frames) urls.push(url);
+    species.push({ frameStart, frameCount: frames.length, fps });
+    weights.push(weight);
+    flipChances.push(flipChance);
   }
-  return { urls, weights, flipChances };
+  return { urls, weights, flipChances, species };
 }
 
 function weightedPick(weights: number[]): number {
@@ -138,6 +176,16 @@ export interface SpriteDriftProps {
    *  sprites tint themselves using params.cloudColor (time-of-day + weather).
    *  Set false to ignore atmosphere and use the `tint` prop verbatim. */
   followAtmosphere?: boolean;
+  /** When true, flipped sprites drift in the opposite direction. Use for
+   *  directional sprites (birds, fish) where a "flipped" sprite is one
+   *  *facing* the other way and should fly/swim that way. Leave false
+   *  for symmetric sprites (clouds, dust) where flip is purely cosmetic. */
+  flipReversesDrift?: boolean;
+  /** Which way your unflipped PNG assets naturally face. 1 = right (+X),
+   *  -1 = left (-X). Only matters when `flipReversesDrift` is true.
+   *  If you turn flipReversesDrift on and your sprites all fly backwards,
+   *  flip this knob. Default 1 (right-facing). */
+  baseFacing?: 1 | -1;
   /** Render order — keep below 3D clouds and scene geometry. */
   renderOrder?: number;
 }
@@ -161,10 +209,12 @@ export default function SpriteDrift({
   bobSpeed = 0.3,
   tint = "#ffffff",
   followAtmosphere = true,
+  flipReversesDrift = false,
+  baseFacing = 1,
   renderOrder = -10,
 }: SpriteDriftProps) {
   const atmosphere = useAtmosphereOptional();
-  const { urls, weights, flipChances } = useMemo(
+  const { urls, weights, flipChances, species } = useMemo(
     () => normalizeTextures(textures),
     [textures],
   );
@@ -209,10 +259,10 @@ export default function SpriteDrift({
   const states = useMemo<SpriteState[]>(() => {
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
     return Array.from({ length: count }, () => {
-      const textureIndex = weightedPick(weights);
-      const flipX: 1 | -1 = Math.random() < flipChances[textureIndex] ? -1 : 1;
+      const speciesIndex = weightedPick(weights);
+      const flipX: 1 | -1 = Math.random() < flipChances[speciesIndex] ? -1 : 1;
       return {
-        textureIndex,
+        speciesIndex,
         flipX,
         // Even initial spread across X so nothing pops on first frame.
         x: rand(minX, maxX),
@@ -221,7 +271,7 @@ export default function SpriteDrift({
         scale: rand(scaleRange[0], scaleRange[1]),
         speed: rand(speedRange[0], speedRange[1]),
         baseOpacity: rand(opacityRange[0], opacityRange[1]),
-        phase: Math.random() * Math.PI * 2,
+        phase: Math.random(),
       };
     });
   }, [
@@ -247,23 +297,37 @@ export default function SpriteDrift({
       const sprite = refs.current[i];
       if (!sprite) continue;
 
-      s.x += speed * s.speed * delta;
+      const dir = flipReversesDrift ? baseFacing * s.flipX : 1;
+      s.x += speed * s.speed * dir * delta;
       if (s.x > maxX) s.x -= range;
       else if (s.x < minX) s.x += range;
 
       const y = bobAmplitude
-        ? s.y + Math.sin(t * bobSpeed + s.phase) * bobAmplitude
+        ? s.y + Math.sin(t * bobSpeed + s.phase * Math.PI * 2) * bobAmplitude
         : s.y;
 
       sprite.position.set(s.x, y, s.z);
       sprite.scale.setScalar(s.scale);
 
-      // Linear fade near horizontal edges so cloud doesn't snap on wrap.
+      // Linear fade near horizontal edges so sprite doesn't snap on wrap.
       const distFromEdge = Math.min(s.x - minX, maxX - s.x);
       const edge = edgeFade > 0 ? Math.min(1, distFromEdge / edgeFade) : 1;
 
       const mat = sprite.material as THREE.SpriteMaterial;
       mat.opacity = s.baseOpacity * opacity * edge;
+
+      // Animate species with multiple frames. Per-sprite phase offset
+      // ensures a flock of birds doesn't flap in unison.
+      const sp = species[s.speciesIndex];
+      if (sp.frameCount > 1) {
+        const frameIdx = Math.floor(
+          (t * sp.fps + s.phase * sp.frameCount) % sp.frameCount,
+        );
+        const globalIdx = sp.frameStart + frameIdx;
+        const nextMap =
+          s.flipX === -1 ? flippedMaps[globalIdx] : maps[globalIdx];
+        if (mat.map !== nextMap) mat.map = nextMap;
+      }
     }
   });
 
@@ -282,8 +346,8 @@ export default function SpriteDrift({
           <spriteMaterial
             map={
               s.flipX === -1
-                ? flippedMaps[s.textureIndex]
-                : maps[s.textureIndex]
+                ? flippedMaps[species[s.speciesIndex].frameStart]
+                : maps[species[s.speciesIndex].frameStart]
             }
             color={tintColor}
             transparent

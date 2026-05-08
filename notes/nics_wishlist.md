@@ -200,3 +200,11 @@ do an audit and see what things can be extracted and component-ified, so there's
 ### work on cloud transitions a bit: right now a white cloud comes from top and white cloud comes from bottom, they close towards each other, scene silently loads in background, then clouds part. But it needs to look more like a paper mario sort of scene where you can see multiple layers of clouds, almost like paper cutout clouds congregating towards the middle of the screen, then separating from each other to reveal the newly-loaded scene that user had navigated to.
 
 # add "good luck" sfx to clicking starlight zone from cloud town
+
+### Organization
+
+Make a flow chart type thing to categorize all zone ideas, like I saw desert colossus from loz-oot-3ds and I thought ok ok I need to put a portal to a "desert" zone which is basically island no. 2 but it's a new archipelago of desert-ish islands, each of which is its own zone, and each of those having subzones. Same idea for ice, water, sky, etc. Cloud Town is an example of this emerging, where you click a cloud on main island, takes you to cloud town, within cloud town are nimbus land, starlight zone, and dream zone, all sort of "sky" related. Figure out when a zone-chain terminates, and plan for interactivity along the way.
+
+### Seasons
+
+Alright, I know this one is fuckin' crazy, but just like pokemon and other beloved games, for bird sanctuary and island especially to start, introduce all four seasons. it would be so fucking cool just like animal crossing. come on if you have good taste you will love this idea.

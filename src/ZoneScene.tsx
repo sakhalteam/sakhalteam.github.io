@@ -36,6 +36,7 @@ import Breadcrumbs from "./Breadcrumbs";
 import { showComingSoon } from "./comingSoonStore";
 import { useDebugHitboxes, useDebugPerformanceMonitor } from "./debugFlags";
 import { Atmosphere, AtmospherePanel, AtmosphereProvider } from "./environment";
+import SpriteDrift from "./environment/subsystems/SpriteDrift";
 import FlightPath, { type FlightPathConfig } from "./FlightPath";
 import IdleAnimator from "./IdleAnimator";
 import SceneAuditor from "./SceneAuditor";
@@ -1034,6 +1035,15 @@ export default function ZoneScene({
               allMeshesRef={allMeshesRef}
             />
           </Suspense>
+          {/* Standalone sprite layers — atmosphere-agnostic. Each entry in
+              the zone's `sprites` array becomes one <SpriteDrift> instance,
+              independent of any atmosphere wiring. Suspense handles the
+              texture loader. */}
+          {(getNode(zoneKey)?.sprites ?? []).map((props, i) => (
+            <Suspense key={`sprite-layer-${i}`} fallback={null}>
+              <SpriteDrift {...props} />
+            </Suspense>
+          ))}
           {zoneKey === "bird_sanctuary" && <BirdSanctuaryLighting />}
           {zoneKey === "bird_sanctuary" && <SunRays />}
           {zoneKey === "ss_brainfog" && (
