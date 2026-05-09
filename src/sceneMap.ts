@@ -508,7 +508,7 @@ const nodes: SceneNode[] = [
   }),
   zone("ss_brainfog", "S.S. Brainfog", {
     turntable: true,
-    sounds: ["/sounds/ss_brainfog_horn.mp3"],
+    sounds: ["/sounds/ssb_toy_ss_aqua.mp3"],
     children: [
       "portal_adhdo",
       "portal_karasu_drop",
@@ -596,6 +596,7 @@ const nodes: SceneNode[] = [
     parent: "cloud_town",
     env: "city",
     turntable: true,
+    sounds: ["/sounds/zone_nimbus_land.mp3"],
     fullBleed: true,
     camera: { padding: 1, elevation: 0.45, azimuth: 0.3 },
     idle: { kind: "undulate", amplitude: 0.07, period: 4 },
