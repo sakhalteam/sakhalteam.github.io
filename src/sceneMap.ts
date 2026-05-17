@@ -780,7 +780,7 @@ const nodes: SceneNode[] = [
     glbPath: null,
     path: null,
     sounds: ["/sounds/zone_crystals.mp3"],
-    children: ["i_crys_toy_crane"],
+    children: ["portal_gem_station_alpha", "i_crys_toy_crane"],
   }),
   // Inside Cloud Town scene (no GLB yet):
   zone("dream_zone", "Dream Zone", {
@@ -818,6 +818,12 @@ const nodes: SceneNode[] = [
   portal("proto_typing", "Proto-Typing", "/proto-typing/", "reading_room"),
   portal("nikbeat", "NikBeat", "/nikbeat/", "beach_party"),
   portal("pokemon_park", "Pokemon Park", "/pokemon-park/", "pokemon_island"),
+  portal(
+    "gem_station_alpha",
+    "Gem Station Alpha",
+    "/gem-station-alpha/",
+    "crystals",
+  ),
   portal("weather_report", "Weather Report", "/weather-report/", "cloud_town", {
     idle: "undulate",
     labelOffsetY: -7,
@@ -1346,6 +1352,7 @@ const nodes: SceneNode[] = [
   site("site_japanese_articles", "Japanese Articles", "/japanese-articles/"),
   site("site_nikbeat", "NikBeat", "/nikbeat/"),
   site("site_pokemon_park", "Pokemon Park", "/pokemon-park/"),
+  site("site_gem_station_alpha", "Gem Station Alpha", "/gem-station-alpha/"),
   site("site_weather_report", "Weather Report", "/weather-report/"),
   site("site_famima", "Famima", "/famima/"),
   site("site_jr_jingle_journey", "JR Jingle Journey", "/jr-jingle-journey/"),
