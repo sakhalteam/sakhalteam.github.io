@@ -449,6 +449,7 @@ const nodes: SceneNode[] = [
   // ── Active zones (have GLBs + routes) ──────────────
   // This is where you add idle animations to zones ON island.glb scene
   zone("bird_sanctuary", "Bird Sanctuary", {
+    turntable: false,
     env: "forest",
     // Standalone bird flock — atmosphere-agnostic. SpriteDrift mounts
     // directly inside the Canvas via the zone's `sprites` field, so the
@@ -1041,6 +1042,24 @@ const nodes: SceneNode[] = [
     sounds: ["/sounds/bs_toy_chocobo.mp3"],
     animation: "hop",
   }),
+  toy("bs_toy_cassowary", "Cassowary", "bird_sanctuary", {
+    sounds: ["/sounds/southern-cassowary-call.mp3"],
+    animation: "wobble",
+  }),
+  toy("bs_toy_northern_flicker", "Northern Flicker", "bird_sanctuary", {
+    sounds: ["/sounds/northern-flicker-call.mp3"],
+    animation: "none",
+    flight: { group: "flicker", duration: 14 },
+    focusBehavior: "instant",
+    raycast: "bvh",
+  }),
+  toy("bs_toy_crow", "Crow", "bird_sanctuary", {
+    sounds: ["/sounds/american-crow-call.mp3"],
+    animation: "none",
+    flight: { group: "crow", duration: 16 },
+    focusBehavior: "instant",
+    raycast: "bvh",
+  }),
   toy("bs_toy_kiwi_01", "Kiwi", "bird_sanctuary", {
     sounds: ["/sounds/okarito-brown-kiwi-call.mp3"],
     animation: "hop",
@@ -1051,14 +1070,20 @@ const nodes: SceneNode[] = [
   }),
   toy("bs_toy_flamingo", "Flamingo", "bird_sanctuary", {
     sounds: ["/sounds/american-flamingo-call.mp3"],
-    animation: "bob",
+    animation: "hop",
   }),
   toy("bs_toy_puffin", "Puffin", "bird_sanctuary", {
     sounds: ["/sounds/atlantic-puffin-call.mp3"],
     animation: "hop",
   }),
-  toy("bs_toy_baby_deku", "Baby Deku", "bird_sanctuary"),
-  toy("bs_toy_tree_stump", "Tree Stump", "bird_sanctuary"),
+  toy("bs_toy_baby_deku", "Baby Deku", "bird_sanctuary", {
+    animation: "none",
+    showLabel: false,
+  }),
+  toy("bs_toy_tree_stump", "Tree Stump", "bird_sanctuary", {
+    animation: "none",
+    showLabel: false,
+  }),
 
   // ── Toys inside zone_cloud_town.glb (parent: cloud_town) ──
   toy("ct_toy_ladder", "ladder", "cloud_town", {
@@ -1356,6 +1381,7 @@ const nodes: SceneNode[] = [
   site("site_famima", "Famima", "/famima/"),
   site("site_jr_jingle_journey", "JR Jingle Journey", "/jr-jingle-journey/"),
   site("site_karasu_drop", "Karasu Drop", "/karasu-drop/"),
+  site("site_doubutsu_no_juui", "Doubutsu no Juui", "/doubutsu-no-juui/"),
 ];
 
 // ─── Indexed lookups ────────────────────────────────────────────────

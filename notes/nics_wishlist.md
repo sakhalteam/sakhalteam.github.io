@@ -208,3 +208,7 @@ Make a flow chart type thing to categorize all zone ideas, like I saw desert col
 ### Seasons
 
 Alright, I know this one is fuckin' crazy, but just like pokemon and other beloved games, for bird sanctuary and island especially to start, introduce all four seasons. it would be so fucking cool just like animal crossing. come on if you have good taste you will love this idea.
+
+### Multiple Islands on homepage?
+
+Do I figure out a way to do a bigger system of archipelagos, like desert island is as big as original island, but you only see like part of it on the edge of the main island's map, and you click it, it recenters the camera, kind of like the overworld in later super mario 3D titles? or just keep main island with its zones, but then, if I start having a crazier idea branch of new zones I want to add, and there's no logical place to add them to the main island, or start their 'zone-chain' (i.e. tower of knowledge with its three 'interior' themed zones, or cloud town with its four 'sky' themed zones) then how should handle multi-island homepage? or am I approaching game territory and need to stop trying to cram all this into a browser haha
