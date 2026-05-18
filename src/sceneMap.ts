@@ -424,12 +424,12 @@ const nodes: SceneNode[] = [
       "pokemon_island",
       "the_tunnels",
       "beach_party",
+      "crystal_cave",
       // Coming-soon zones (no glb yet)
       "mystery_zone",
       "nessie",
       "flower_shop",
       "warehouse",
-      "crystals",
       // Portals directly on the island
       "famima",
       // Standalone island toys
@@ -734,7 +734,7 @@ const nodes: SceneNode[] = [
     ],
   }),
 
-  // ── Coming-soon zones ──────────────────────────────
+  // ── Additional island zones ─────────────────────────
   // On the island (no GLB yet):
   zone("mystery_zone", "Mystery Zone", {
     glbPath: null,
@@ -776,10 +776,9 @@ const nodes: SceneNode[] = [
     glbPath: null,
     path: null,
   }),
-  zone("crystals", "Crystals", {
-    glbPath: null,
-    path: null,
-    sounds: ["/sounds/zone_crystals.mp3"],
+  // Active island zones added after the main active block:
+  zone("crystal_cave", "Crystal Cave", {
+    sounds: ["/sounds/zone_crystal_cave.mp3"],
     children: ["portal_gem_station_alpha", "i_crys_toy_crane"],
   }),
   // Inside Cloud Town scene (no GLB yet):
@@ -822,7 +821,7 @@ const nodes: SceneNode[] = [
     "gem_station_alpha",
     "Gem Station Alpha",
     "/gem-station-alpha/",
-    "crystals",
+    "crystal_cave",
   ),
   portal("weather_report", "Weather Report", "/weather-report/", "cloud_town", {
     idle: "undulate",
@@ -1000,7 +999,7 @@ const nodes: SceneNode[] = [
   ),
 
   // Coming-soon crane zones (all deferred until Bug #9 crane fix)
-  structural("i_crys_toy_crane", "Crane", "crystals"),
+  structural("i_crys_toy_crane", "Crane", "crystal_cave"),
   structural("i_flwr_toy_crane", "Crane", "flower_shop"),
   structural("i_mz_toy_crane", "Crane", "mystery_zone"),
 

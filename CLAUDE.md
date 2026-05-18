@@ -67,7 +67,7 @@ Object name conventions in GLB files:
 | nessie               | ns      | `ns_toy_*`, `i_ns_toy_*`               |
 | flower_shop          | flwr    | `flwr_toy_*`, `i_flwr_toy_*`           |
 | warehouse            | ware    | `ware_toy_*`                           |
-| crystals             | crys    | `crys_toy_*`, `i_crys_toy_*`           |
+| crystal_cave         | crys    | `crys_toy_*`, `i_crys_toy_*`           |
 | the_epipelagic       | epi     | `epi_toy_*`                            |
 | the_mesopelagic      | meso    | `meso_toy_*`                           |
 | the_bathypelagic     | bathy   | `bathy_toy_*`                          |
@@ -196,11 +196,11 @@ Both zone types use bloom (emissive ramp + Bloom pass via BloomDriver.tsx). The 
 
 ## Coming-soon zones (meshes exist in island.glb, not yet wired to sites)
 
-zone_crystals, zone_flower_shop, zone_mystery_zone, zone_nessie, zone_warehouse
+zone_flower_shop, zone_mystery_zone, zone_nessie, zone_warehouse
 
 ## Blender naming (no parenting needed)
 
-All objects should be flat at the scene root — no `empty_zone_x` wrappers, no parenting hierarchy. Use `zc_<key>_<name>` prefix to include meshes in a zone's hover glow. Cranes use `zc_` prefix on their respective zones (e.g., `zc_crystals_crane.004`).
+All objects should be flat at the scene root — no `empty_zone_x` wrappers, no parenting hierarchy. Use `zc_<key>_<name>` prefix to include meshes in a zone's hover glow. Cranes use `zc_` prefix on their respective zones (e.g., `zc_crystal_cave_crane.004`).
 
 ## GLB optimization
 
