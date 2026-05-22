@@ -45,6 +45,10 @@ function optimize(file) {
       "--flatten", "false",
       "--join", "false",
       "--simplify", "false",
+      // Keep empty leaf nodes (flight-path empties, hitbox markers, etc.).
+      // Default prune strips them as "unused" and silently breaks runtime
+      // systems that reference Blender empties by name.
+      "--prune", "false",
     ],
     { stdio: "inherit", shell: true },
   );
