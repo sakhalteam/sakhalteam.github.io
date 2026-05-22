@@ -1052,6 +1052,7 @@ const nodes: SceneNode[] = [
     flight: { group: "flicker", duration: 14 },
     focusBehavior: "instant",
     raycast: "bvh",
+    showLabel: false,
   }),
   toy("bs_toy_crow", "Crow", "bird_sanctuary", {
     sounds: ["/sounds/american-crow-call.mp3"],
@@ -1059,6 +1060,7 @@ const nodes: SceneNode[] = [
     flight: { group: "crow", duration: 16 },
     focusBehavior: "instant",
     raycast: "bvh",
+    showLabel: false,
   }),
   toy("bs_toy_kiwi_01", "Kiwi", "bird_sanctuary", {
     sounds: ["/sounds/okarito-brown-kiwi-call.mp3"],
