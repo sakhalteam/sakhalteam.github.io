@@ -1049,6 +1049,25 @@ export default function ZoneScene({
           {zoneKey === "ss_brainfog" && (
             <Water size={320} color="#00fccd" opacity={0.7} />
           )}
+          {zoneKey === "beach_party" && (
+            <Water
+              size={80}
+              waterLevel={-0.06}
+              color="#00fccd"
+              opacity={0.34}
+              shallowColor="#9cebd9"
+              deepColor="#1c93bd"
+              surfaceBoost={0.58}
+              foamBoost={0.75}
+              waveAmplitude={0}
+              foamSpeed={0.1}
+              foamScale={14}
+              waveScale={5}
+              rimWidth={0.42}
+              rimColor="#ffffff"
+              rimStrength={0.95}
+            />
+          )}
           <OrbitControls
             ref={orbitRef}
             enablePan={true}
