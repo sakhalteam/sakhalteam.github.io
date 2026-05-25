@@ -1,4 +1,4 @@
-import { Frame } from "lucide-react";
+import { Bug, Frame } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   setDebugBarrelRollTriggers,
@@ -66,14 +66,14 @@ export default function DebugToggle() {
       }}
     >
       <button
-        className="debug-toggle-trigger"
+        className={`corner-btn ${open ? "corner-btn--open" : ""}`}
         type="button"
         aria-expanded={open}
         aria-label="Debug options"
         title="Debug options"
         onClick={() => setOpen((current) => !current)}
       >
-        ?
+        <Bug size={14} strokeWidth={1.75} aria-hidden />
       </button>
       <div className="debug-toggle-panel" aria-hidden={!open}>
         <button

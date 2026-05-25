@@ -30,6 +30,7 @@ import {
   StaticGeometryGenerator,
 } from "three-mesh-bvh";
 import { AdaptiveLabel } from "./AdaptiveLabel";
+import DebugToggle from "./DebugToggle";
 import { playCyclingSound } from "./audio";
 import "./App.css";
 import Breadcrumbs from "./Breadcrumbs";
@@ -1119,6 +1120,10 @@ export default function ZoneScene({
           {turntablePlaying ? <Pause size={14} /> : <Play size={14} />}
         </button>
       </footer>
+
+      <div className="corner-controls">
+        <DebugToggle />
+      </div>
 
       {useAtmosphere && atmosphereConfig!.controls && <AtmospherePanel />}
     </div>

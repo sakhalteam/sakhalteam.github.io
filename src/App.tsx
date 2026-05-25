@@ -1,5 +1,4 @@
 import { Leva } from "leva";
-import { Pause, Play } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import { Routes, Route } from "react-router-dom";
 import "./App.css";
@@ -9,6 +8,8 @@ import QuickNav from "./QuickNav";
 import CloudTransition from "./CloudTransition";
 import ComingSoonToast from "./ComingSoonToast";
 import DebugToggle from "./DebugToggle";
+import LegendToggle from "./LegendToggle";
+import TurntableButton from "./TurntableButton";
 import Toast from "./Toast";
 import { useDebugLightingControls } from "./debugFlags";
 import { useSceneTransition } from "./useSceneTransition";
@@ -52,23 +53,14 @@ function HomePage() {
         />
       </div>
 
-      <footer className="site-footer">
-        <span className="footer-hint">
-          <span className="legend-dot legend-dot--active" />
-          active &nbsp;·&nbsp;
-          <span className="legend-dot legend-dot--inactive" />
-          uninhabited &nbsp;·&nbsp; drag to rotate · scroll to zoom ·
-          WASD/QE/RF/ZX for keyboard
-        </span>
-        <button
-          className="turntable-toggle"
-          onClick={() => turntableToggleRef.current?.()}
-          title={turntablePlaying ? "Pause rotation" : "Resume rotation"}
-          aria-label={turntablePlaying ? "Pause rotation" : "Resume rotation"}
-        >
-          {turntablePlaying ? <Pause size={14} /> : <Play size={14} />}
-        </button>
-      </footer>
+      <div className="corner-controls">
+        <LegendToggle />
+        <TurntableButton
+          playing={turntablePlaying}
+          onToggle={() => turntableToggleRef.current?.()}
+        />
+        <DebugToggle />
+      </div>
     </div>
   );
 }
@@ -85,7 +77,6 @@ export default function App() {
       <QuickNav />
       <CloudTransition />
       <ComingSoonToast />
-      <DebugToggle />
       <Routes>
         <Route path="/" element={<HomePage />} />
         {zoneRoutes.map((z) => (
