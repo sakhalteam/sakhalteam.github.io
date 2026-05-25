@@ -71,7 +71,7 @@ export type SpriteLayer = Partial<ComponentProps<typeof SpriteDrift>>;
  *     sounds, animation, idle, idleOffset, focusDistance, focusBehavior
  *     raycast        "default" | "bvh"    opt into deformed-geometry BVH picking
  *     interactive    boolean             clickable? default true
- *     showLabel      boolean             proximity label on hover; default true
+ *     showLabel      boolean             proximity label on hover; default false (opt-in per toy)
  *     showOutline    boolean             toy-level outline on hover; default true
  *     labelOffsetY   number              extra world-units to lift hover label
  *
@@ -364,7 +364,7 @@ function toy(
     ...(opts.idleOffset !== undefined && { idleOffset: opts.idleOffset }),
     ...(opts.flight && { flight: opts.flight }),
     ...(opts.interactive === false && { interactive: false }),
-    ...(opts.showLabel === false && { showLabel: false }),
+    ...(opts.showLabel === true && { showLabel: true }),
     ...(opts.showOutline === false && { showOutline: false }),
     ...(opts.labelOffsetY !== undefined && { labelOffsetY: opts.labelOffsetY }),
     ...(opts.focusDistance !== undefined && {
@@ -398,7 +398,6 @@ const cry = (id: number) =>
 const structural = (key: string, label: string, parent: string): SceneNode =>
   toy(key, label, parent, {
     interactive: false,
-    showLabel: false,
     showOutline: false,
   });
 
@@ -896,7 +895,6 @@ const nodes: SceneNode[] = [
   toy("i_bs_toy_cassowary", "Cassowary", "bird_sanctuary", {
     sounds: ["/sounds/southern-cassowary-call.mp3"],
     animation: "wobble",
-    showLabel: false,
   }),
   toy("i_bs_toy_eagle", "Eagle", "bird_sanctuary", {
     sounds: ["/sounds/red-tailed-hawk-call.mp3"],
@@ -1080,17 +1078,14 @@ const nodes: SceneNode[] = [
   }),
   toy("bs_toy_baby_deku", "Baby Deku", "bird_sanctuary", {
     animation: "none",
-    showLabel: false,
   }),
   toy("bs_toy_tree_stump", "Tree Stump", "bird_sanctuary", {
     animation: "none",
-    showLabel: false,
   }),
 
   // ── Toys inside zone_cloud_town.glb (parent: cloud_town) ──
   toy("ct_toy_ladder", "ladder", "cloud_town", {
     animation: "none",
-    showLabel: false,
     showOutline: true,
   }),
   toy("ct_toy_fox_arwing", "Fox's Arwing", "cloud_town", {
@@ -1169,7 +1164,6 @@ const nodes: SceneNode[] = [
     raycast: "bvh",
   }),
   toy("ct_toy_metal_gear_rex", "Metal Gear Rex", "cloud_town", {
-    showLabel: false,
     sounds: [
       "/sounds/ct_toy_metal_gear_rex_01.wav",
       "/sounds/ct_toy_metal_gear_rex_02.wav",
@@ -1177,7 +1171,6 @@ const nodes: SceneNode[] = [
     animation: "hop",
   }),
   toy("ct_toy_weather_report", "Weather Report JJBA", "cloud_town", {
-    showLabel: false,
     sounds: [
       "/sounds/ct_toy_weather_report_01.wav",
       "/sounds/ct_toy_weather_report_02.wav",
@@ -1188,42 +1181,35 @@ const nodes: SceneNode[] = [
     raycast: "bvh",
   }),
   toy("ct_toy_keyboard", "Keyboard", "cloud_town", {
-    showLabel: false,
     showOutline: false,
   }),
   toy("ct_toy_cloud_01", "Cloud", "cloud_town", {
-    showLabel: false,
     showOutline: false,
     idle: "undulate",
     idleOffset: 0.25,
     animation: "none",
   }),
   toy("ct_toy_cloud_02", "Cloud", "cloud_town", {
-    showLabel: false,
     showOutline: false,
     idle: "undulate",
     idleOffset: 0.35,
   }),
   toy("ct_toy_cloud_03", "Cloud", "cloud_town", {
-    showLabel: false,
     showOutline: false,
     idle: "undulate",
     idleOffset: 0.45,
   }),
   toy("ct_toy_cloud_04", "Cloud", "cloud_town", {
-    showLabel: false,
     showOutline: false,
     idle: "undulate",
     idleOffset: 0.55,
   }),
   toy("ct_toy_cloud_05", "Cloud", "cloud_town", {
-    showLabel: false,
     showOutline: false,
     idle: "undulate",
     idleOffset: 0.65,
   }),
   toy("ct_toy_jotaro_hat", "Jotaro's Hat", "cloud_town", {
-    showLabel: false,
     showOutline: false,
     animation: "none",
     sounds: ["/sounds/ct_toy_jotaro_hat_01.wav"],
@@ -1243,7 +1229,6 @@ const nodes: SceneNode[] = [
   }),
   toy("nl_toy_nimbus_castle_doors", "Castle Doors", "nimbus_land", {
     animation: "toggle",
-    showLabel: false,
   }),
 
   // ── Toys inside zone_ss_brainfog.glb (parent: ss_brainfog) ──
@@ -1537,7 +1522,7 @@ export function getToyConfig(objName: string):
     animation: node.animation ?? "spin",
     parent: node.parent,
     interactive: node.interactive !== false,
-    showLabel: node.showLabel !== false,
+    showLabel: node.showLabel === true,
     showOutline: node.showOutline !== false,
     labelOffsetY: node.labelOffsetY ?? 0,
     focusDistance: node.focusDistance,
