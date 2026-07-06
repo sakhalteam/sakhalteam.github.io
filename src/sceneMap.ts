@@ -830,6 +830,7 @@ const nodes: SceneNode[] = [
     raycast: "bvh",
   }),
   portal("famima", "Family Mart", "/famima/", "island"),
+  portal("nyanwan_rx", "Nyanwan Rx", "/nyanwan-rx/", "island"),
   portal(
     "jr_jingle_journey",
     "JR Jingle Journey",
