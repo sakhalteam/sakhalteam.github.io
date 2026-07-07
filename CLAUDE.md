@@ -192,6 +192,7 @@ Both zone types use bloom (emissive ramp + Bloom pass via BloomDriver.tsx). The 
 - `zone_pokemon_island` → `/zone-pokemon-island` → `portal_pokemon_park` → `/pokemon-park/`
 - `zone_the_tunnels` → `/zone-the-tunnels` → `portal_jr_jingle_journey` → `/jr-jingle-journey/`
 - `portal_famima` → `/famima/` (direct portal on island, no zone scene)
+- `portal_nyanwan_rx` → `/nyanwan-rx/` (direct portal on island, no zone scene; `nyanwan_steps` mesh is unregistered scenery — rename to `i_nyanwan_toy_*` in Blender + add sceneMap entry if it should glow with the portal)
 - `zone_beach_party` → `/zone-beach-party` → `portal_nikbeat` → `/nikbeat/`
 
 ## Coming-soon zones (meshes exist in island.glb, not yet wired to sites)

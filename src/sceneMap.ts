@@ -779,7 +779,7 @@ const nodes: SceneNode[] = [
   // Active island zones added after the main active block:
   zone("crystal_cave", "Crystal Cave", {
     sounds: ["/sounds/zone_crystal_cave.mp3"],
-    children: ["portal_gem_station_alpha", "i_crys_toy_crane"],
+    children: ["portal_gem_station_alpha"],
   }),
   // Inside Cloud Town scene (no GLB yet):
   zone("dream_zone", "Dream Zone", {
@@ -829,6 +829,7 @@ const nodes: SceneNode[] = [
     raycast: "bvh",
   }),
   portal("famima", "Family Mart", "/famima/", "island"),
+  portal("nyanwan_rx", "Nyanwan Rx", "/nyanwan-rx/", "island"),
   portal(
     "jr_jingle_journey",
     "JR Jingle Journey",
@@ -998,7 +999,6 @@ const nodes: SceneNode[] = [
   ),
 
   // Coming-soon crane zones (all deferred until Bug #9 crane fix)
-  structural("i_crys_toy_crane", "Crane", "crystal_cave"),
   structural("i_flwr_toy_crane", "Crane", "flower_shop"),
   structural("i_mz_toy_crane", "Crane", "mystery_zone"),
 
