@@ -1368,7 +1368,10 @@ const nodes: SceneNode[] = [
   site("site_famima", "Famima", "/famima/"),
   site("site_jr_jingle_journey", "JR Jingle Journey", "/jr-jingle-journey/"),
   site("site_karasu_drop", "Karasu Drop", "/karasu-drop/"),
-  site("site_doubutsu_no_juui", "Doubutsu no Juui", "/doubutsu-no-juui/"),
+  site("site_nyanwan_rx", "Nyanwan Rx", "/nyanwan-rx/"),
+  // Friendly Pressure lives on its own custom domain (CNAME), so it needs
+  // the absolute URL — a "/friendly-pressure/" subpath would 404 on the hub.
+  site("site_friendly_pressure", "Friendly Pressure", "https://www.friendlypressurewa.com"),
 ];
 
 // ─── Indexed lookups ────────────────────────────────────────────────
