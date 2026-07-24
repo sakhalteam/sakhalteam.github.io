@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import {
   getIslandZones,
   getSisterSites,
+  getPersonalSites,
   getActiveZones,
   sceneMap,
 } from "./sceneMap";
@@ -14,7 +15,28 @@ const sisterSites = getSisterSites().map((s) => ({
   label: s.label,
   url: s.url!,
 }));
+const personalSites = getPersonalSites().map((s) => ({
+  label: s.label,
+  url: s.url!,
+}));
 const activeKeys = new Set(getActiveZones().map((z) => z.key));
+
+// Soft passphrase gate for personal sites. This is a CURTAIN, not a lock:
+// the real protection is each personal tool's own auth (traction = Supabase
+// login + RLS). We store only the SHA-256 hash so the plaintext never lives
+// in the repo/bundle. Unlock state is in-memory only → auto-relocks on refresh.
+const PERSONAL_HASH =
+  "3b3b53c2a6bdd088d8b0fa6b73274972db439f6ae25393f680a77d6112cded94";
+
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(input),
+  );
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 /** Build a flat list of zone entries with depth for indentation */
 function buildZoneTree(): { node: SceneNode; depth: number }[] {
@@ -42,7 +64,11 @@ const zoneTree = buildZoneTree();
 
 export default function QuickNav() {
   const [open, setOpen] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [entry, setEntry] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -54,6 +80,35 @@ export default function QuickNav() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
+
+  // Focus the passphrase field the moment it appears.
+  useEffect(() => {
+    if (promptOpen) inputRef.current?.focus();
+  }, [promptOpen]);
+
+  // Clicking the inconspicuous +/− toggle next to "Sites".
+  function handleGateToggle() {
+    if (unlocked) {
+      // − relocks and hides the personal sites again.
+      setUnlocked(false);
+      setPromptOpen(false);
+      setEntry("");
+    } else {
+      setPromptOpen((p) => !p);
+      setEntry("");
+    }
+  }
+
+  // Live check — unfurls the instant the full passphrase is typed, no Enter.
+  async function handleEntryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setEntry(value);
+    if ((await sha256Hex(value)) === PERSONAL_HASH) {
+      setUnlocked(true);
+      setPromptOpen(false);
+      setEntry("");
+    }
+  }
 
   return (
     <div className="quick-nav" ref={ref}>
@@ -114,13 +169,50 @@ export default function QuickNav() {
             );
           })}
 
-          <div className="quick-nav-section">Sites</div>
+          <div className="quick-nav-section quick-nav-section--sites">
+            <span>Sites</span>
+            <button
+              className="quick-nav-gate"
+              onClick={handleGateToggle}
+              aria-label={unlocked ? "Hide personal sites" : "More"}
+              title={unlocked ? "Hide" : "More"}
+            >
+              {unlocked ? "−" : "+"}
+            </button>
+          </div>
+
+          {promptOpen && !unlocked && (
+            <input
+              ref={inputRef}
+              type="password"
+              className="quick-nav-gate-input"
+              value={entry}
+              onChange={handleEntryChange}
+              placeholder="…"
+              aria-label="Passphrase"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          )}
+
           {sisterSites.map((s) => (
             <a key={s.url} href={s.url} className="quick-nav-item">
               {s.label}
               <span className="quick-nav-external">↗</span>
             </a>
           ))}
+
+          {unlocked &&
+            personalSites.map((s) => (
+              <a
+                key={s.url}
+                href={s.url}
+                className="quick-nav-item quick-nav-item--personal"
+              >
+                {s.label}
+                <span className="quick-nav-external">↗</span>
+              </a>
+            ))}
         </div>
       )}
     </div>

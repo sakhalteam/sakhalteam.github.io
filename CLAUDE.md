@@ -166,7 +166,7 @@ Keep it flat. All zone GLBs live in `public/zones/` regardless of depth in the n
 
 ### UI components
 
-- **QuickNav.tsx**: Hamburger dropdown (top-left) with direct links to all sister sites. Auto-generated from `getSisterSites()`.
+- **QuickNav.tsx**: Hamburger dropdown (top-left) with direct links to all sister sites. Auto-generated from `getSisterSites()`. **Personal-sites soft gate:** an inconspicuous `+` beside the "Sites" header opens a passphrase field; typing the passphrase live-unfurls `getPersonalSites()` (type `personal_site`, e.g. Traction) at the bottom of the Sites list — no Enter needed. `−` relocks; unlock state is in-memory so a refresh auto-relocks. Only the SHA-256 hash of the passphrase is in source. **This is a curtain, not a lock** — the URL is discoverable in the bundle; real protection is each personal tool's own auth (Traction = Supabase login + RLS).
 - **App.css**: All styling (no Tailwind). Frosted glass modals, zone cards, quick-nav dropdown, turntable toggle.
 
 ### Scripts & config

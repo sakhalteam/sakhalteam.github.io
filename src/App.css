@@ -458,6 +458,60 @@
   margin-left: auto;
 }
 
+/* Inconspicuous +/− gate tucked beside the "Sites" header */
+.quick-nav-section--sites {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.quick-nav-gate {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  margin-right: 0.6rem;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.12s;
+}
+
+.quick-nav-gate:hover {
+  opacity: 0.8;
+}
+
+.quick-nav-gate-input {
+  width: calc(100% - 1.7rem);
+  margin: 0.1rem 0.85rem 0.35rem;
+  padding: 0.3rem 0.45rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--card-border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.25em;
+  outline: none;
+}
+
+.quick-nav-gate-input:focus {
+  border-color: var(--accent);
+}
+
+/* Personal sites unfurl when unlocked */
+.quick-nav-item--personal {
+  animation: nav-fade-in 0.18s ease-out;
+}
+
+.quick-nav-item--personal .quick-nav-external::before {
+  content: "🔒 ";
+  font-size: 0.55rem;
+  opacity: 0.7;
+}
+
 /* ── Breadcrumbs ─────────────────────────── */
 
 .breadcrumbs {

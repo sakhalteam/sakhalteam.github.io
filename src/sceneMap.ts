@@ -97,7 +97,7 @@ export type SpriteLayer = Partial<ComponentProps<typeof SpriteDrift>>;
  *   gentle always-on motion plus a clicker reaction.
  */
 
-export type NodeType = "zone" | "portal" | "toy" | "site";
+export type NodeType = "zone" | "portal" | "toy" | "site" | "personal_site";
 
 /**
  * Per-zone atmosphere config. Absent → zone uses the legacy hardcoded lights
@@ -382,6 +382,26 @@ function site(key: string, label: string, url: string): SceneNode {
     key,
     label,
     type: "site",
+    path: null,
+    url,
+    glbPath: null,
+    parent: null,
+    children: [],
+  };
+}
+
+/**
+ * A "personal" site — Nic's own tools (billing, etc). Kept out of the public
+ * sister-sites list; QuickNav only reveals these behind the soft passphrase
+ * gate. NOTE: the gate is a curtain, not a lock — the real protection is each
+ * tool's own auth (e.g. traction's Supabase login + RLS). Anyone can find the
+ * URL in the bundle; they just can't read the data without logging in as Nic.
+ */
+function personalSite(key: string, label: string, url: string): SceneNode {
+  return {
+    key,
+    label,
+    type: "personal_site",
     path: null,
     url,
     glbPath: null,
@@ -1372,6 +1392,9 @@ const nodes: SceneNode[] = [
   // Friendly Pressure lives on its own custom domain (CNAME), so it needs
   // the absolute URL — a "/friendly-pressure/" subpath would 404 on the hub.
   site("site_friendly_pressure", "Friendly Pressure", "https://www.friendlypressurewa.com"),
+
+  // ── Personal sites (hidden behind QuickNav's soft passphrase gate) ──
+  personalSite("personal_traction", "Traction", "/traction/"),
 ];
 
 // ─── Indexed lookups ────────────────────────────────────────────────
@@ -1412,6 +1435,10 @@ export function getIslandZones(): SceneNode[] {
 
 export function getSisterSites(): SceneNode[] {
   return nodes.filter((n) => n.type === "site");
+}
+
+export function getPersonalSites(): SceneNode[] {
+  return nodes.filter((n) => n.type === "personal_site");
 }
 
 export function getPortals(): SceneNode[] {
