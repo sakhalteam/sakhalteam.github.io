@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .claude/
+
+# Local-only Blender zone backups (source .blend live in Dropbox)
+public/backup_zone_glbs_dont_use/
