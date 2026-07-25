@@ -380,6 +380,26 @@
   border-radius: 4px;
   padding: 0.35rem 0;
   animation: nav-fade-in 0.12s ease-out;
+  /* Never run past the screen — cap to viewport and scroll internally.
+     Offset accounts for the toggle button + top margins so the panel
+     always fits, especially on mobile where the list is tall. */
+  max-height: calc(100vh - 4.5rem);
+  max-height: calc(100dvh - 4.5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Slim, unobtrusive scrollbar inside the menu */
+.quick-nav-menu::-webkit-scrollbar {
+  width: 6px;
+}
+.quick-nav-menu::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: 3px;
+}
+.quick-nav-menu {
+  scrollbar-width: thin;
+  scrollbar-color: var(--card-border) transparent;
 }
 
 @keyframes nav-fade-in {
