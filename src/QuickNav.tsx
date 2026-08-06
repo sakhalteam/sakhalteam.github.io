@@ -66,6 +66,7 @@ export default function QuickNav() {
   const [open, setOpen] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
+  const [hintOpen, setHintOpen] = useState(false);
   const [entry, setEntry] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -88,6 +89,7 @@ export default function QuickNav() {
 
   // Clicking the inconspicuous +/− toggle next to "Sites".
   function handleGateToggle() {
+    setHintOpen(false);
     if (unlocked) {
       // − relocks and hides the personal sites again.
       setUnlocked(false);
@@ -106,6 +108,7 @@ export default function QuickNav() {
     if ((await sha256Hex(value)) === PERSONAL_HASH) {
       setUnlocked(true);
       setPromptOpen(false);
+      setHintOpen(false);
       setEntry("");
     }
   }
@@ -182,17 +185,33 @@ export default function QuickNav() {
           </div>
 
           {promptOpen && !unlocked && (
-            <input
-              ref={inputRef}
-              type="password"
-              className="quick-nav-gate-input"
-              value={entry}
-              onChange={handleEntryChange}
-              placeholder="…"
-              aria-label="Passphrase"
-              autoComplete="off"
-              spellCheck={false}
-            />
+            <div className="quick-nav-gate-field">
+              <input
+                ref={inputRef}
+                type="password"
+                className="quick-nav-gate-input"
+                value={entry}
+                onChange={handleEntryChange}
+                placeholder="…"
+                aria-label="Passphrase"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                className="quick-nav-gate-hint"
+                onClick={() => setHintOpen((h) => !h)}
+                aria-label="Hint"
+                aria-expanded={hintOpen}
+              >
+                ?
+              </button>
+              {hintOpen && (
+                <div className="quick-nav-gate-hint-popover" role="tooltip">
+                  {"3rd word of Tim Noah's groundbreaking hit"}
+                </div>
+              )}
+            </div>
           )}
 
           {sisterSites.map((s) => (
